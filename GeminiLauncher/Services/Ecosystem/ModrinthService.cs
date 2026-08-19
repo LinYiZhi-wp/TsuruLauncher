@@ -12,7 +12,9 @@ namespace GeminiLauncher.Services.Ecosystem
     public class ModrinthService
     {
         // Simple in-memory cache for API responses
+        // (locked: it is shared between the preload worker and UI-triggered searches)
         private static readonly Dictionary<string, (DateTime fetched, object? data)> _cache = new();
+        private static readonly object _cacheLock = new();
         private static readonly TimeSpan _cacheDuration = TimeSpan.FromMinutes(3);
 
         private static HttpClient? _httpClient;
@@ -51,7 +53,7 @@ namespace GeminiLauncher.Services.Ecosystem
                     _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("LYZL/2.0 (GeminiLauncher)");
                     _httpClient.Timeout = TimeSpan.FromSeconds(30);
                     _lastBaseUrl = baseUrl;
-                    _cache.Clear();
+                    lock (_cacheLock) { _cache.Clear(); }
                 }
             }
             return _httpClient;
@@ -59,15 +61,21 @@ namespace GeminiLauncher.Services.Ecosystem
 
         private static T? GetFromCache<T>(string key) where T : class
         {
-            if (_cache.TryGetValue(key, out var entry) && DateTime.Now - entry.fetched < _cacheDuration)
-                return entry.data as T;
-            _cache.Remove(key);
-            return null;
+            lock (_cacheLock)
+            {
+                if (_cache.TryGetValue(key, out var entry) && DateTime.Now - entry.fetched < _cacheDuration)
+                    return entry.data as T;
+                _cache.Remove(key);
+                return null;
+            }
         }
 
         private static void SetCache(string key, object? data)
         {
-            _cache[key] = (DateTime.Now, data);
+            lock (_cacheLock)
+            {
+                _cache[key] = (DateTime.Now, data);
+            }
         }
 
         public async Task<List<ModProject>> SearchProjectsAsync(string query, int limit = 20, string sort = "relevance", string? projectType = null, int offset = 0, string? gameVersion = null)

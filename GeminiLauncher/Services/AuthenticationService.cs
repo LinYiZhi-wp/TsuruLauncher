@@ -228,8 +228,10 @@ namespace GeminiLauncher.Services
             // 4. Refresh Minecraft Token
             var mcTokenData = await AuthenticateMinecraftAsync(xstsData.UserHash, xstsData.Token);
 
-            // Update Account object
+            // Update Account object — AccessToken is what the launcher passes to the game,
+            // so it must be refreshed too, not only MinecraftAccessToken.
             account.RefreshToken = newRefreshToken;
+            account.AccessToken = mcTokenData.AccessToken;
             account.MinecraftAccessToken = mcTokenData.AccessToken;
             account.ExpiryTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + mcTokenData.ExpiresIn;
         }

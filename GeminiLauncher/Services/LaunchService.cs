@@ -45,6 +45,25 @@ namespace GeminiLauncher.Services
                 throw new ArgumentException("Invalid Account: Username, UUID, or Access Token is missing.");
             }
 
+            // Refresh a stale Microsoft session before launch
+            if (account.Type == AccountType.Microsoft &&
+                account.ExpiryTime > 0 &&
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 120 >= account.ExpiryTime)
+            {
+                statusCallback?.Invoke("刷新账号令牌...");
+                try
+                {
+                    var authService = new AuthenticationService();
+                    await authService.RefreshSessionAsync(account);
+                }
+                catch (Exception ex)
+                {
+                    var refreshMsg = $"微软账号登录已过期且刷新失败: {ex.Message}";
+                    _notificationService.Show("启动失败", refreshMsg, NotificationType.Error);
+                    throw new Exception(refreshMsg);
+                }
+            }
+
             statusCallback?.Invoke("校验资源文件...");
             await ValidateAndRepairAsync(game, statusCallback);
 
@@ -57,28 +76,40 @@ namespace GeminiLauncher.Services
 
             statusCallback?.Invoke("检查 Java 环境...");
             var javaService = new JavaService();
+
+            if (!File.Exists(javaPath))
+            {
+                var msg = $"Java 路径不存在: {javaPath}";
+                _notificationService.Show("启动失败", msg, NotificationType.Error);
+                throw new Exception(msg);
+            }
+
+            JavaInstallation? javaInfo = null;
             try
             {
-                var javaInfo = javaService.GetJavaInfo(javaPath);
-                int majorVer = javaInfo != null ? javaService.GetMajorVersion(javaInfo.Version) : 0;
+                javaInfo = javaService.GetJavaInfo(javaPath);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "GetJavaInfo");
+            }
+            int majorVer = javaInfo != null ? javaService.GetMajorVersion(javaInfo.Version) : 0;
 
-                if (game.RequiredJavaVersion > 0 && (majorVer < game.RequiredJavaVersion || javaInfo == null))
+            if (javaInfo == null || (game.RequiredJavaVersion > 0 && majorVer < game.RequiredJavaVersion))
+            {
+                var bestJava = javaService.AutoDetectBestJava(game.RequiredJavaVersion);
+                if (!string.IsNullOrEmpty(bestJava))
                 {
-                    var bestJava = javaService.AutoDetectBestJava(game.RequiredJavaVersion);
-                    if (!string.IsNullOrEmpty(bestJava))
-                    {
-                        javaPath = bestJava;
-                        _notificationService.Show("Java 自动切换", $"已自动切换至适配 Java", NotificationType.Info);
-                    }
-                    else
-                    {
-                        var msg = $"游戏需要 Java {game.RequiredJavaVersion}+，但未找到可用版本。";
-                        _notificationService.Show("启动失败", msg, NotificationType.Error);
-                        throw new Exception(msg);
-                    }
+                    javaPath = bestJava;
+                    _notificationService.Show("Java 自动切换", $"已自动切换至适配 Java", NotificationType.Info);
+                }
+                else
+                {
+                    var msg = $"游戏需要 Java {game.RequiredJavaVersion}+，但未找到可用版本。";
+                    _notificationService.Show("启动失败", msg, NotificationType.Error);
+                    throw new Exception(msg);
                 }
             }
-            catch (Exception ex) { if (ex.Message.Contains("严重错误") || ex.Message.Contains("启动失败")) throw; }
 
             string librariesPath = Path.Combine(game.RootPath, "libraries");
             string assetsPath = Path.Combine(game.RootPath, "assets");
@@ -134,8 +165,10 @@ namespace GeminiLauncher.Services
                 minRam = Math.Min(minRam, maxRam / 3);
             }
 
+            // Clamp max first, then clamp min against the FINAL max so -Xms can never exceed -Xmx
+            int systemMemoryMb = Math.Max(512, (int)GetTotalSystemMemoryMB());
+            maxRam = Math.Clamp(maxRam, 512, systemMemoryMb);
             minRam = Math.Clamp(minRam, 256, maxRam);
-            maxRam = Math.Clamp(maxRam, 512, (int)GetTotalSystemMemoryMB());
         }
 
         private void ExtractNatives(GameInstance game, string librariesPath, string nativesPath, Action<string> Log)
@@ -189,6 +222,8 @@ namespace GeminiLauncher.Services
                 }
             }
             string clientJar = Path.Combine(game.RootPath, "versions", game.Id, $"{game.Id}.jar");
+            if (!File.Exists(clientJar))
+                Log($"[Lib] Missing client jar: {clientJar}");
             sbCp.Append(clientJar);
             Log($"[Classpath] {count} libs + client jar");
             return sbCp.ToString();
@@ -224,6 +259,11 @@ namespace GeminiLauncher.Services
 
             if (!string.IsNullOrEmpty(_configService.Settings.GlobalJvmArguments))
                 sbArgs.Append(_configService.Settings.GlobalJvmArguments).Append(" ");
+
+            // Per-version JVM arguments (lyzl_profile.json) — only when the version
+            // is not using global settings
+            if (!game.UseGlobalSettings && !string.IsNullOrEmpty(game.CustomJvmArgs))
+                sbArgs.Append(ReplacePlaceholders(game.CustomJvmArgs, game, account, assetsPath, classpath)).Append(" ");
 
             if (game.LogConfig != null && !string.IsNullOrEmpty(game.LogConfig.Argument))
             {
@@ -332,28 +372,36 @@ namespace GeminiLauncher.Services
 
         #region Placeholder Replacement
 
+        // Quote values that may contain spaces so they survive command-line parsing.
+        // (Templates in version JSONs never wrap these placeholders in quotes themselves.)
+        private static string QuoteIfNeeded(string value)
+        {
+            if (string.IsNullOrEmpty(value) || value.IndexOf(' ') < 0) return value;
+            return $"\"{value}\"";
+        }
+
         private string ReplacePlaceholders(string template, GameInstance game, Account account, string assetsPath, string classpath)
         {
             string result = template;
 
-            result = result.Replace("${auth_player_name}", account.Username ?? "Player");
+            result = result.Replace("${auth_player_name}", QuoteIfNeeded(account.Username ?? "Player"));
             result = result.Replace("${auth_uuid}", account.Uuid ?? "");
             result = result.Replace("${auth_access_token}", account.AccessToken ?? "");
             string userType = account.Type == AccountType.Microsoft ? "msa" : "mojang";
             result = result.Replace("${user_type}", userType);
-            result = result.Replace("${version_name}", game.Id);
+            result = result.Replace("${version_name}", QuoteIfNeeded(game.Id));
             result = result.Replace("${version_type}", game.Type);
-            result = result.Replace("${game_directory}", game.GameDir);
-            result = result.Replace("${assets_root}", assetsPath);
+            result = result.Replace("${game_directory}", QuoteIfNeeded(game.GameDir));
+            result = result.Replace("${assets_root}", QuoteIfNeeded(assetsPath));
             result = result.Replace("${assets_index_name}", game.AssetIndexId);
             result = result.Replace("${user_properties}", "{}");
             result = result.Replace("${resolution_width}", _configService.Settings.WindowWidth.ToString());
             result = result.Replace("${resolution_height}", _configService.Settings.WindowHeight.ToString());
 
             if (!string.IsNullOrEmpty(classpath))
-                result = result.Replace("${classpath}", classpath);
+                result = result.Replace("${classpath}", QuoteIfNeeded(classpath));
 
-            result = result.Replace("${natives_directory}", Path.Combine(game.GameDir, "natives"));
+            result = result.Replace("${natives_directory}", QuoteIfNeeded(Path.Combine(game.GameDir, "natives")));
 
             return result;
         }

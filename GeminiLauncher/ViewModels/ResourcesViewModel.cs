@@ -493,8 +493,13 @@ namespace GeminiLauncher.ViewModels
             if (versionId.Contains(" "))
                 versionId = versionId.Split(' ')[0];
 
-            var modsDir = Path.Combine(gamePath, "mods");
-            var resourcePacksDir = Path.Combine(gamePath, "resourcepacks");
+            // Use the version's working directory so isolated versions get their
+            // mods in the right place instead of the global .minecraft folder.
+            string targetDir = mainVM?.SelectedVersion?.GameDir;
+            if (string.IsNullOrEmpty(targetDir)) targetDir = gamePath;
+
+            var modsDir = Path.Combine(targetDir, "mods");
+            var resourcePacksDir = Path.Combine(targetDir, "resourcepacks");
 
             Directory.CreateDirectory(modsDir);
             Directory.CreateDirectory(resourcePacksDir);
@@ -566,7 +571,9 @@ namespace GeminiLauncher.ViewModels
             InstalledMods.Clear();
             var mainVM = Application.Current.MainWindow.DataContext as MainViewModel;
             string gamePath = mainVM?.ConfigService.Settings.GamePath ?? ".minecraft";
-            string modsDir = Path.Combine(gamePath, "mods");
+            string targetDir = mainVM?.SelectedVersion?.GameDir;
+            if (string.IsNullOrEmpty(targetDir)) targetDir = gamePath;
+            string modsDir = Path.Combine(targetDir, "mods");
 
             if (Directory.Exists(modsDir))
             {
@@ -589,7 +596,9 @@ namespace GeminiLauncher.ViewModels
 
             var mainVM = Application.Current.MainWindow.DataContext as MainViewModel;
             string gamePath = mainVM?.ConfigService.Settings.GamePath ?? ".minecraft";
-            string modsDir = Path.Combine(gamePath, "mods");
+            string targetDir = mainVM?.SelectedVersion?.GameDir;
+            if (string.IsNullOrEmpty(targetDir)) targetDir = gamePath;
+            string modsDir = Path.Combine(targetDir, "mods");
             string filePath = Path.Combine(modsDir, fileName);
 
             try
@@ -608,7 +617,7 @@ namespace GeminiLauncher.ViewModels
         }
 
         [RelayCommand]
-        private async void ViewDetail(ModProject? project)
+        private void ViewDetail(ModProject? project)
         {
             if (project == null) return;
 
@@ -617,7 +626,7 @@ namespace GeminiLauncher.ViewModels
             if (!string.IsNullOrEmpty(gameVersion) && gameVersion.Contains(" "))
                 gameVersion = gameVersion.Split(' ')[0];
 
-            PreloadDetailAsync(project.Id);
+            _ = PreloadDetailAsync(project.Id);
 
             var detailPage = new Views.ResourceDetailPage(project, gameVersion);
             NavigationService?.Navigate(detailPage);

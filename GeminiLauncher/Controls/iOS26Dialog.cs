@@ -202,10 +202,12 @@ namespace GeminiLauncher.Controls
 
             dlg.Loaded += (_, __) =>
             {
-                var scaleAnim = new DoubleAnimation(0.88, 1.0, TimeSpan.FromMilliseconds(320)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+                // PCL2-style pop: springy scale with a tiny overshoot, then settle
+                var spring = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.45 };
+                var scaleAnim = new DoubleAnimation(0.88, 1.0, TimeSpan.FromMilliseconds(340)) { EasingFunction = spring };
                 cardTransform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleAnim);
                 cardTransform.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
-                translateTransform.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(12, 0, TimeSpan.FromMilliseconds(280)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+                translateTransform.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(14, 0, TimeSpan.FromMilliseconds(300)) { EasingFunction = spring });
             };
 
             dlg.ShowDialog();

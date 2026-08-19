@@ -28,7 +28,7 @@ namespace GeminiLauncher.Services.Network
         [ObservableProperty] private bool _anyActiveTasks;
 
         private readonly VersionManifestService _manifestService = new();
-        private readonly DownloadService _downloadService = new();
+        private readonly DownloadService _downloadService = new(Math.Max(1, ConfigService.Instance.Settings.MaxDownloadThreads));
         private readonly System.Windows.Threading.DispatcherTimer _speedTimer;
 
         private DownloadManagerService() 
@@ -88,18 +88,25 @@ namespace GeminiLauncher.Services.Network
             AnyActiveTasks = ActiveTasks.Any(t => !t.IsCompleted && !t.IsFailed);
         }
 
-        public async Task EnqueueGenericDownload(string name, string url, string destination)
+        // ObservableCollection must only be touched on the UI thread
+        private void AddTask(DownloadTask task)
         {
-            var task = new DownloadTask { Name = name, Status = "Pending..." };
-            
-            // Ensure UI thread access for ObservableCollection
             if (Application.Current?.Dispatcher != null && !Application.Current.Dispatcher.CheckAccess())
-            {
-                await Application.Current.Dispatcher.InvokeAsync(() => ActiveTasks.Add(task));
-            }
+                Application.Current.Dispatcher.Invoke(() => ActiveTasks.Add(task));
             else
-            {
                 ActiveTasks.Add(task);
+        }
+
+        public void EnqueueTask(DownloadTask task) => AddTask(task);
+
+        public async Task EnqueueGenericDownload(string name, string url, string destination, DownloadTask? existing = null)
+        {
+            var task = existing ?? new DownloadTask { Name = name, Status = "Pending..." };
+            if (existing == null)
+            {
+                task.DownloadUrl = url;
+                task.DestinationPath = destination;
+                AddTask(task);
             }
             
             try
@@ -123,10 +130,26 @@ namespace GeminiLauncher.Services.Network
 
         public async Task EnqueueGameDownload(DownloadableVersion version, string loaderChoice, string source)
         {
-            var task = new DownloadTask { Name = version.Id, Status = "Preparing..." };
-            ActiveTasks.Add(task);
+            var task = CreateGameTask(version, loaderChoice, string.Empty, source);
+            AddTask(task);
 
             await AttemptDownloadAsync(task, version, loaderChoice, source);
+        }
+
+        private static DownloadTask CreateGameTask(DownloadableVersion version, string loaderChoice, string loaderVersion, string source)
+        {
+            string name = version.Id;
+            if (!string.IsNullOrEmpty(loaderChoice) && loaderChoice != "Vanilla")
+                name = $"{version.Id}-{loaderChoice}";
+            return new DownloadTask
+            {
+                Name = name,
+                Status = "Preparing...",
+                VersionId = version.Id,
+                LoaderChoice = loaderChoice,
+                LoaderVersion = loaderVersion,
+                Source = source
+            };
         }
 
         private async Task AttemptDownloadAsync(DownloadTask task, DownloadableVersion version, string loaderChoice, string source)
@@ -228,6 +251,27 @@ namespace GeminiLauncher.Services.Network
 
                         string libPath = Path.Combine(gamePath, "libraries", relativePath);
                         downloadRequests.Add(new DownloadRequest(libUrl, libPath, artifact["sha1"]?.ToString()));
+                    }
+
+                    // Native (classifier) libraries — without these the game cannot
+                    // find LWJGL native files at launch.
+                    string? classifier = GetWindowsNativesClassifier(lib);
+                    if (!string.IsNullOrEmpty(classifier))
+                    {
+                        var classifiers = lib["downloads"]?["classifiers"] as JObject;
+                        var classToken = classifiers?[classifier];
+                        if (classToken != null)
+                        {
+                            string nativeUrl = ReplaceSource(classToken["url"]?.ToString() ?? "", source);
+                            string nativePath = classToken["path"]?.ToString() ?? "";
+                            if (!string.IsNullOrEmpty(nativePath))
+                            {
+                                downloadRequests.Add(new DownloadRequest(
+                                    nativeUrl,
+                                    Path.Combine(gamePath, "libraries", nativePath),
+                                    classToken["sha1"]?.ToString()));
+                            }
+                        }
                     }
                 }
             }
@@ -372,6 +416,29 @@ namespace GeminiLauncher.Services.Network
             };
         }
 
+        /// <summary>
+        /// Resolves the windows natives classifier for a library entry
+        /// (e.g. "natives-windows" from the "natives" node, or the classifier
+        /// embedded in the maven name as a fallback).
+        /// </summary>
+        private static string? GetWindowsNativesClassifier(JToken lib)
+        {
+            var natives = lib["natives"];
+            if (natives != null)
+            {
+                string? cls = natives["windows"]?.ToString();
+                if (!string.IsNullOrEmpty(cls))
+                    return cls.Replace("${arch}", IntPtr.Size == 8 ? "64" : "32");
+            }
+
+            string name = lib["name"]?.ToString() ?? "";
+            var parts = name.Split(':');
+            if (parts.Length > 3 && parts[3].Contains("natives", StringComparison.OrdinalIgnoreCase))
+                return parts[3];
+
+            return null;
+        }
+
         public void CancelAll()
         {
             foreach (var task in ActiveTasks.ToList())
@@ -403,20 +470,43 @@ namespace GeminiLauncher.Services.Network
                 task.ErrorMessage = string.Empty;
                 task.Status = "重试中...";
                 task.Progress = 0;
-                _ = AttemptDownloadAsync(task, new DownloadableVersion { Id = task.Name }, "Vanilla",
-                    ConfigService.Instance.Settings.DownloadSource);
+                task.JsonProgress = 0;
+                task.LibrariesProgress = 0;
+                task.AssetsProgress = 0;
+                task.ComponentsProgress = 0;
+
+                if (!string.IsNullOrEmpty(task.DownloadUrl))
+                {
+                    // Generic file download (mod / resource pack / ...)
+                    _ = EnqueueGenericDownload(task.Name, task.DownloadUrl, task.DestinationPath, task);
+                }
+                else if (!string.IsNullOrEmpty(task.VersionId))
+                {
+                    // Game (or game+loader) download — reuse the recorded choices
+                    var version = new DownloadableVersion { Id = task.VersionId };
+                    _ = AttemptDownloadWithLoaderAsync(task, version, task.LoaderChoice, task.LoaderVersion,
+                        string.IsNullOrEmpty(task.Source) ? ConfigService.Instance.Settings.DownloadSource : task.Source);
+                }
+                else
+                {
+                    task.Status = "Failed";
+                    task.IsFailed = true;
+                    task.ErrorMessage = "该任务缺少重试信息，无法自动重试";
+                }
             }
         }
 
         public async Task EnqueueGameDownloadWithLoader(DownloadableVersion version, string loaderChoice, string loaderVersion, string source)
         {
-            var task = new DownloadTask { Name = version.Id, Status = "Preparing..." };
-            if (!string.IsNullOrEmpty(loaderChoice) && loaderChoice != "Vanilla")
-                task.Name = $"{version.Id}-{loaderChoice}";
-            ActiveTasks.Add(task);
-
+            var task = CreateGameTask(version, loaderChoice, loaderVersion, source);
+            AddTask(task);
             await AttemptDownloadWithLoaderAsync(task, version, loaderChoice, loaderVersion, source);
         }
+
+        // Overload that reuses a task already visible in the UI (single task per download,
+        // so cancel/pause actually cancel the running download).
+        public async Task EnqueueGameDownloadWithLoader(DownloadTask task, DownloadableVersion version, string loaderChoice, string loaderVersion, string source)
+            => await AttemptDownloadWithLoaderAsync(task, version, loaderChoice, loaderVersion, source);
 
         private async Task AttemptDownloadWithLoaderAsync(DownloadTask task, DownloadableVersion version, string loaderChoice, string loaderVersion, string source)
         {
@@ -427,18 +517,42 @@ namespace GeminiLauncher.Services.Network
 
                 await DownloadGameFullAsync(task, version, loaderChoice, source);
 
-                if (loaderChoice == "Fabric" && !string.IsNullOrEmpty(loaderVersion))
+                if (loaderChoice != "Vanilla" && !string.IsNullOrEmpty(loaderVersion))
                 {
-                    task.Status = $"正在安装 Fabric {loaderVersion}...";
-                    task.ComponentsStatus = "正在安装";
-                    task.ComponentsStatusText = $"Fabric {loaderVersion}";
-
                     var mainVM = ((App)Application.Current).MainWindow.DataContext as ViewModels.MainViewModel;
                     string gamePath = mainVM?.ConfigService.Settings.GamePath ?? ".minecraft";
                     var modLoaderService = new GeminiLauncher.Services.Ecosystem.ModLoaderService();
-                    await modLoaderService.InstallFabricAsync(version.Id, loaderVersion, gamePath,
-                        new Progress<double>(p => task.ComponentsProgress = p),
-                        new Progress<string>(s => task.ComponentsStatusText = s));
+
+                    if (loaderChoice == "Fabric")
+                    {
+                        task.Status = $"正在安装 Fabric {loaderVersion}...";
+                        task.ComponentsStatus = "正在安装";
+                        task.ComponentsStatusText = $"Fabric {loaderVersion}";
+
+                        await modLoaderService.InstallFabricAsync(version.Id, loaderVersion, gamePath,
+                            new Progress<double>(p => task.ComponentsProgress = p),
+                            new Progress<string>(s => task.ComponentsStatusText = s));
+                    }
+                    else if (loaderChoice == "Forge")
+                    {
+                        task.Status = $"正在安装 Forge {loaderVersion}...";
+                        task.ComponentsStatus = "正在安装";
+                        task.ComponentsStatusText = $"Forge {loaderVersion}";
+
+                        await modLoaderService.InstallForgeAsync(version.Id, loaderVersion, gamePath,
+                            new Progress<double>(p => task.ComponentsProgress = p),
+                            new Progress<string>(s => task.ComponentsStatusText = s));
+                    }
+                    else if (loaderChoice == "OptiFine")
+                    {
+                        task.Status = $"正在安装 OptiFine {loaderVersion}...";
+                        task.ComponentsStatus = "正在安装";
+                        task.ComponentsStatusText = $"OptiFine {loaderVersion}";
+
+                        await modLoaderService.InstallOptiFineAsync(version.Id, loaderVersion, gamePath,
+                            new Progress<double>(p => task.ComponentsProgress = p),
+                            new Progress<string>(s => task.ComponentsStatusText = s));
+                    }
                 }
 
                 task.Status = "Completed";

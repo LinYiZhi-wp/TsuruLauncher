@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Input;
 using System.Windows.Shapes;
+using System.Threading.Tasks;
 using GeminiLauncher.Controls;
 using Path = System.IO.Path;
 
@@ -30,15 +31,12 @@ namespace GeminiLauncher.Views
         {
             if (DataContext is MainViewModel vm)
             {
-                if (vm.AccountManager.ActiveAccount == null)
-                {
-                    string defaultPlayer = "Player";
-                    vm.AccountManager.LoginOffline(defaultPlayer);
-                }
-
+                // Do NOT silently create an account — the launcher asks the user to
+                // log in when they press launch. This keeps logout actually working.
                 var activeAccount = vm.AccountManager.ActiveAccount;
-                PlayerNameText.Text = activeAccount?.Username ?? "Player";
-                GreetingText.Text = $"👋 你好，{activeAccount?.Username ?? "Player"}";
+                PlayerNameText.Text = activeAccount?.Username ?? "未登录";
+                PlayerModeText.Text = activeAccount?.Type == Models.AccountType.Microsoft ? "微软账号" : "离线模式";
+                GreetingText.Text = $"👋 你好，{activeAccount?.Username ?? "未登录玩家"}";
                 LaunchButton.IsEnabled = true;
             }
         }
@@ -111,21 +109,27 @@ namespace GeminiLauncher.Views
                 ModCountText.Text = "0";
             }
 
-            var javaService = new Services.JavaService();
-            var installations = javaService.FindInstallations();
-            if (installations.Count > 0)
+            // Java registry scanning can take a moment — keep it off the UI thread
+            _ = Task.Run(() =>
             {
-                var best = installations[0];
-                JavaStatusText.Text = best.Version ?? "已安装";
-                JavaStatusText.Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#00E676")!);
-            }
-            else
-            {
-                JavaStatusText.Text = "未检测";
-                JavaStatusText.Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFC107")!);
-            }
+                var installations = new Services.JavaService().FindInstallations();
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    if (installations.Count > 0)
+                    {
+                        var best = installations[0];
+                        JavaStatusText.Text = best.Version ?? "已安装";
+                        JavaStatusText.Foreground = new System.Windows.Media.SolidColorBrush(
+                            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#00E676")!);
+                    }
+                    else
+                    {
+                        JavaStatusText.Text = "未检测";
+                        JavaStatusText.Foreground = new System.Windows.Media.SolidColorBrush(
+                            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFC107")!);
+                    }
+                });
+            });
         }
 
         private void AccountCapsule_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -556,7 +560,12 @@ namespace GeminiLauncher.Views
 
         private string GetString(string key)
         {
-            return (string)Application.Current.FindResource(key) ?? key;
+            try
+            {
+                if (Application.Current.FindResource(key) is string s) return s;
+            }
+            catch { }
+            return key;
         }
     }
 }

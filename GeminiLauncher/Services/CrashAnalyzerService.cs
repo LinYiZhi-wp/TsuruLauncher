@@ -131,39 +131,22 @@ namespace GeminiLauncher.Services
                 if (!Directory.Exists(modsDir)) return (string?)null;
 
                 var modFiles = Directory.GetFiles(modsDir, "*.jar");
-                var modNames = new System.Collections.Generic.HashSet<string>();
-                var warnings = new System.Collections.Generic.List<string>();
+                var lowerNames = modFiles
+                    .Select(f => Path.GetFileName(f).ToLowerInvariant())
+                    .ToList();
 
-                foreach (var file in modFiles)
-                {
-                    string fileName = Path.GetFileName(file).ToLowerInvariant();
-                    
-                    // 1. Duplicate Detection (Simplified by filename)
-                    // Remove version numbers: "jei-1.16.5-7.7.1.jar" -> "jei"
-                    // Regex to grab name part: ^[a-zA-Z]+
-                    var match = Regex.Match(fileName, @"^([a-zA-Z\-]+)");
-                    if (match.Success)
-                    {
-                        string baseName = match.Groups[1].Value;
-                        // Ignore common prefixes like "fabric-api" vs "fabric-language-kotlin" overlap
-                        if (baseName.Length > 3) 
-                        {
-                             // This is a very crude check, real Mod duplicate detection needs getting ModID from jar
-                             // skipping for now to avoid false positives in prototype
-                        }
-                    }
+                // Known incompatibilities: check across the WHOLE mods folder —
+                // the conflicting mods are separate files, so per-file checks never fire.
+                bool hasOptifine = lowerNames.Any(n => n.Contains("optifine"));
+                bool hasSodium = lowerNames.Any(n => n.Contains("sodium"));
+                bool hasRubidium = lowerNames.Any(n => n.Contains("rubidium"));
 
-                    // 2. Known Incompatibilities (Hardcoded)
-                    if (fileName.Contains("optifine") && fileName.Contains("sodium"))
-                    {
-                        return "Conflict Detected: OptiFine and Sodium cannot be installed together.";
-                    }
-                    if (fileName.Contains("rubidium") && fileName.Contains("sodium"))
-                    {
-                        return "Conflict Detected: Rubidium and Sodium are the same mod for different loaders.";
-                    }
-                }
-                
+                if (hasOptifine && hasSodium)
+                    return "Conflict Detected: OptiFine and Sodium cannot be installed together.";
+
+                if (hasRubidium && hasSodium)
+                    return "Conflict Detected: Rubidium and Sodium are the same mod for different loaders.";
+
                 return (string?)null;
             });
         }

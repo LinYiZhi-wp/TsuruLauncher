@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using GeminiLauncher.Models;
 using GeminiLauncher.Services.Network;
@@ -101,17 +102,25 @@ namespace GeminiLauncher.Services.Ecosystem
                     foreach (var file in files)
                     {
                          currentFile++;
-                         double pct = (double)currentFile / totalFiles * 100;
-                         progress?.Report(pct);
-                         
-                         string downloadUrl = file["downloads"]?[0]?.ToString() ?? "";
-                         string path = file["path"]?.ToString() ?? ""; 
-                         if (string.IsNullOrEmpty(downloadUrl) || string.IsNullOrEmpty(path)) continue;
+                         progress?.Report((double)currentFile / totalFiles); // 0..1, consistent with InstallFabricAsync
 
-                         string fileName = Path.GetFileName(path);
+                         string downloadUrl = file["downloads"]?[0]?.ToString() ?? "";
+                         string rawPath = file["path"]?.ToString() ?? "";
+                         if (string.IsNullOrEmpty(downloadUrl) || string.IsNullOrEmpty(rawPath)) continue;
+
+                         string fileName = Path.GetFileName(rawPath);
                          status?.Report($"Downloading {fileName} ({currentFile}/{totalFiles})...");
 
-                         string destPath = Path.Combine(versionDir, path); 
+                         // Security: never allow pack-supplied paths to escape the version directory
+                         string safeRel = rawPath.Replace('\\', '/');
+                         string destPath = Path.GetFullPath(Path.Combine(versionDir, safeRel));
+                         string versionRoot = Path.GetFullPath(versionDir) + Path.DirectorySeparatorChar;
+                         if (!destPath.StartsWith(versionRoot, StringComparison.OrdinalIgnoreCase))
+                         {
+                             status?.Report($"跳过非法路径: {rawPath}");
+                             continue;
+                         }
+
                          string? destDir = Path.GetDirectoryName(destPath);
                          if (destDir != null && !Directory.Exists(destDir)) Directory.CreateDirectory(destDir);
 
@@ -183,10 +192,23 @@ namespace GeminiLauncher.Services.Ecosystem
                 indexJson["summary"] = "Exported by LYZL";
                 
                 var dependencies = new JObject();
-                // We should ideally detect these from the instance metadata or json
-                // For now, heuristic or placeholder
-                dependencies["minecraft"] = instance.Id.Split('-')[0]; // Crude
-                dependencies["fabric-loader"] = "0.14.21"; // Placeholder, TODO: Detect
+
+                // Detect the MC version from the version id ("1.20.1-forge-47.2.0" -> "1.20.1")
+                string mcVersion = Regex.Match(instance.Id, @"^\d+\.\d+(\.\d+)?").Value;
+                if (string.IsNullOrEmpty(mcVersion)) mcVersion = instance.Id.Split('-')[0];
+                dependencies["minecraft"] = mcVersion;
+
+                // Detect the mod loader from the version id
+                string lowerId = instance.Id.ToLowerInvariant();
+                if (lowerId.Contains("fabric"))
+                    dependencies["fabric-loader"] = ExtractLoaderVersion(instance.Id, "fabric") ?? "latest";
+                else if (lowerId.Contains("quilt"))
+                    dependencies["quilt-loader"] = ExtractLoaderVersion(instance.Id, "quilt") ?? "latest";
+                else if (lowerId.Contains("neoforge"))
+                    dependencies["neoforge"] = ExtractLoaderVersion(instance.Id, "neoforge") ?? "latest";
+                else if (lowerId.Contains("forge"))
+                    dependencies["forge"] = ExtractLoaderVersion(instance.Id, "forge") ?? "latest";
+
                 indexJson["dependencies"] = dependencies;
 
                 var filesArray = new JArray();
@@ -259,6 +281,17 @@ namespace GeminiLauncher.Services.Ecosystem
             {
                  try { Directory.Delete(tempDir, true); } catch { }
             }
+        }
+
+        private static string? ExtractLoaderVersion(string versionId, string loader)
+        {
+            var parts = versionId.Split('-');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (parts[i].Equals(loader, StringComparison.OrdinalIgnoreCase) && i + 1 < parts.Length)
+                    return parts[i + 1];
+            }
+            return null;
         }
 
         private string ComputeHash(string filePath, System.Security.Cryptography.HashAlgorithm algorithm)

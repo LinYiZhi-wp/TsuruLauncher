@@ -56,6 +56,15 @@ namespace GeminiLauncher.Models
 
         public long LastDownloadedBytes { get; set; }
         public CancellationTokenSource Cts { get; set; } = new CancellationTokenSource();
+
+        // Retry metadata (populated by DownloadManagerService so RetryFailed can
+        // rebuild the correct download instead of guessing from the display name)
+        public string VersionId { get; set; } = string.Empty;
+        public string LoaderChoice { get; set; } = "Vanilla";
+        public string LoaderVersion { get; set; } = string.Empty;
+        public string Source { get; set; } = "Official";
+        public string DownloadUrl { get; set; } = string.Empty;
+        public string DestinationPath { get; set; } = string.Empty;
         
         public string ProgressPercentageText => $"{(Progress * 100):F0}%"; // Using field is fine here for read, but Property is preferred.
         // Actually, ObservableProperty generates "Progress", so let's use that.

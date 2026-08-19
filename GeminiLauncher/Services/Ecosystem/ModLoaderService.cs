@@ -44,8 +44,6 @@ namespace GeminiLauncher.Services.Ecosystem
                 foreach (var lib in libraries)
                 {
                     string name = lib["name"]?.ToString() ?? "";
-                    string urlBase = lib["url"]?.ToString() ?? "https://maven.fabricmc.net/";
-
                     if (string.IsNullOrEmpty(name)) continue;
 
                     var parts = name.Split(':');
@@ -54,16 +52,91 @@ namespace GeminiLauncher.Services.Ecosystem
                     string group = parts[0].Replace('.', '/');
                     string artifact = parts[1];
                     string version = parts[2];
-                    string path = $"{group}/{artifact}/{version}/{artifact}-{version}.jar";
-                    string destPath = Path.Combine(dotMinecraftPath, "libraries", path);
+                    var downloadsToken = lib["downloads"];
 
-                    if (!File.Exists(destPath))
+                    // 1) Main artifact — use explicit downloads.artifact metadata when present,
+                    // otherwise fall back to the maven layout. Mojang-hosted libraries carry no
+                    // "url" field, so default to libraries.minecraft.net (NOT maven.fabricmc.net).
+                    var artifactToken = downloadsToken?["artifact"];
+                    if (artifactToken != null && !string.IsNullOrEmpty(artifactToken["path"]?.ToString()))
                     {
-                        downloads.Add(new DownloadRequest
+                        string p = artifactToken["path"].ToString();
+                        string artifactUrl = artifactToken["url"]?.ToString() ?? "";
+                        if (string.IsNullOrEmpty(artifactUrl)) artifactUrl = (lib["url"]?.ToString() ?? "https://libraries.minecraft.net/") + p;
+                        string destPath = Path.Combine(dotMinecraftPath, "libraries", p);
+                        if (!File.Exists(destPath))
                         {
-                            Url = $"{urlBase}{path}",
-                            DestinationPath = destPath
-                        });
+                            downloads.Add(new DownloadRequest
+                            {
+                                Url = artifactUrl,
+                                DestinationPath = destPath,
+                                Sha1 = artifactToken["sha1"]?.ToString()
+                            });
+                        }
+                    }
+                    else if (parts.Length == 3)
+                    {
+                        string path = $"{group}/{artifact}/{version}/{artifact}-{version}.jar";
+                        string urlBase = lib["url"]?.ToString() ?? "https://libraries.minecraft.net/";
+                        string destPath = Path.Combine(dotMinecraftPath, "libraries", path);
+                        if (!File.Exists(destPath))
+                        {
+                            downloads.Add(new DownloadRequest
+                            {
+                                Url = $"{urlBase}{path}",
+                                DestinationPath = destPath
+                            });
+                        }
+                    }
+
+                    // 2) Natives classifier (windows) — required for LWJGL at launch.
+                    string? classifier = null;
+                    var natives = lib["natives"];
+                    if (natives != null)
+                    {
+                        classifier = natives["windows"]?.ToString();
+                        if (!string.IsNullOrEmpty(classifier))
+                            classifier = classifier.Replace("$" + "{arch}", IntPtr.Size == 8 ? "64" : "32");
+                    }
+                    if (string.IsNullOrEmpty(classifier) && parts.Length > 3 &&
+                        parts[3].Contains("natives", StringComparison.OrdinalIgnoreCase))
+                        classifier = parts[3];
+
+                    if (!string.IsNullOrEmpty(classifier))
+                    {
+                        var classifiers = downloadsToken?["classifiers"] as JObject;
+                        var classToken = classifiers?[classifier];
+                        if (classToken != null && !string.IsNullOrEmpty(classToken["path"]?.ToString()))
+                        {
+                            string p = classToken["path"].ToString();
+                            string classifierUrl = classToken["url"]?.ToString() ?? "";
+                            if (string.IsNullOrEmpty(classifierUrl)) classifierUrl = (lib["url"]?.ToString() ?? "https://libraries.minecraft.net/") + p;
+                            string destPath = Path.Combine(dotMinecraftPath, "libraries", p);
+                            if (!File.Exists(destPath))
+                            {
+                                downloads.Add(new DownloadRequest
+                                {
+                                    Url = classifierUrl,
+                                    DestinationPath = destPath,
+                                    Sha1 = classToken["sha1"]?.ToString()
+                                });
+                            }
+                        }
+                        else if (parts.Length > 3 && classifier == parts[3])
+                        {
+                            // No downloads metadata: guess the classifier jar path
+                            string path = $"{group}/{artifact}/{version}/{artifact}-{version}-{classifier}.jar";
+                            string guessedUrl = (lib["url"]?.ToString() ?? "https://libraries.minecraft.net/") + path;
+                            string destPath = Path.Combine(dotMinecraftPath, "libraries", path);
+                            if (!File.Exists(destPath))
+                            {
+                                downloads.Add(new DownloadRequest
+                                {
+                                    Url = guessedUrl,
+                                    DestinationPath = destPath
+                                });
+                            }
+                        }
                     }
                 }
 
@@ -183,6 +256,126 @@ namespace GeminiLauncher.Services.Ecosystem
             {
                 status?.Report($"Forge安装失败: {ex.Message}");
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Installs OptiFine by downloading the installer jar from BMCLAPI and
+        /// running it in silent mode (creates versions/{mc}-OptiFine).
+        /// optifineVersion is expected in "type_patch" form, e.g. "HD_U_I6".
+        /// </summary>
+        public async Task InstallOptiFineAsync(string mcVersion, string optifineVersion, string dotMinecraftPath, IProgress<double>? progress = null, IProgress<string>? status = null)
+        {
+            if (string.IsNullOrEmpty(optifineVersion))
+                throw new Exception("OptiFine 版本为空");
+
+            var versionParts = optifineVersion.Split('_');
+            if (versionParts.Length < 2)
+                throw new Exception($"无效的 OptiFine 版本: {optifineVersion}");
+            string type = string.Join("_", versionParts.Take(versionParts.Length - 1));
+            string patch = versionParts[versionParts.Length - 1];
+
+            // Try the known BMCLAPI download layouts
+            var candidates = new[]
+            {
+                $"{BMCLAPI_FORGE}/optifine/{mcVersion}/{type}/{patch}",
+                $"{BMCLAPI_FORGE}/optifine/{mcVersion}/{type}_{patch}",
+                $"{BMCLAPI_FORGE}/optifine/{mcVersion}/download?type={type}&patch={patch}"
+            };
+
+            string? installerPath = null;
+            foreach (var url in candidates)
+            {
+                string candidate = Path.Combine(Path.GetTempPath(), $"optifine_{Guid.NewGuid():N}.jar");
+                try
+                {
+                    status?.Report($"正在下载 OptiFine {optifineVersion}...");
+                    await _downloadService.DownloadFileAsync(url, candidate);
+                    installerPath = candidate;
+                    break;
+                }
+                catch
+                {
+                    try { if (File.Exists(candidate)) File.Delete(candidate); } catch { }
+                }
+            }
+
+            if (installerPath == null)
+                throw new Exception($"无法从 BMCLAPI 下载 OptiFine {optifineVersion}，请检查版本是否正确");
+
+            try
+            {
+                status?.Report("正在运行 OptiFine 安装程序...");
+
+                var javaPath = FindJavaPath();
+                if (string.IsNullOrEmpty(javaPath))
+                    throw new Exception("未找到Java运行环境");
+
+                using var process = new System.Diagnostics.Process
+                {
+                    StartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = javaPath,
+                        Arguments = $"-jar \"{installerPath}\" --installDir \"{dotMinecraftPath}\"",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        WorkingDirectory = Path.GetTempPath()
+                    }
+                };
+
+                var outputBuilder = new System.Text.StringBuilder();
+                var errorBuilder = new System.Text.StringBuilder();
+                process.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) outputBuilder.AppendLine(e.Data); };
+                process.ErrorDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) errorBuilder.AppendLine(e.Data); };
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                while (!process.HasExited)
+                {
+                    await Task.Delay(500);
+                    progress?.Report(0.5);
+                }
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode != 0)
+                {
+                    var err = string.IsNullOrEmpty(errorBuilder.ToString()) ? outputBuilder.ToString() : errorBuilder.ToString();
+                    throw new Exception($"OptiFine 安装程序返回错误码: {process.ExitCode}\n{err}");
+                }
+
+                // The installer creates versions/{mcVersion}-OptiFine/{mcVersion}-OptiFine.json
+                string versionsDir = Path.Combine(dotMinecraftPath, "versions");
+                string? optifineDir = null;
+                if (Directory.Exists(versionsDir))
+                {
+                    optifineDir = Directory.GetDirectories(versionsDir)
+                        .FirstOrDefault(d => Path.GetFileName(d).StartsWith($"{mcVersion}-OptiFine", StringComparison.OrdinalIgnoreCase))
+                        ?? Directory.GetDirectories(versionsDir)
+                           .FirstOrDefault(d => Path.GetFileName(d).Contains("OptiFine", StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (optifineDir == null)
+                    throw new Exception("OptiFine 安装完成但未找到生成的版本目录");
+
+                string dirName = Path.GetFileName(optifineDir);
+                string jsonPath = Path.Combine(optifineDir, $"{dirName}.json");
+                if (File.Exists(jsonPath))
+                {
+                    var json = JObject.Parse(File.ReadAllText(jsonPath));
+                    json["id"] = dirName;
+                    File.WriteAllText(jsonPath, json.ToString());
+                }
+
+                status?.Report("OptiFine安装完成！");
+                progress?.Report(1.0);
+            }
+            finally
+            {
+                try { if (File.Exists(installerPath)) File.Delete(installerPath); } catch { }
             }
         }
 

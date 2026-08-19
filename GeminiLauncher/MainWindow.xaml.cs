@@ -128,6 +128,9 @@ namespace GeminiLauncher
                 if (!(RootFrame.Content is Views.HomePage))
                 {
                     NavigateTo("home");
+                    // "home" fallback should be a fresh start, not a pushed page —
+                    // otherwise repeated back presses keep pushing more HomePages.
+                    while (RootFrame.CanGoBack) RootFrame.RemoveBackEntry();
                 }
             }
         }

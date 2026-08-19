@@ -83,7 +83,6 @@ namespace GeminiLauncher.ViewModels
         public ObservableCollection<LoaderVersionItem> FilteredOptiFineVersions { get; } = new();
 
         private readonly LoaderApiService _loaderApiService = new();
-        private readonly ModLoaderService _modLoaderService = new();
         private bool _forgeLoaded, _fabricLoaded, _optifineLoaded;
 
         private DownloadTask? _currentDownloadTask;
@@ -264,36 +263,27 @@ namespace GeminiLauncher.ViewModels
 
                 var downloadSource = ConfigService.Instance.Settings.DownloadSource;
 
-                if (loaderChoice == "Forge")
+                // Single task shared with the download manager, so the panel shows one
+                // entry and Cancel/Pause actually cancel the running download.
+                _currentDownloadTask = new DownloadTask
                 {
-                    _currentDownloadTask = new DownloadTask
-                    {
-                        Name = $"{SelectedVersion.Id}-Forge{loaderVersion}",
-                        Status = "正在下载游戏核心...",
-                        Cts = new CancellationTokenSource()
-                    };
-                    DownloadManagerService.Instance.ActiveTasks.Add(_currentDownloadTask);
+                    Name = loaderChoice == "Vanilla" ? SelectedVersion.Id : $"{SelectedVersion.Id}-{loaderChoice}",
+                    Status = "正在下载游戏核心...",
+                    Cts = new CancellationTokenSource(),
+                    VersionId = SelectedVersion.Id,
+                    LoaderChoice = loaderChoice,
+                    LoaderVersion = loaderVersion,
+                    Source = downloadSource
+                };
+                DownloadManagerService.Instance.EnqueueTask(_currentDownloadTask);
 
-                    await DownloadManagerService.Instance.EnqueueGameDownloadWithLoader(
-                        SelectedVersion, loaderChoice, loaderVersion, downloadSource);
+                await DownloadManagerService.Instance.EnqueueGameDownloadWithLoader(
+                    _currentDownloadTask, SelectedVersion, loaderChoice, loaderVersion, downloadSource);
 
-                    _currentDownloadTask.Status = "正在安装Forge...";
-                    DownloadStatus = "正在安装Forge...";
-
-                    await InstallForgeAsync(SelectedVersion.Id, loaderVersion);
-
-                    _currentDownloadTask.Status = "已完成";
-                    _currentDownloadTask.IsCompleted = true;
-                    _currentDownloadTask.Progress = 1.0;
+                if (_currentDownloadTask.IsCompleted)
                     DownloadStatus = "下载并安装完成！";
-                }
                 else
-                {
-                    await DownloadManagerService.Instance.EnqueueGameDownloadWithLoader(
-                        SelectedVersion, loaderChoice, loaderVersion, downloadSource);
-
-                    DownloadStatus = "下载已加入队列";
-                }
+                    DownloadStatus = _currentDownloadTask.ErrorMessage ?? "下载未完成";
 
                 DownloadProgress = 1.0;
             }
@@ -319,51 +309,6 @@ namespace GeminiLauncher.ViewModels
             finally
             {
                 IsDownloading = false;
-            }
-        }
-
-        private async Task InstallForgeAsync(string mcVersion, string forgeVersion)
-        {
-            if (_currentDownloadTask == null) return;
-
-            try
-            {
-                var mainVM = ((App)Application.Current).MainWindow.DataContext as MainViewModel;
-                string gamePath = mainVM?.ConfigService.Settings.GamePath ?? ".minecraft";
-
-                var progress = new Progress<double>(p =>
-                {
-                    if (_currentDownloadTask != null)
-                    {
-                        _currentDownloadTask.ComponentsProgress = p;
-                        _currentDownloadTask.ComponentsStatusText = $"安装中 {p * 100:F0}%";
-                    }
-                });
-
-                var status = new Progress<string>(s =>
-                {
-                    if (_currentDownloadTask != null)
-                    {
-                        _currentDownloadTask.ComponentsStatus = s;
-                    }
-                });
-
-                await _modLoaderService.InstallForgeAsync(mcVersion, forgeVersion, gamePath, progress, status);
-
-                if (_currentDownloadTask != null)
-                {
-                    _currentDownloadTask.ComponentsProgress = 1.0;
-                    _currentDownloadTask.ComponentsStatus = "已完成";
-                    _currentDownloadTask.ComponentsStatusText = "已完成";
-                }
-            }
-            catch (Exception ex)
-            {
-                if (_currentDownloadTask != null)
-                {
-                    _currentDownloadTask.ComponentsStatus = $"安装失败: {ex.Message}";
-                }
-                throw;
             }
         }
 

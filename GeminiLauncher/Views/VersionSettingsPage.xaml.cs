@@ -1,10 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.IO.Compression;
 using GeminiLauncher.Models;
+using GeminiLauncher.Services.Animation;
+using Newtonsoft.Json.Linq;
 
 namespace GeminiLauncher.Views
 {
@@ -13,6 +17,9 @@ namespace GeminiLauncher.Views
         private GameInstance _version;
         private VersionSettings? _settings;
         private string _startTab = "overview";
+        private string _customJvmArgs = string.Empty;
+        private TextBox? _jvmArgsBox;
+        private ComboBox? _javaCombo;
 
         public VersionSettingsPage(GameInstance version)
         {
@@ -44,6 +51,7 @@ namespace GeminiLauncher.Views
 
         private void BackButton_Click(object sender, RoutedEventArgs e)
         {
+            SaveVersionSettings();
             if (NavigationService.CanGoBack) NavigationService.GoBack();
         }
 
@@ -51,7 +59,7 @@ namespace GeminiLauncher.Views
 
         private VersionSettings LoadVersionSettings(string versionId)
         {
-            return new VersionSettings
+            var settings = new VersionSettings
             {
                 VersionId = versionId,
                 CustomName = _version.Id,
@@ -60,6 +68,43 @@ namespace GeminiLauncher.Views
                 MinMemoryMB = 512,
                 MaxMemoryMB = 4096
             };
+
+            try
+            {
+                string configPath = Path.Combine(_version.GameDir, "lyzl_profile.json");
+                if (File.Exists(configPath))
+                {
+                    var json = JObject.Parse(File.ReadAllText(configPath));
+                    if (json.ContainsKey("UseGlobalSettings"))
+                        settings.MemoryMode = (bool?)json["UseGlobalSettings"] == false
+                            ? MemoryAllocation.Custom
+                            : MemoryAllocation.FollowGlobal;
+                    if (json.ContainsKey("CustomMemoryMb")) settings.MaxMemoryMB = (int?)json["CustomMemoryMb"] ?? 4096;
+                    if (json.ContainsKey("CustomMinMemoryMb")) settings.MinMemoryMB = (int?)json["CustomMinMemoryMb"] ?? 512;
+                    if (json.ContainsKey("CustomJavaPath")) settings.JavaPath = json["CustomJavaPath"]?.ToString() ?? "";
+                    if (json.ContainsKey("CustomJvmArgs")) _customJvmArgs = json["CustomJvmArgs"]?.ToString() ?? "";
+                }
+            }
+            catch { }
+
+            return settings;
+        }
+
+        private void SaveVersionSettings()
+        {
+            try
+            {
+                var json = new JObject();
+                json["UseGlobalSettings"] = _settings?.MemoryMode == MemoryAllocation.Custom ? false : true;
+                json["CustomMemoryMb"] = _settings?.MaxMemoryMB ?? 4096;
+                json["CustomMinMemoryMb"] = _settings?.MinMemoryMB ?? 512;
+                json["CustomJavaPath"] = _settings?.JavaPath ?? "";
+                json["CustomJvmArgs"] = _customJvmArgs ?? "";
+
+                string configPath = Path.Combine(_version.GameDir, "lyzl_profile.json");
+                File.WriteAllText(configPath, json.ToString());
+            }
+            catch { }
         }
 
         private void TabButton_Click(object sender, RoutedEventArgs e)
@@ -99,16 +144,16 @@ namespace GeminiLauncher.Views
                 // Animate
                 var storyboard = new System.Windows.Media.Animation.Storyboard();
                 
-                var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.3))
+                var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.28))
                 {
-                    EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                    EasingFunction = TransitionConfig.DecelerateEase
                 };
                 System.Windows.Media.Animation.Storyboard.SetTarget(fadeIn, content);
                 System.Windows.Media.Animation.Storyboard.SetTargetProperty(fadeIn, new PropertyPath("Opacity"));
                 
-                var slideUp = new System.Windows.Media.Animation.DoubleAnimation(20, 0, TimeSpan.FromSeconds(0.3))
+                var slideUp = new System.Windows.Media.Animation.DoubleAnimation(18, 0, TimeSpan.FromSeconds(0.3))
                 {
-                    EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                    EasingFunction = TransitionConfig.SoftSpringEase
                 };
                 System.Windows.Media.Animation.Storyboard.SetTarget(slideUp, content);
                 System.Windows.Media.Animation.Storyboard.SetTargetProperty(slideUp, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.Y)"));
@@ -174,7 +219,7 @@ namespace GeminiLauncher.Views
             var stack = new StackPanel();
             stack.Children.Add(new TextBlock { Text = "⚠️ 危险操作区", Foreground = System.Windows.Media.Brushes.Orange, FontWeight = FontWeights.Bold, Margin = new Thickness(0,0,0,15) });
             
-            stack.Children.Add(CreateActionButton("🗑️ 删除该版本", (s, e) => MessageBox.Show("确定要删除吗？(模拟)"), "#30FF0000"));
+            stack.Children.Add(CreateActionButton("🗑️ 删除该版本", async (s, e) => await DeleteVersionAsync(), "#30FF0000"));
             stack.Children.Add(CreateActionButton("📂 打开版本文件夹", (s, e) => OpenFolder(_version.GameDir)));
             
             card.Child = stack;
@@ -228,14 +273,11 @@ namespace GeminiLauncher.Views
             
             var chkSettings = CreateCheckbox(GetString("Export_GameSettings"), true);
             var chkSaves = CreateCheckbox(GetString("Export_Saves"), false);
-            var chkLauncher = CreateCheckbox(GetString("Export_PCL_Launcher"), false); // Default false for now
-            var chkLauncherSettings = CreateCheckbox(GetString("Export_PCL_Settings"), false); // Default false
+            // (launcher / launcher-settings options were placeholders with no effect — removed)
             
             exportList.Children.Add(chkGameCore);
             exportList.Children.Add(chkSettings);
             exportList.Children.Add(chkSaves);
-            exportList.Children.Add(chkLauncher);
-            exportList.Children.Add(chkLauncherSettings);
             
             var listBorder = new Border
             {
@@ -296,13 +338,7 @@ namespace GeminiLauncher.Views
                             IncludeGameCore = chkGameCore.IsChecked == true,
                             IncludeGameSettings = chkSettings.IsChecked == true,
                             IncludeSaves = chkSaves.IsChecked == true,
-                            IncludeLauncher = chkLauncher.IsChecked == true,
-                            IncludeLauncherSettings = chkLauncherSettings.IsChecked == true,
-                            // Implicitly export mods/resourcepacks if GameCore/Settings are checked or simple heuristic?
-                            // For a modpack, we MUST export mods.
-                            // I'll assume IncludeGameCore implies Mods for now, or I should have added a separate checkbox. 
-                            // But usually "Game Core" in PCL context for a modpack instance INCLUDES the mods folder.
-                            IncludeMods = true, 
+                            IncludeMods = true,
                             IncludeResourcePacks = true,
                             IncludeShaderPacks = true
                         };
@@ -542,9 +578,10 @@ namespace GeminiLauncher.Views
             launchItems.Add(CreateSettingItem("游戏窗口标题", CreateTextBox("跟随全局设置")));
             launchItems.Add(CreateSettingItem("自定义信息", CreateTextBox("跟随全局设置"))); // From screenshot 3
             
-            // Java with Auto/Global logic
-            var javaItems = new[] { "跟随全局设置", "智能匹配 (Auto)", "自定义..." };
-            launchItems.Add(CreateSettingItem("游戏 Java", CreateComboBox(javaItems, 0)));
+            // Java with Auto/Global logic (persisted to lyzl_profile.json)
+            _javaCombo = CreateComboBox(new[] { "跟随全局设置", "智能匹配 (Auto)", "自定义..." }, 0);
+            _javaCombo.SelectionChanged += JavaCombo_SelectionChanged;
+            launchItems.Add(CreateSettingItem("游戏 Java", _javaCombo));
             
             panel.Children.Add(CreateSettingsGroup("启动选项", launchItems.ToArray()));
 
@@ -576,8 +613,10 @@ namespace GeminiLauncher.Views
             var textGrid = new Grid();
             textGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             textGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            textGrid.Children.Add(new TextBlock { Text = "已使用内存 11.1 GB / 15.7 GB", Foreground = System.Windows.Media.Brushes.Gray, FontSize = 12 });
-            var allocText = new TextBlock { Text = "游戏分配 3.2 GB", Foreground = System.Windows.Media.Brushes.Gray, FontSize = 12 };
+            long totalMemMb = GeminiLauncher.Services.LaunchService.GetTotalSystemMemoryMB();
+            int allocMb = _settings?.MaxMemoryMB ?? 4096;
+            textGrid.Children.Add(new TextBlock { Text = $"系统内存 {totalMemMb / 1024.0:F1} GB", Foreground = System.Windows.Media.Brushes.Gray, FontSize = 12 });
+            var allocText = new TextBlock { Text = $"游戏分配 {allocMb / 1024.0:F1} GB", Foreground = System.Windows.Media.Brushes.Gray, FontSize = 12 };
             Grid.SetColumn(allocText, 1);
             textGrid.Children.Add(allocText);
 
@@ -590,7 +629,9 @@ namespace GeminiLauncher.Views
 
             // Group 3: Advanced Options (Screenshot 4)
             var advItems = new List<UIElement>();
-            advItems.Add(CreateSettingItem("Java 虚拟机参数", CreateTextBox("跟随全局设置", 60))); // Multiline?
+            _jvmArgsBox = CreateTextBox(string.IsNullOrEmpty(_customJvmArgs) ? "跟随全局设置" : _customJvmArgs, 60);
+            _jvmArgsBox.TextChanged += (s, e) => { if (IsLoaded) _customJvmArgs = _jvmArgsBox.Text; };
+            advItems.Add(CreateSettingItem("Java 虚拟机参数", _jvmArgsBox)); // Multiline?
             advItems.Add(CreateSettingItem("游戏参数", CreateTextBox("跟随全局设置")));
             advItems.Add(CreateSettingItem("启动前执行命令", CreateTextBox("")));
             
@@ -665,7 +706,7 @@ namespace GeminiLauncher.Views
             // Quick Actions
             panel.Children.Add(CreateSectionHeader("快速操作"));
             var actionsPanel = new WrapPanel();
-            actionsPanel.Children.Add(CreateActionButton("▶ 启动游戏", (s, e) => MessageBox.Show("正在启动... (模拟)"), "#FF4CAF50"));
+            actionsPanel.Children.Add(CreateActionButton("▶ 启动游戏", (s, e) => LaunchSelectedVersion(), "#FF4CAF50"));
             actionsPanel.Children.Add(CreateActionButton("📂 打开目录", (s, e) => OpenFolder(_version.GameDir)));
             panel.Children.Add(actionsPanel);
 
@@ -884,6 +925,80 @@ namespace GeminiLauncher.Views
             }
             catch {}
         }
+        private void JavaCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_settings == null || _javaCombo == null || !IsLoaded) return;
+
+            if (_javaCombo.SelectedIndex == 2) // 自定义...
+            {
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Filter = "Java Executable (javaw.exe;java.exe)|javaw.exe;java.exe|All Files (*.*)|*.*",
+                    Title = "选择 Java 可执行文件"
+                };
+                if (dialog.ShowDialog() == true)
+                {
+                    _settings.JavaPath = dialog.FileName;
+                    _settings.MemoryMode = MemoryAllocation.Custom;
+                }
+                else
+                {
+                    _javaCombo.SelectedIndex = 0; // revert
+                }
+            }
+            else if (_javaCombo.SelectedIndex == 1) // 智能匹配
+            {
+                _settings.JavaPath = string.Empty;
+                _settings.MemoryMode = MemoryAllocation.Custom;
+            }
+            else // 跟随全局设置
+            {
+                _settings.JavaPath = string.Empty;
+                _settings.MemoryMode = MemoryAllocation.FollowGlobal;
+            }
+        }
+
+        private void LaunchSelectedVersion()
+        {
+            SaveVersionSettings();
+
+            if (Application.Current.MainWindow is MainWindow mw && mw.DataContext is ViewModels.MainViewModel vm)
+            {
+                var match = vm.GameVersions.FirstOrDefault(v => v.Id == _version.Id);
+                if (match != null)
+                {
+                    vm.SelectedVersion = match;
+                    if (vm.LaunchGameCommand.CanExecute(null))
+                        vm.LaunchGameCommand.Execute(null);
+                    return;
+                }
+            }
+            MessageBox.Show("未找到对应版本，请返回主页选择版本", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
+        private async Task DeleteVersionAsync()
+        {
+            if (MessageBox.Show($"确定要删除版本 \"{_version.Id}\" 吗？此操作不可恢复！",
+                    "删除版本", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+
+            try
+            {
+                await Task.Run(() =>
+                {
+                    string versionDir = Path.Combine(_version.RootPath, "versions", _version.Id);
+                    if (Directory.Exists(versionDir))
+                        Directory.Delete(versionDir, true);
+                });
+                MessageBox.Show("版本已删除", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                if (NavigationService.CanGoBack) NavigationService.GoBack();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"删除失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private string GetString(string key)
         {
             if (FindResource(key) is string value)

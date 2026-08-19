@@ -18,7 +18,8 @@ namespace GeminiLauncher.Services
         public InstallationService(string gamePath, string downloadSource = "Official")
         {
             _gamePath = gamePath;
-            _downloadService = new DownloadService(maxConcurrency: 64);
+            int threads = Math.Max(1, ConfigService.Instance.Settings.MaxDownloadThreads);
+            _downloadService = new DownloadService(maxConcurrency: threads);
             _downloadSource = downloadSource == "Official" 
                 ? "https://piston-meta.mojang.com" 
                 : "https://bmclapi2.bangbang93.com";
@@ -31,8 +32,6 @@ namespace GeminiLauncher.Services
                 ? "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
                 : $"{_downloadSource}/mc/game/version_manifest_v2.json";
 
-            var manifestJson = await _downloadService.DownloadStringAsync(manifestUrl); // Need to add DownloadStringAsync to DownloadService or use HttpClient direct
-            // Workaround: simple fetch here
             using var client = new System.Net.Http.HttpClient();
             var manifestStr = await client.GetStringAsync(manifestUrl);
             var manifest = JObject.Parse(manifestStr);
@@ -106,7 +105,37 @@ namespace GeminiLauncher.Services
                         }
                     }
                     
-                    // TODO: Handle Natives (classifiers)
+                    // Natives (classifiers) — required for LWJGL at launch
+                    var natives = lib["natives"];
+                    if (natives != null)
+                    {
+                        string? classifier = natives["windows"]?.ToString();
+                        if (!string.IsNullOrEmpty(classifier))
+                            classifier = classifier.Replace("$" + "{arch}", IntPtr.Size == 8 ? "64" : "32");
+                        if (!string.IsNullOrEmpty(classifier))
+                        {
+                            var classifiers = lib["downloads"]?["classifiers"] as JObject;
+                            var classToken = classifiers?[classifier];
+                            if (classToken != null)
+                            {
+                                string path = classToken["path"]?.ToString() ?? "";
+                                string url = classToken["url"]?.ToString() ?? "";
+                                if (!string.IsNullOrEmpty(path))
+                                {
+                                    if (_downloadSource != "Official")
+                                    {
+                                        url = url.Replace("https://libraries.minecraft.net", _downloadSource + "/maven");
+                                    }
+                                    downloads.Add(new DownloadRequest
+                                    {
+                                        Url = url,
+                                        DestinationPath = Path.Combine(_gamePath, "libraries", path),
+                                        Sha1 = classToken["sha1"]?.ToString()
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

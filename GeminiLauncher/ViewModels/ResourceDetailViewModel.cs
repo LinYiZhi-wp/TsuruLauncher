@@ -261,7 +261,10 @@ namespace GeminiLauncher.ViewModels
 
             var mainVM = ((App)Application.Current).MainWindow.DataContext as MainViewModel;
             string gamePath = mainVM?.ConfigService.Settings.GamePath ?? ".minecraft";
-            string destDir = GetDestinationDirectory(gamePath);
+            // Use the selected version's working directory (respects version isolation)
+            string targetDir = mainVM?.SelectedVersion?.GameDir;
+            if (string.IsNullOrEmpty(targetDir)) targetDir = gamePath;
+            string destDir = GetDestinationDirectory(targetDir);
             Directory.CreateDirectory(destDir);
             string destPath = Path.Combine(destDir, Resource.SelectedVersion.FileName);
 
@@ -285,7 +288,7 @@ namespace GeminiLauncher.ViewModels
 
                     if (DownloadDependencies && Resource.SelectedVersion.Dependencies?.Count > 0)
                     {
-                        await DownloadDependenciesAsync(gamePath);
+                        await DownloadDependenciesAsync(targetDir);
                     }
                 }
                 catch (Exception ex)
@@ -304,7 +307,7 @@ namespace GeminiLauncher.ViewModels
             }
         }
 
-        private async Task DownloadDependenciesAsync(string gamePath)
+        private async Task DownloadDependenciesAsync(string targetDir)
         {
             if (Resource?.SelectedVersion?.Dependencies == null) return;
 
@@ -317,7 +320,7 @@ namespace GeminiLauncher.ViewModels
 
                     if (depFile != null)
                     {
-                        string modsDir = Path.Combine(gamePath, "mods");
+                        string modsDir = Path.Combine(targetDir, "mods");
                         Directory.CreateDirectory(modsDir);
                         string depDest = Path.Combine(modsDir, depFile.FileName);
 
@@ -370,7 +373,9 @@ namespace GeminiLauncher.ViewModels
             if (Resource == null) return;
             var mainVM = ((App)Application.Current).MainWindow.DataContext as MainViewModel;
             var gamePath = mainVM?.ConfigService.Settings.GamePath ?? ".minecraft";
-            string dir = GetDestinationDirectory(gamePath);
+            string targetDir = mainVM?.SelectedVersion?.GameDir;
+            if (string.IsNullOrEmpty(targetDir)) targetDir = gamePath;
+            string dir = GetDestinationDirectory(targetDir);
             InstallPathDisplay = Path.Combine(dir, Resource.SelectedVersion?.FileName ?? "{未选择版本}");
         }
 

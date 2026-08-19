@@ -131,7 +131,16 @@ namespace GeminiLauncher.Services.Network
             else
             {
                 response.EnsureSuccessStatusCode();
-                await SaveStream(response, partialPath, startOffset > 0, progress, ct);
+                // Some servers ignore the Range header and reply 200 with the FULL body.
+                // In that case we must overwrite the partial file, not append to it,
+                // otherwise the file ends up with duplicated content.
+                bool append = startOffset > 0 && response.StatusCode == System.Net.HttpStatusCode.PartialContent;
+                if (startOffset > 0 && !append && File.Exists(partialPath))
+                {
+                    startOffset = 0;
+                    File.Delete(partialPath);
+                }
+                await SaveStream(response, partialPath, append, progress, ct);
             }
 
             File.Move(partialPath, finalPath, true);
@@ -203,12 +212,14 @@ namespace GeminiLauncher.Services.Network
                 try
                 {
                     await DownloadFileAsync(req.Url, req.DestinationPath, req.Sha1, byteProgress, ct);
+                    // Only count successful downloads; a failed file rethrows below
+                    // and should not inflate the progress.
+                    Interlocked.Increment(ref completedCount);
+                    progress.Report((double)completedCount / requests.Count);
                 }
                 finally
                 {
                     _semaphore.Release();
-                    Interlocked.Increment(ref completedCount);
-                    progress.Report((double)completedCount / requests.Count);
                 }
             }, ct));
 

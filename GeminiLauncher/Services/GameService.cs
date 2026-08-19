@@ -146,7 +146,16 @@ namespace GeminiLauncher.Services
                     var versionParts = id.Split('.');
                     if (versionParts.Length >= 2 && int.TryParse(versionParts[1], out int minor))
                     {
-                        if (minor >= 21) defaultJava = 21; // 1.21+ (actually 1.20.5+)
+                        if (minor > 21) defaultJava = 21; // future versions
+                        else if (minor == 21) defaultJava = 21; // 1.21+
+                        else if (minor == 20)
+                        {
+                            // 1.20.5+ requires Java 21; 1.20.0–1.20.4 requires Java 17
+                            if (versionParts.Length >= 3 && int.TryParse(versionParts[2], out int patch) && patch >= 5)
+                                defaultJava = 21;
+                            else
+                                defaultJava = 17;
+                        }
                         else if (minor >= 18) defaultJava = 17; // 1.18+
                         else if (minor >= 17) defaultJava = 17; // 1.17 (16 actually, but 17 is standard now)
                     }

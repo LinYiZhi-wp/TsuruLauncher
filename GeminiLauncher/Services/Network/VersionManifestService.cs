@@ -20,8 +20,9 @@ namespace GeminiLauncher.Services.Network
 
         public static List<string> AvailableSources => Sources.Keys.ToList();
 
-        private static List<DownloadableVersion>? _cachedVersions;
-        private static DateTime _lastFetchTime = DateTime.MinValue;
+        // Cache is keyed by source: switching the download source must not serve
+        // a manifest fetched from another mirror.
+        private static readonly Dictionary<string, (List<DownloadableVersion> versions, DateTime fetched)> _cache = new();
         private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(30);
         private static readonly object _cacheLock = new();
 
@@ -29,9 +30,9 @@ namespace GeminiLauncher.Services.Network
         {
             lock (_cacheLock)
             {
-                if (_cachedVersions != null && (DateTime.Now - _lastFetchTime) < CacheDuration)
+                if (_cache.TryGetValue(source, out var entry) && (DateTime.Now - entry.fetched) < CacheDuration)
                 {
-                    return _cachedVersions;
+                    return entry.versions;
                 }
             }
 
@@ -46,7 +47,8 @@ namespace GeminiLauncher.Services.Network
 
             lock (_cacheLock)
             {
-                return _cachedVersions ?? new List<DownloadableVersion>();
+                if (_cache.TryGetValue(source, out var entry)) return entry.versions;
+                return new List<DownloadableVersion>();
             }
         }
 
@@ -64,8 +66,7 @@ namespace GeminiLauncher.Services.Network
                 {
                     lock (_cacheLock)
                     {
-                        _cachedVersions = versions;
-                        _lastFetchTime = DateTime.Now;
+                        _cache[sourceName] = (versions, DateTime.Now);
                     }
                     return versions;
                 }

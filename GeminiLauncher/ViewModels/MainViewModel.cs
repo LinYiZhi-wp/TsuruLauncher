@@ -361,6 +361,12 @@ namespace GeminiLauncher.ViewModels
                        }
                    }
                }
+               else
+               {
+                   // Process failed to start: restore UI state so the user can retry
+                   IsLaunching = false;
+                   StatusMessage = GetString("Status_Ready");
+               }
             }
             catch (System.Exception ex)
             {
