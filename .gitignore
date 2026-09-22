@@ -41,6 +41,7 @@ Thumbs.db
 !/README.md
 !/TsuruLauncher/
 !/Setup/
+!/docs/
 
 # 打包脚本要，但产物不要
 /Setup/Output/
