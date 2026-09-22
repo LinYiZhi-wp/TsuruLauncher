@@ -1,0 +1,9 @@
+<Project Sdk="WixToolset.Sdk">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <OutputName>LYZL-Launcher-Setup</OutputName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="5.*" />
+  </ItemGroup>
+</Project>

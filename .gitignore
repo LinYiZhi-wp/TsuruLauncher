@@ -40,3 +40,10 @@ Thumbs.db
 !/.gitignore
 !/README.md
 !/TsuruLauncher/
+!/Setup/
+
+# 打包脚本要，但产物不要
+/Setup/Output/
+/Setup/*.exe
+/Setup/*.zip
+/Setup/publish/

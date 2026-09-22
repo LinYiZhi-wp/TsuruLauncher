@@ -1,0 +1,51 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="LYZL Minecraft Launcher"
+           Manufacturer="LYZL"
+           Version="1.1.0"
+           UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+           Language="2052"
+           Codepage="936">
+
+    <MajorUpgrade DowngradeErrorMessage="已安装更高版本!" />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="app.ico" SourceFile="..\publish\LYZL.exe" />
+
+    <Property Id="ARPPRODUCTICON" Value="app.ico" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/LinYiZhi-wp/LYZL-Minecraft-" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/LinYiZhi-wp/LYZL-Minecraft-" />
+
+    <!-- 安装目录 -->
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="APPLICATIONFOLDER" Name="LYZL Launcher">
+        <Component Id="MainExecutable" Guid="B1C2D3E4-F5A6-7890-BCDE-F12345678901">
+          <File Id="LYZL.exe" Source="..\publish\LYZL.exe" KeyPath="yes" />
+          <Shortcut Id="StartMenuShortcut"
+                    Directory="ProgramMenuFolder"
+                    Name="LYZL Minecraft Launcher"
+                    WorkingDirectory="APPLICATIONFOLDER"
+                    Advertise="yes" />
+          <Shortcut Id="DesktopShortcut"
+                    Directory="DesktopFolder"
+                    Name="LYZL Minecraft Launcher"
+                    WorkingDirectory="APPLICATIONFOLDER"
+                    Advertise="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="LYZL Launcher" Level="1">
+      <ComponentRef Id="MainExecutable" />
+    </Feature>
+
+    <!-- 安装向导 UI -->
+    <ui:WixUI Id="WixUI_InstallDir" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+    <WixVariable Id="WixUIBannerBmp" Value="banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="dialog.bmp" />
+
+  </Package>
+</Wix>
