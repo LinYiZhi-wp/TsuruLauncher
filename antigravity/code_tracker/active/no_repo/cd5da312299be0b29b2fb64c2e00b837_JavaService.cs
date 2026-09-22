@@ -1,181 +1,0 @@
-†7using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using Microsoft.Win32;
-
-namespace GeminiLauncher.Services
-{
-    public class JavaInstallation
-    {
-        public string Path { get; set; } = string.Empty;
-        public string Version { get; set; } = string.Empty;
-        public bool Is64Bit { get; set; } = true;
-
-        public override string ToString() => $"{Version} ({Path})";
-    }
-
-    public class JavaService
-    {
-        public List<JavaInstallation> FindInstallations()
-        {
-            var installations = new List<JavaInstallation>();
-            var scannedPaths = new HashSet<string>();
-
-            // 1. Scan Registry
-            ScanRegistryKey(Registry.LocalMachine.OpenSubKey(@"SOFTWARE\JavaSoft\Java Runtime Environment"), installations, scannedPaths);
-            ScanRegistryKey(Registry.LocalMachine.OpenSubKey(@"SOFTWARE\JavaSoft\JDK"), installations, scannedPaths);
-            ScanRegistryKey(Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\JavaSoft\Java Runtime Environment"), installations, scannedPaths);
-
-            // 2. Scan Common Paths
-            var commonPaths = new[]
-            {
-                @"C:\Program Files\Java",
-                @"C:\Program Files (x86)\Java",
-                @"C:\Program Files\Eclipse Adoptium",
-                @"C:\Program Files\Microsoft\jdk",
-                @"C:\Program Files\Azul\zulu",
-                @"C:\Program Files\BellSoft\LibericaJDK",
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Eclipse Adoptium"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".jdks") // IntelliJ
-            };
-
-            foreach (var basePath in commonPaths)
-            {
-                if (Directory.Exists(basePath))
-                {
-                    try
-                    {
-                        var javaExecutables = Directory.GetFiles(basePath, "javaw.exe", SearchOption.AllDirectories);
-                        foreach (var exec in javaExecutables)
-                        {
-                            if (scannedPaths.Contains(exec)) continue;
-                            
-                            var info = GetJavaInfo(exec);
-                            if (info != null)
-                            {
-                                installations.Add(info);
-                                scannedPaths.Add(exec);
-                            }
-                        }
-                    }
-                    catch { }
-                }
-            }
-
-            return installations.OrderByDescending(j => j.Version).ToList();
-        }
-
-        private void ScanRegistryKey(RegistryKey? key, List<JavaInstallation> installations, HashSet<string> scannedPaths)
-        {
-            if (key == null) return;
-            try
-            {
-                foreach (var ver in key.GetSubKeyNames())
-                {
-                    using var subKey = key.OpenSubKey(ver);
-                    var javaHome = subKey?.GetValue("JavaHome")?.ToString();
-                    if (!string.IsNullOrEmpty(javaHome))
-                    {
-                        var execPath = Path.Combine(javaHome, "bin", "javaw.exe");
-                        if (File.Exists(execPath) && !scannedPaths.Contains(execPath))
-                        {
-                            var info = GetJavaInfo(execPath);
-                            if (info != null)
-                            {
-                                installations.Add(info);
-                                scannedPaths.Add(execPath);
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-        }
-
-        public JavaInstallation? GetJavaInfo(string path)
-        {
-            try
-            {
-                var fileInfo = System.Diagnostics.FileVersionInfo.GetVersionInfo(path);
-                
-                // Heuristic for version if FileVersion is not standard
-                string version = fileInfo.ProductVersion ?? fileInfo.FileVersion ?? "Unknown";
-                
-                // Try to parse standard java versions like 1.8.0_20, 17.0.1, etc.
-                // For now, just return what we have
-                
-                return new JavaInstallation
-                {
-                    Path = path,
-                    Version = version,
-                    Is64Bit = path.Contains("Program Files") && !path.Contains("x86") // naive check
-                };
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        public string? AutoDetectBestJava(int requiredVersion = 0)
-        {
-            var installs = FindInstallations();
-            if (!installs.Any()) return null;
-
-            if (requiredVersion > 0)
-            {
-                // Try to find exact major version match
-                var match = installs.FirstOrDefault(j => GetMajorVersion(j.Version) == requiredVersion);
-                if (match != null) return match.Path;
-
-                // If not found, and required is 8, try to find any 8
-                if (requiredVersion == 8)
-                {
-                    match = installs.FirstOrDefault(j => j.Version.StartsWith("1.8") || j.Version.StartsWith("8."));
-                    if (match != null) return match.Path;
-                }
-                
-                // If required is high (e.g. 17), find >= required
-                match = installs.FirstOrDefault(j => GetMajorVersion(j.Version) >= requiredVersion);
-                if (match != null) return match.Path;
-            }
-
-            // Fallback: If required is 0 (unknown), assume Java 8 for legacy, Java 17 for modern?
-            // Actually, newer is usually safer for modern packs, but 8 is needed for <=1.16.5 most times.
-            
-            // Prefer Java 17/21 if available as default? No, let's Stick to User Default usually.
-            // But this function is "AutoDetectBestJava".
-            
-            return installs.OrderByDescending(j => GetMajorVersion(j.Version)).First().Path;
-        }
-
-        public JavaInstallation? GetJavaFromPath(string path)
-        {
-             if (File.Exists(path)) return GetJavaInfo(path);
-             return null;
-        }
-
-        public int GetMajorVersion(string version)
-        {
-            try
-            {
-                if (version.StartsWith("1."))
-                {
-                    // 1.8.0_202 -> 8
-                    return int.Parse(version.Split('.')[1]);
-                }
-                else
-                {
-                    // 17.0.1 -> 17
-                    return int.Parse(version.Split('.')[0]);
-                }
-            }
-            catch
-            {
-                return 0;
-            }
-        }
-    }
-}
-ë, *cascade08ë,ì,*cascade08ì,ñ, *cascade08ñ,ü,*cascade08ü,†, *cascade08†,•,*cascade08•,¶, *cascade08¶,ß,*cascade08ß,®, *cascade08®,∑,*cascade08∑,∏, *cascade08∏,ø,*cascade08ø,¿, *cascade08¿,Ã,*cascade08Ã,Õ, *cascade08Õ,‘,*cascade08‘,’, *cascade08’,Ÿ,*cascade08Ÿ,⁄, *cascade08⁄,·,*cascade08·,„, *cascade08„,Á,*cascade08Á,Ë, *cascade08Ë,Î,*cascade08Î,Ï, *cascade08Ï,Ú,*cascade08Ú,Û, *cascade08Û,Ö-*cascade08Ö-Ü- *cascade08Ü-è-*cascade08è-ê- *cascade08ê-ü-*cascade08ü-†- *cascade08†-°-*cascade08°-¢- *cascade08¢-Æ-*cascade08Æ-Ø- *cascade08Ø-≤-*cascade08≤-¥- *cascade08¥-∑-*cascade08∑-∏- *cascade08∏-ª-*cascade08ª-º- *cascade08º-¿-*cascade08¿-À- *cascade08À-÷-*cascade08÷-‡- *cascade08‡-à.*cascade08à.ä. *cascade08ä.é.*cascade08é.è. *cascade08è.ò.*cascade08ò.ô. *cascade08ô.ù.*cascade08ù.û. *cascade08û.ü.*cascade08ü.•. *cascade08•.‘.*cascade08‘.◊. *cascade08◊.⁄.*cascade08⁄.€. *cascade08€.‡.*cascade08‡.·. *cascade08·.„.*cascade08„.Â. *cascade08Â.Ê.*cascade08Ê.Á. *cascade08Á.È.*cascade08È.Í. *cascade08Í..*cascade08.Ú. *cascade08Ú.ı.*cascade08ı.˚. *cascade08˚.˝.*cascade08˝.˛. *cascade08˛.Ä/*cascade08Ä/Ç/ *cascade08Ç/â/*cascade08â/ã/ *cascade08ã/ì/*cascade08ì/î/ *cascade08î/ò/*cascade08ò/ô/ *cascade08ô/ö/*cascade08ö/õ/ *cascade08õ/û/*cascade08û/´/ *cascade08´/µ/*cascade08µ/æ/ *cascade08æ/Ó/*cascade08Ó/Û/ *cascade08Û/Ù/*cascade08Ù/ı/ *cascade08ı/ˇ/*cascade08ˇ/Ä0 *cascade08Ä0è0*cascade08è0ê0 *cascade08ê0•0*cascade08•0ß0 *cascade08ß0™0*cascade08™0¨0 *cascade08¨0∞0*cascade08∞0±0 *cascade08±0≤0*cascade08≤0¥0 *cascade08¥0∂0*cascade08∂0∑0 *cascade08∑0π0*cascade08π0∫0 *cascade08∫0Ω0*cascade08Ω0æ0 *cascade08æ0Ã0*cascade08Ã0÷0 *cascade08÷0‹0*cascade08‹0‰0 *cascade08‰0Ê0*cascade08Ê0Á0 *cascade08Á0Ó0*cascade08Ó0¯0 *cascade08¯0˘0*cascade08˘0˙0 *cascade08˙0¸0*cascade08¸0˝0 *cascade08˝0ˇ0*cascade08ˇ0Å1 *cascade08Å1â1*cascade08â1©1 *cascade08©1¨1*cascade08¨1Ø1 *cascade08Ø1±1*cascade08±1≤1 *cascade08≤1∑1*cascade08∑1¬1 *cascade08¬1«1*cascade08«1œ1 *cascade08œ1”1*cascade08”1‘1 *cascade08‘1’1*cascade08’1÷1 *cascade08÷1Ÿ1*cascade08Ÿ1⁄1 *cascade08⁄1›1*cascade08›1ﬁ1 *cascade08ﬁ1ﬂ1*cascade08ﬂ1·1 *cascade08·1Á1*cascade08Á1Ë1 *cascade08Ë1È1*cascade08È1Î1 *cascade08Î11*cascade081Ò1 *cascade08Ò1Ú1*cascade08Ú1Û1 *cascade08Û1Ù1*cascade08Ù1˜1 *cascade08˜1Ä2*cascade08Ä2É2 *cascade08É2Ñ2*cascade08Ñ2é2 *cascade08é2è2*cascade08è2ù2 *cascade08ù2†2*cascade08†2°2 *cascade08°2¢2*cascade08¢2£2 *cascade08£2§2*cascade08§2•2 *cascade08•2Ø2*cascade08Ø2∞2 *cascade08∞2¥2*cascade08¥2µ2 *cascade08µ2∂2*cascade08∂2º2 *cascade08º2ƒ2*cascade08ƒ2≈2 *cascade08≈2 2*cascade08 2À2 *cascade08À2Œ2*cascade08Œ2–2 *cascade08–2—2*cascade08—2Â2 *cascade08Â2Ê2*cascade08Ê2Å3 *cascade08Å3Ñ3*cascade08Ñ3Ö3 *cascade08Ö3Ü3*cascade08Ü3†7 *cascade082Hfile:///c:/Users/Linyizhi/.gemini/GeminiLauncher/Services/JavaService.cs

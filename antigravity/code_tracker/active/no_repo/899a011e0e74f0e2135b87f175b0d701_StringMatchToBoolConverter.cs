@@ -1,23 +1,0 @@
-—using System;
-using System.Globalization;
-using System.Windows.Data;
-
-namespace GeminiLauncher.Converters
-{
-    public class StringMatchToBoolConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value == null || parameter == null) return false;
-            return value.ToString() == parameter.ToString();
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is bool isChecked && isChecked)
-                return parameter.ToString() ?? "";
-            return Binding.DoNothing;
-        }
-    }
-}
-é *cascade08éí*cascade08íç *cascade08çè*cascade08èê *cascade08êì*cascade08ì— *cascade082Yfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Converters/StringMatchToBoolConverter.cs

@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_WALKTHROUGH",
-  "summary": "版本选择系统实现说明文档，包含数据模型、VersionDetectionService、VersionSelectorDialog的设计和实现细节，以及与主页的集成方式。",
-  "updatedAt": "2026-02-11T13:08:42.234520800Z"
-}

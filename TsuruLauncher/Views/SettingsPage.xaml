@@ -1,0 +1,835 @@
+<Page x:Class="TsuruLauncher.Views.SettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:local="clr-namespace:TsuruLauncher.Views"
+      xmlns:vm="clr-namespace:TsuruLauncher.ViewModels"
+      xmlns:seg="clr-namespace:TsuruLauncher.Controls"
+      mc:Ignorable="d" 
+      d:DesignHeight="700" d:DesignWidth="900"
+      Title="Settings"
+      Background="Transparent">
+
+    <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </Page.Resources>
+
+    <!-- 内容区统一内边距（顶 20 / 左右 20 / 底 16）：加在 ScrollViewer 的 Padding 上，滚动条不缩进 -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                  Padding="20,20,20,16">
+        <Grid MaxWidth="800">
+            <StackPanel>
+                <TextBlock Text="{DynamicResource Settings_Title}" Style="{StaticResource iOS26.PageTitle}"/>
+                <TextBlock Text="{DynamicResource Settings_Subtitle}" Style="{StaticResource iOS26.PageSubtitle}"/>
+
+                <!-- GAME ENVIRONMENT -->
+                <TextBlock Text="{DynamicResource Settings_Section_GameEnv}" Style="{StaticResource iOS26.SettingsSectionHeader}"/>
+                <Border Style="{StaticResource iOS26.SettingsGroup}">
+                    <StackPanel>
+                        <!-- Game Path -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" 
+                                Background="Transparent" 
+                                Cursor="Hand" 
+                                MouseLeftButtonDown="BrowseGamePath_Click">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="📁" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Settings_GamePath}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                </StackPanel>
+                                
+                                <TextBlock Grid.Column="1" 
+                                           x:Name="GamePathBox" 
+                                           Text="C:\..." 
+                                           Style="{StaticResource iOS26.SettingsItem.Value}"/>
+                                
+                                <!-- Chevron -->
+                                <TextBlock Grid.Column="2" Text="›" FontSize="20" Foreground="{DynamicResource TextDimBrush}" Margin="10,0,0,4" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Version Isolation -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="📦" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Settings_VersionIsolation}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                </StackPanel>
+                                
+                                <ui:ToggleSwitch x:Name="VersionIsolationToggle" Grid.Column="1" IsChecked="False" Checked="VersionIsolationToggle_Changed" Unchecked="VersionIsolationToggle_Changed"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- PERSONALIZATION -->
+                <TextBlock Text="{DynamicResource Settings_Section_Personalization}" Style="{StaticResource iOS26.SettingsSectionHeader}"/>
+                <Border Style="{StaticResource iOS26.SettingsGroup}">
+                    <StackPanel>
+                        <!-- Appearance: mode + accent (all colours are derived) -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <StackPanel>
+                                <TextBlock Text="外观与主题" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                <TextBlock Text="选择外观模式与强调色，其余配色会自动生成" FontSize="11"
+                                           Foreground="{DynamicResource TextDimBrush}" Margin="0,4,0,14"/>
+
+                                <!-- mode：分段胶囊（浅色 / 深色 / OLED）——选中底色由滑动指示块承担，
+                                     项自己做 150ms 双层文字交叉淡入（不再瞬时硬切）。 -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <TextBlock Text="外观模式" Width="76" VerticalAlignment="Center" FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <Border Style="{StaticResource iOS26.Segmented}" VerticalAlignment="Center">
+                                        <Grid x:Name="ThemeModeGroup"
+                                              seg:SegmentedIndicator.Host="True"
+                                              seg:SegmentedIndicator.Indicator="{Binding ElementName=ThemeModePill}">
+                                            <Canvas IsHitTestVisible="False">
+                                                <Border x:Name="ThemeModePill" CornerRadius="16" Opacity="0"
+                                                        Background="{DynamicResource AccentBrush}"/>
+                                            </Canvas>
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="ModeLightRadio" Content="浅色" GroupName="ThemeMode"
+                                                             Style="{StaticResource iOS26.SegmentItem}"
+                                                             Checked="ThemeMode_Checked"/>
+                                                <RadioButton x:Name="ModeDarkRadio" Content="深色" GroupName="ThemeMode"
+                                                             Style="{StaticResource iOS26.SegmentItem}"
+                                                             Checked="ThemeMode_Checked"/>
+                                                <RadioButton x:Name="ModeOledRadio" Content="OLED 纯黑" GroupName="ThemeMode"
+                                                             Style="{StaticResource iOS26.SegmentItem}"
+                                                             Checked="ThemeMode_Checked"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- accent swatches -->
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="强调色" Width="76" VerticalAlignment="Center" FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <ListBox x:Name="AccentList"
+                                             Background="Transparent" BorderThickness="0"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             SelectionChanged="AccentList_SelectionChanged">
+                                        <ListBox.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel/>
+                                            </ItemsPanelTemplate>
+                                        </ListBox.ItemsPanel>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" ToolTip="{Binding DisplayName}">
+                                                    <Border Width="22" Height="22" CornerRadius="11"
+                                                            Background="{Binding Preview}"/>
+                                                    <TextBlock Text="{Binding DisplayName}" FontSize="12" Margin="8,0,0,0"
+                                                               VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Margin" Value="0,0,10,0"/>
+                                                <Setter Property="Cursor" Value="Hand"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <Border x:Name="Bd"
+                                                                    Background="{DynamicResource SurfaceInputBrush}"
+                                                                    BorderBrush="{DynamicResource GlassBorderBrush}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="{StaticResource RadiusMedium}"
+                                                                    Padding="10,6">
+                                                                <ContentPresenter/>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="Bd" Property="BorderBrush"
+                                                                            Value="{DynamicResource GlassBorderHoverBrush}"/>
+                                                                </Trigger>
+                                                                <Trigger Property="IsSelected" Value="True">
+                                                                    <Setter TargetName="Bd" Property="BorderBrush"
+                                                                            Value="{DynamicResource AccentBrush}"/>
+                                                                    <Setter TargetName="Bd" Property="Background"
+                                                                            Value="{DynamicResource AccentGlassMediumBrush}"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                    </ListBox>
+                                </StackPanel>
+
+                                <!-- custom hex + system accent -->
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <TextBlock Text="自定义" Width="76" VerticalAlignment="Center" FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <TextBox x:Name="CustomAccentBox" Width="110" Height="30"
+                                             VerticalContentAlignment="Center"
+                                             ToolTip="输入 #RRGGBB 例如 #7C5CFF"/>
+                                    <Button Content="应用" Margin="8,0,0,0" Padding="14,4" FontSize="12"
+                                            Cursor="Hand" Click="ApplyCustomAccent_Click"/>
+                                    <CheckBox x:Name="SystemAccentCheck" Content="跟随系统强调色"
+                                              Margin="18,0,0,0" VerticalAlignment="Center" FontSize="12"
+                                              Foreground="{DynamicResource TextSecondaryBrush}"
+                                              Checked="SystemAccent_Changed" Unchecked="SystemAccent_Changed"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Background Image -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" 
+                                Background="Transparent" 
+                                Cursor="Hand" 
+                                MouseLeftButtonDown="BrowseBackgroundImage_Click">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="🖼️" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Settings_BackgroundImage}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                </StackPanel>
+                                
+                                <TextBlock Grid.Column="1" 
+                                           Text="{Binding ConfigService.Settings.BackgroundImagePath, TargetNullValue=Default}" 
+                                           Style="{StaticResource iOS26.SettingsItem.Value}"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxWidth="300"
+                                           HorizontalAlignment="Right"/>
+                                           
+                                <TextBlock Grid.Column="2" Text="›" FontSize="20" Foreground="{DynamicResource TextDimBrush}" Margin="10,0,0,4" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Opacity Slider -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}">
+                             <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="{DynamicResource Settings_Opacity}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                    <TextBlock Text="{Binding ElementName=OpacitySlider, Path=Value, StringFormat={}{0:P0}}" Style="{StaticResource iOS26.SettingsItem.Value}"/>
+                                </Grid>
+                                <Slider Grid.Row="1" x:Name="OpacitySlider" Minimum="0" Maximum="1" Value="{Binding BackgroundOpacity, Mode=TwoWay}" LargeChange="0.1" SmallChange="0.01" Style="{StaticResource iOS26.GlassSlider}"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Blur Slider -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                             <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="{DynamicResource Settings_Blur}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                    <TextBlock Text="{Binding ElementName=BlurSlider, Path=Value, StringFormat={}{0:F0}}" Style="{StaticResource iOS26.SettingsItem.Value}"/>
+                                </Grid>
+                                <Slider Grid.Row="1" x:Name="BlurSlider" Minimum="0" Maximum="50" Value="{Binding BlurEffectRadius, Mode=TwoWay}" Style="{StaticResource iOS26.GlassSlider}"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- DOWNLOAD SETTINGS -->
+                <TextBlock Text="{DynamicResource Settings_Section_Download}" Style="{StaticResource iOS26.SettingsSectionHeader}"/>
+                <Border Style="{StaticResource iOS26.SettingsGroup}">
+                    <StackPanel>
+                        <!-- Download Source -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{DynamicResource Settings_DownloadSource}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                
+                                <ComboBox x:Name="DownloadSourceCombo" Grid.Column="1" Width="220" SelectionChanged="DownloadSource_Changed">
+                                    <ComboBoxItem Content="{DynamicResource Settings_Source_Official}" Tag="Official"/>
+                                    <ComboBoxItem Content="{DynamicResource Settings_Source_BMCLAPI}" Tag="BMCLAPI"/>
+                                </ComboBox>
+                            </Grid>
+                        </Border>
+
+                        <!-- Max Threads -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                             <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="{DynamicResource Settings_MaxThreads}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                    <TextBlock Text="{Binding ElementName=ThreadsSlider, Path=Value, StringFormat={}{0:F0}}" Style="{StaticResource iOS26.SettingsItem.Value}"/>
+                                </Grid>
+                                <Slider Grid.Row="1" x:Name="ThreadsSlider" Minimum="1" Maximum="128" Value="{Binding ConfigService.Settings.MaxDownloadThreads, Mode=TwoWay}" LargeChange="8" SmallChange="1" IsSnapToTickEnabled="True" TickFrequency="1" ValueChanged="MaxThreads_ValueChanged" Style="{StaticResource iOS26.GlassSlider}"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Modrinth API Mirror -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <StackPanel>
+                                <TextBlock Text="Modrinth API 镜像" Style="{StaticResource iOS26.SettingsItem.Title}" Margin="0,0,0,6"/>
+                                <TextBlock Text="国内用户可设置为镜像地址加速加载" FontSize="11" Foreground="{DynamicResource TextDimBrush}" Margin="0,0,0,6"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="ModrinthMirrorBox" Grid.Column="0" 
+                                             Text="{Binding ConfigService.Settings.ModrinthApiBaseUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             TextChanged="ModrinthMirror_Changed"
+                                             ToolTip="例如: https://modrinth.ink/v2/"/>
+                                    <Button Grid.Column="1" Content="重置" Margin="8,0,0,0"
+                                            Style="{StaticResource iOS26.SecondaryButton}" Height="30" Padding="12,0"
+                                            Click="ResetModrinthMirror_Click"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- CurseForge API Key（第二内容源） -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <StackPanel>
+                                <TextBlock Text="CurseForge API Key" Style="{StaticResource iOS26.SettingsItem.Title}" Margin="0,0,0,6"/>
+                                <TextBlock Text="在 console.curseforge.com 免费申请，填好后资源页即可切换到 CurseForge 内容源" FontSize="11" Foreground="{DynamicResource TextDimBrush}" Margin="0,0,0,6" TextWrapping="Wrap"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="CurseForgeKeyBox" Grid.Column="0"
+                                             Text="{Binding ConfigService.Settings.CurseForgeApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             TextChanged="CurseForgeKey_Changed"
+                                             ToolTip="形如 $2a$10$... 的字符串"/>
+                                    <Button Grid.Column="1" Content="打开申请页面" Margin="8,0,0,0"
+                                            Style="{StaticResource iOS26.SecondaryButton}" Height="30" Padding="12,0"
+                                            Click="OpenCurseForgeConsole_Click"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- LAUNCH SETTINGS -->
+                <TextBlock Text="{DynamicResource Settings_Section_Launch}" Style="{StaticResource iOS26.SettingsSectionHeader}"/>
+                <Border Style="{StaticResource iOS26.SettingsGroup}">
+                    <StackPanel>
+                        <!-- Auto-Detect Memory Toggle -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                                    <TextBlock Text="{DynamicResource Settings_AutoDetectMemory}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                    <TextBlock x:Name="SystemMemoryInfoText" Text="" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <ui:ToggleSwitch x:Name="AutoDetectMemoryToggle" Grid.Column="1" IsChecked="{Binding ConfigService.Settings.AutoDetectMemory, Mode=TwoWay}" Checked="AutoDetectMemory_Changed" Unchecked="AutoDetectMemory_Changed"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Max Memory Slider -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                             <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="{DynamicResource Settings_MaxMemory}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                    <TextBlock Text="{Binding ElementName=MaxRamSlider, Path=Value, StringFormat={}{0:F0} MB}" Style="{StaticResource iOS26.SettingsItem.Value}"/>
+                                </Grid>
+                                <Slider Grid.Row="1" x:Name="MaxRamSlider" Minimum="512" Maximum="32768" Value="{Binding ConfigService.Settings.MaxRam, Mode=TwoWay}" LargeChange="512" SmallChange="256" IsSnapToTickEnabled="True" TickFrequency="256" ValueChanged="MaxRam_ValueChanged" Style="{StaticResource iOS26.GlassSlider}"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Min Memory Slider -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                             <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="{DynamicResource Settings_MinMemory}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                    <TextBlock Text="{Binding ElementName=MinRamSlider, Path=Value, StringFormat={}{0:F0} MB}" Style="{StaticResource iOS26.SettingsItem.Value}"/>
+                                </Grid>
+                                <Slider Grid.Row="1" x:Name="MinRamSlider" Minimum="256" Maximum="8192" Value="{Binding ConfigService.Settings.MinRam, Mode=TwoWay}" LargeChange="256" SmallChange="128" IsSnapToTickEnabled="True" TickFrequency="128" ValueChanged="MinRam_ValueChanged" Style="{StaticResource iOS26.GlassSlider}"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Launcher Visibility -->
+                         <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{DynamicResource Settings_LauncherVisibility}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                
+                                <ComboBox Grid.Column="1" Width="200" SelectedIndex="{Binding ConfigService.Settings.LauncherVisibility}" SelectionChanged="LauncherVisibility_Changed">
+                                    <ComboBoxItem Content="{DynamicResource Settings_Visibility_KeepOpen}"/>
+                                    <ComboBoxItem Content="{DynamicResource Settings_Visibility_Hide}"/>
+                                    <ComboBoxItem Content="{DynamicResource Settings_Visibility_Close}"/>
+                                </ComboBox>
+                            </Grid>
+                        </Border>
+
+                        <!-- Process Priority -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{DynamicResource Settings_ProcessPriority}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                
+                                <ComboBox Grid.Column="1" Width="200" SelectedIndex="{Binding ConfigService.Settings.ProcessPriority}" SelectionChanged="ProcessPriority_Changed">
+                                    <ComboBoxItem Content="{DynamicResource Settings_Priority_Normal}"/>
+                                    <ComboBoxItem Content="{DynamicResource Settings_Priority_High}"/>
+                                </ComboBox>
+                            </Grid>
+                        </Border>
+
+                        <!-- 实时启动日志窗口 -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                                    <TextBlock Text="启动时显示实时日志窗口" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                    <TextBlock Text="像 PCL2 一样看到启动参数、游戏 stdout / stderr 与退出码" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Content="立即打开" Style="{StaticResource iOS26.SecondaryButton}" Height="30" Padding="12,0" Margin="0,0,10,0" Click="OpenLaunchLog_Click"/>
+                                    <ui:ToggleSwitch x:Name="ShowLaunchLogToggle" IsChecked="{Binding ConfigService.Settings.ShowLaunchLog, Mode=TwoWay}" Checked="ShowLaunchLog_Changed" Unchecked="ShowLaunchLog_Changed"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- ADVANCED LAUNCH SETTINGS -->
+                <TextBlock Text="{DynamicResource Settings_Section_Advanced}" Style="{StaticResource iOS26.SettingsSectionHeader}"/>
+                <Border Style="{StaticResource iOS26.SettingsGroup}">
+                    <StackPanel>
+                        <!-- Window Title -->
+                         <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="220"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{DynamicResource Settings_WindowTitle}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                <TextBox x:Name="WindowTitleBox" Grid.Column="1" Text="{Binding ConfigService.Settings.CustomWindowTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" TextChanged="AdvancedSetting_Changed"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- JVM Arguments -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_JvmArgs}" Style="{StaticResource iOS26.SettingsItem.Title}" Margin="0,0,0,8"/>
+                                <TextBox x:Name="JvmArgsBox" Text="{Binding ConfigService.Settings.GlobalJvmArguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" TextChanged="AdvancedSetting_Changed" TextWrapping="Wrap" MinHeight="60" AcceptsReturn="True"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Game Arguments -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings_GameArgs}" Style="{StaticResource iOS26.SettingsItem.Title}" Margin="0,0,0,8"/>
+                                <TextBox x:Name="GameArgsBox" Text="{Binding ConfigService.Settings.GlobalGameArguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" TextChanged="AdvancedSetting_Changed" TextWrapping="Wrap" MinHeight="60" AcceptsReturn="True"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- UI CUSTOMIZATION -->
+                <TextBlock Text="{DynamicResource Settings_Section_UI}" Style="{StaticResource iOS26.SettingsSectionHeader}"/>
+                <Border Style="{StaticResource iOS26.SettingsGroup}">
+                    <StackPanel>
+                        <!-- Hide Download -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{DynamicResource Settings_Hide_Download}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                <CheckBox x:Name="HideDownloadCheck" Grid.Column="1" Checked="HidePage_Changed" Unchecked="HidePage_Changed" Tag="download"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Hide Settings (Careful with this one!) -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{DynamicResource Settings_Hide_Settings}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                <CheckBox x:Name="HideSettingsCheck" Grid.Column="1" Checked="HidePage_Changed" Unchecked="HidePage_Changed" Tag="settings"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- JAVA SETTINGS -->
+                <TextBlock Text="{DynamicResource Settings_Section_Java}" Style="{StaticResource iOS26.SettingsSectionHeader}"/>
+                <Border Style="{StaticResource iOS26.SettingsGroup}">
+                    <StackPanel>
+                        <!-- Java Path -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" 
+                                Background="Transparent" 
+                                Cursor="Hand" 
+                                MouseLeftButtonDown="BrowseJavaPath_Click">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="☕" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Settings_JavaRuntime}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                </StackPanel>
+                                
+                                <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                    <TextBlock x:Name="JavaVersionText" Text="{DynamicResource Settings_SelectJavaPlaceholder}" FontSize="13" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Right"/>
+                                    <TextBlock x:Name="JavaPathBox" Text="" FontSize="11" Foreground="{DynamicResource TextDimBrush}" TextTrimming="CharacterEllipsis" MaxWidth="300" HorizontalAlignment="Right"/>
+                                </StackPanel>
+
+                                <TextBlock Grid.Column="2" Text="›" FontSize="20" Foreground="{DynamicResource TextDimBrush}" Margin="10,0,0,4" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Auto Search -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" 
+                                BorderThickness="0" 
+                                Background="Transparent">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                 <TextBlock Grid.Column="0" Text="{DynamicResource Settings_AutoDetect}" Style="{StaticResource iOS26.SettingsItem.Title}" Foreground="{StaticResource iOS26.Accent}" VerticalAlignment="Center"/>
+                                 <ComboBox x:Name="JavaAutoSearchCombo" Grid.Column="1" 
+                                           Width="280" HorizontalAlignment="Right"
+                                           Style="{StaticResource iOS26.GlassComboBox}"
+                                           DropDownOpened="JavaAutoSearchCombo_DropDownOpened"
+                                           SelectionChanged="JavaAutoSearchCombo_SelectionChanged"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Auto download a matching runtime -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="自动获取 Java 运行时"
+                                               Style="{StaticResource iOS26.SettingsItem.Title}" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <ComboBox x:Name="JavaRuntimeVersionCombo" Width="120" SelectedIndex="2"
+                                                  Style="{StaticResource iOS26.GlassComboBox}">
+                                            <ComboBoxItem Content="Java 8" Tag="8"/>
+                                            <ComboBoxItem Content="Java 17" Tag="17"/>
+                                            <ComboBoxItem Content="Java 21" Tag="21"/>
+                                            <ComboBoxItem Content="Java 25" Tag="25"/>
+                                        </ComboBox>
+                                        <Button x:Name="JavaRuntimeDownloadBtn" Content="下载并安装" Margin="10,0,0,0"
+                                                Padding="16,6" FontSize="12" Cursor="Hand"
+                                                Click="DownloadJavaRuntime_Click"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="本机没有合适版本时，可从 Adoptium 自动下载（无需手动配置）"
+                                           FontSize="11" Foreground="{DynamicResource TextDimBrush}" Margin="0,8,0,0"/>
+                                <TextBlock x:Name="JavaRuntimeStatusText" Text="" FontSize="11" Margin="0,6,0,0"
+                                           Foreground="{DynamicResource AccentBrush}" TextTrimming="CharacterEllipsis"/>
+                                <ProgressBar x:Name="JavaRuntimeProgressBar" Height="4" Minimum="0" Maximum="100"
+                                             Margin="0,8,0,0" Visibility="Collapsed"
+                                             Background="{DynamicResource Surface4Brush}"
+                                             Foreground="{DynamicResource AccentBrush}" BorderThickness="0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- MEMORY ALLOCATION -->
+                <TextBlock Text="{DynamicResource Settings_Section_Memory}" Style="{StaticResource iOS26.SettingsSectionHeader}"/>
+                <Border Style="{StaticResource iOS26.SettingsGroup}">
+                    <StackPanel>
+                        <!-- Mode -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{DynamicResource Settings_AllocationMode}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Background="{DynamicResource Surface4Brush}" VerticalAlignment="Center">
+                                    <Border CornerRadius="{StaticResource RadiusSmall}" Background="{DynamicResource GlassMediumBrush}" Padding="2">
+                                        <Grid x:Name="MemoryModeGroup"
+                                              seg:SegmentedIndicator.Host="True"
+                                              seg:SegmentedIndicator.Indicator="{Binding ElementName=MemoryModePill}">
+                                            <Canvas IsHitTestVisible="False">
+                                                <Border x:Name="MemoryModePill" CornerRadius="{StaticResource RadiusSmall}" Opacity="0"
+                                                        Background="{DynamicResource AccentBrush}"/>
+                                            </Canvas>
+                                            <StackPanel Orientation="Horizontal">
+                                                 <RadioButton x:Name="AutoMemoryRadio" Content="{DynamicResource Settings_Auto}" IsChecked="True" Style="{StaticResource SegmentRadioButtonStyle}" GroupName="MemMode" Checked="AutoMemoryRadio_Checked"/>
+                                                 <RadioButton x:Name="CustomMemoryRadio" Content="{DynamicResource Settings_Custom}" Style="{StaticResource SegmentRadioButtonStyle}" GroupName="MemMode" Checked="CustomMemoryRadio_Checked"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Slider Row -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0" MinHeight="80">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                
+                                <Grid Grid.Row="0" Margin="0,0,0,10">
+                                    <TextBlock Text="{DynamicResource Settings_AllocatedMemory}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                    <TextBlock x:Name="MemoryValueText" Text="4096 MB" Style="{StaticResource iOS26.SettingsItem.Value}" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                </Grid>
+                                
+                                <Slider Grid.Row="1"
+                                       x:Name="MemorySlider"
+                                       Minimum="1024"
+                                       Maximum="16384"
+                                       Value="4096"
+                                       TickFrequency="512"
+                                       IsSnapToTickEnabled="True"
+                                       IsEnabled="{Binding ElementName=CustomMemoryRadio, Path=IsChecked}"
+                                       ValueChanged="MemorySlider_ValueChanged"
+                                       Style="{StaticResource iOS26.GlassSlider}"/>
+                                
+                                <!-- Memory Warning -->
+                                <TextBlock x:Name="MemoryWarningText"
+                                           Grid.Row="1"
+                                           Text=""
+                                           FontSize="12"
+                                           Margin="0,8,0,0"
+                                           VerticalAlignment="Bottom"
+                                           Opacity="0.85"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- ACCOUNTS -->
+                <TextBlock Text="{DynamicResource Settings_Section_Accounts}" Style="{StaticResource iOS26.SettingsSectionHeader}"/>
+                <Border Style="{StaticResource iOS26.SettingsGroup}">
+                    <StackPanel>
+                        <!-- Account List (Placeholder for now, usually needs ItemsControl) -->
+                        <ItemsControl ItemsSource="{Binding AccountManager.Accounts}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                     <Border Style="{StaticResource iOS26.SettingsItem}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <!-- Avatar placeholder -->
+                                            <Border Grid.Column="0" Width="32" Height="32" CornerRadius="{StaticResource RadiusLarge}" Background="{DynamicResource GlassHeavyBrush}" Margin="0,0,12,0">
+                                                <TextBlock Text="👤" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </Border>
+                                            
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Username}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                                <TextBlock Text="{Binding Type}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                            </StackPanel>
+                                            
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="Current" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,10,0"
+                                                           Visibility="{Binding Path=IsSelected, Converter={StaticResource BoolToVis}}"/>
+                                                
+                                                <Button Content="Remove" 
+                                                        Click="RemoveAccount_Click" 
+                                                        Tag="{Binding}"
+                                                        Background="Transparent" BorderThickness="0" Foreground="{DynamicResource DangerBrush}"
+                                                        Padding="8,4" FontSize="12" Cursor="Hand"/>
+                                            </StackPanel>
+                                        </Grid>
+                                     </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Add Account Row -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <ui:TextBox x:Name="OfflineUsernameBox" 
+                                           PlaceholderText="Offline Username"
+                                           Width="200" 
+                                           HorizontalAlignment="Left"
+                                           Margin="0,0,10,0"/>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                     <Button Content="{DynamicResource Settings_AddOffline}" Click="AddOfflineAccount_Click" Margin="0,0,8,0" Padding="12,6"/>
+                                     <Button Content="{DynamicResource Settings_Microsoft}" Click="AddMicrosoftAccount_Click" Padding="12,6" Background="{StaticResource iOS26.Accent}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- 外置登录（Yggdrasil / authlib-injector） -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                            <StackPanel>
+                                <TextBlock Text="外置登录（Yggdrasil / 皮肤站）" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                <TextBlock Text="支持 LittleSkin、Blessing Skin 等皮肤站。登录后启动时会自动注入 authlib-injector，游戏里能直接使用该站皮肤。" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" TextWrapping="Wrap" Margin="0,4,0,10"/>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox x:Name="YggdrasilPresetCombo" Width="170" Margin="0,0,8,0" SelectionChanged="YggdrasilPreset_Changed">
+                                        <ComboBoxItem Content="LittleSkin" Tag="https://littleskin.cn/api/yggdrasil" IsSelected="True"/>
+                                        <ComboBoxItem Content="自定义服务器" Tag=""/>
+                                    </ComboBox>
+                                    <ui:TextBox Grid.Column="1" x:Name="YggdrasilServerBox" PlaceholderText="https://example.com/api/yggdrasil" Text="https://littleskin.cn/api/yggdrasil"/>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox x:Name="YggdrasilUserBox" PlaceholderText="邮箱 / 用户名" Margin="0,0,8,0"/>
+                                    <PasswordBox Grid.Column="1" x:Name="YggdrasilPassBox" Padding="10,7" FontSize="13"/>
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="登录外置账号" Click="AddYggdrasilAccount_Click" Padding="12,6" Background="{StaticResource iOS26.Accent}" Margin="0,0,8,0"/>
+                                    <Button Content="测试连接" Click="TestYggdrasilServer_Click" Padding="12,6"/>
+                                    <TextBlock x:Name="YggdrasilStatusText" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="10,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Privacy Mode -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="🔒" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                    <StackPanel>
+                                        <TextBlock Text="{DynamicResource Settings_PrivacyMode}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                        <TextBlock Text="{DynamicResource Settings_PrivacyDesc}" FontSize="11" Opacity="0.5" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <ui:ToggleSwitch x:Name="PrivacyModeToggle" Grid.Column="1" IsChecked="False"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Token Status -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="🔑" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Settings_TokenStatus}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                </StackPanel>
+                                <TextBlock x:Name="TokenStatusText" Grid.Column="1" Text="-" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+                
+                 <!-- LANGUAGE & ABOUT -->
+                <TextBlock Text="{DynamicResource Settings_Section_General}" Style="{StaticResource iOS26.SettingsSectionHeader}"/>
+                <Border Style="{StaticResource iOS26.SettingsGroup}">
+                    <StackPanel>
+                        <!-- Language -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{DynamicResource Settings_Language}" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <Border Style="{StaticResource iOS26.Segmented}" VerticalAlignment="Center">
+                                        <Grid x:Name="LanguageGroup"
+                                              seg:SegmentedIndicator.Host="True"
+                                              seg:SegmentedIndicator.Indicator="{Binding ElementName=LanguagePill}">
+                                            <Canvas IsHitTestVisible="False">
+                                                <Border x:Name="LanguagePill" CornerRadius="16" Opacity="0"
+                                                        Background="{DynamicResource AccentBrush}"/>
+                                            </Canvas>
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="EnglishRadio" Content="{DynamicResource Settings_English}" IsChecked="True" GroupName="Lang" Checked="Language_Changed"
+                                                             Style="{StaticResource iOS26.SegmentItem}"/>
+                                                <RadioButton x:Name="ChineseRadio" Content="{DynamicResource Settings_Chinese}" GroupName="Lang" Checked="Language_Changed"
+                                                             Style="{StaticResource iOS26.SegmentItem}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        
+                        <!-- Check Update -->
+                         <Button Command="{Binding CheckUpdateCommand}" Background="Transparent" BorderThickness="0" Padding="0">
+                             <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0" Background="Transparent">
+                                        <Grid>
+                                             <TextBlock Text="{DynamicResource Settings_CheckUpdate}" Style="{StaticResource iOS26.SettingsItem.Title}" Foreground="{StaticResource iOS26.Accent}"/>
+                                             <TextBlock Text="v1.0.0" Style="{StaticResource iOS26.SettingsItem.Value}"/>
+                                        </Grid>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Page>

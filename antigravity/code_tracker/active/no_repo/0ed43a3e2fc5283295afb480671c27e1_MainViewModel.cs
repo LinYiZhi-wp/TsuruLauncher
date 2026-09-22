@@ -1,422 +1,0 @@
-Ñzusing CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using GeminiLauncher.Models;
-using GeminiLauncher.Services;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-
-namespace GeminiLauncher.ViewModels
-{
-    public partial class MainViewModel : ObservableObject
-    {
-        private readonly GameService _gameService;
-        private readonly LaunchService _launchService;
-        private readonly ConfigService _configService;
-
-        public ConfigService ConfigService => _configService;
-        public NotificationService NotificationService { get; }
-        public GeminiLauncher.Services.Network.DownloadManagerService DownloadManager => GeminiLauncher.Services.Network.DownloadManagerService.Instance;
-
-        [ObservableProperty]
-        private string _title = "LinLaunch";
-
-        [ObservableProperty]
-        private AccountManager _accountManager;
-
-        public ObservableCollection<GameInstance> GameVersions { get; } = new ObservableCollection<GameInstance>();
-
-        [ObservableProperty]
-        private GameInstance? _selectedVersion;
-
-        [ObservableProperty]
-        private string _statusMessage = "Ready to Launch";
-
-        [ObservableProperty]
-        private bool _isLaunching = false;
-
-        // Personalization
-        [ObservableProperty]
-        private ImageSource? _backgroundImage;
-
-        [ObservableProperty]
-        private double _backgroundOpacity = 0.6;
-
-        [ObservableProperty]
-        private double _blurEffectRadius = 0;
-
-        [ObservableProperty]
-        private bool _isGlobalResourcesOverlayActive = false;
-
-        private readonly JavaService _javaService;
-
-        private string GetString(string key)
-        {
-            if (Application.Current.TryFindResource(key) is string s)
-            {
-                return s;
-            }
-            return $"[{key}]";
-        }
-
-        public MainViewModel()
-        {
-            _accountManager = new AccountManager();
-            _configService = new ConfigService();
-            _gameService = new GameService(_configService);
-            NotificationService = new NotificationService();
-            _launchService = new LaunchService(NotificationService, _configService);
-            _javaService = new JavaService();
-
-            _statusMessage = GetString("Status_Ready");
-
-            // Apply Language from Config
-            ApplyLanguage();
-
-            // Load Background
-            LoadBackground();
-
-            // Load Versions
-            LoadVersions();
-        }
-
-        private void ApplyLanguage()
-        {
-            if (!string.IsNullOrEmpty(_configService.Settings.Language))
-            {
-                App.SwitchLanguage(_configService.Settings.Language);
-            }
-        }
-
-        public void LoadBackground()
-        {
-            try
-            {
-                string? path = _configService.Settings.BackgroundImagePath;
-                BackgroundOpacity = _configService.Settings.BackgroundOpacity;
-                BlurEffectRadius = _configService.Settings.BlurEffectRadius;
-
-                if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
-                {
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.UriSource = new System.Uri(path);
-                    bitmap.EndInit();
-                    bitmap.Freeze(); // Important for cross-thread access if needed
-                    BackgroundImage = bitmap;
-                }
-                else
-                {
-                    // Fallback to default (handled in XAML or by setting null)
-                    BackgroundImage = new BitmapImage(new System.Uri("pack://application:,,,/Assets/cirno_bg.png"));
-                }
-            }
-            catch (System.Exception ex)
-            {
-                // Fallback on error
-                System.Diagnostics.Debug.WriteLine($"Error loading background: {ex.Message}");
-            }
-        }
-
-        [RelayCommand]
-        private void PickBackgroundImage()
-        {
-            var dialog = new Microsoft.Win32.OpenFileDialog
-            {
-                Title = "Select Background Image",
-                Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp;*.webp"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                _configService.Settings.BackgroundImagePath = dialog.FileName;
-                _configService.SaveConfig();
-                LoadBackground();
-            }
-        }
-        
-        public void LoadVersions()
-        {
-            string dotMinecraft = _configService.Settings.GamePath;
-            if (string.IsNullOrEmpty(dotMinecraft) || !System.IO.Directory.Exists(dotMinecraft))
-            {
-                 dotMinecraft = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), ".minecraft");
-            }
-            
-            _configService.Settings.GamePath = dotMinecraft; // Update config if empty
-            _configService.SaveConfig();
-
-            if (!System.IO.Directory.Exists(dotMinecraft))
-            {
-                // Create it if it doesn't exist? Or just warn.
-                try { System.IO.Directory.CreateDirectory(dotMinecraft); } catch {}
-            }
-            
-            var versions = _gameService.ScanVersions(dotMinecraft, _configService.Settings.VersionIsolation);
-            GameVersions.Clear();
-            foreach(var v in versions) GameVersions.Add(v);
-            
-            if (GameVersions.Any() && SelectedVersion == null) SelectedVersion = GameVersions.First();
-        }
-
-        [RelayCommand]
-
-        private async Task LaunchGame()
-        {
-            if (SelectedVersion == null) { MessageBox.Show(GetString("Msg_NoVersion")); return; }
-            if (AccountManager.CurrentAccount == null) { MessageBox.Show(GetString("Msg_NoAccount")); return; }
-            
-            // Resolve Java Path
-            string javaPath = SelectedVersion.CustomJavaPath;
-
-            // 1. Smart Selection: If no custom path, try to find the best matching Java version automatically
-            if (string.IsNullOrWhiteSpace(javaPath))
-            {
-                // Pass the required version (e.g. 8 or 17) to find a specific match
-                var bestMatch = _javaService.AutoDetectBestJava(SelectedVersion.RequiredJavaVersion);
-                if (!string.IsNullOrEmpty(bestMatch))
-                {
-                   javaPath = bestMatch;
-                }
-            }
-
-            // 2. Fallback to Global if auto-detect didn't find a specific match
-            if (string.IsNullOrWhiteSpace(javaPath))
-            {
-                javaPath = _configService.Settings.JavaPath;
-            }
-
-            // 3. Final Check: If still missing or invalid, try to find ANY Java (last resort)
-            if (string.IsNullOrWhiteSpace(javaPath) || !System.IO.File.Exists(javaPath))
-            {
-                var detected = _javaService.AutoDetectBestJava(0); 
-                if (detected != null)
-                {
-                    javaPath = detected;
-                    // Only save to Global if Global was empty
-                    if (string.IsNullOrWhiteSpace(_configService.Settings.JavaPath))
-                    {
-                        _configService.Settings.JavaPath = javaPath;
-                        _configService.SaveConfig();
-                    }
-                }
-                else
-                {
-                    MessageBox.Show(string.Format(GetString("Msg_JavaMissing"), SelectedVersion.RequiredJavaVersion), "Java Missing");
-                    return;
-                }
-            }
-            
-            try 
-            {
-               IsLaunching = true;
-               StatusMessage = GetString("Status_Checking");
-
-               // Pre-launch checks
-               var analyzer = new CrashAnalyzerService();
-               string? conflictWarning = await analyzer.CheckForConflictsAsync(SelectedVersion.GameDir);
-               if (conflictWarning != null)
-               {
-                   if (MessageBox.Show($"Potential Mod Conflict:\n{conflictWarning}\n\nContinue anyway?", GetString("Title_Warning"), MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.No)
-                   {
-                       IsLaunching = false;
-                       StatusMessage = GetString("Status_Ready");
-                       return;
-                   }
-               }
-
-               var process = await _launchService.LaunchGameAsync(SelectedVersion, AccountManager.CurrentAccount, _configService.Settings.MaxRam, javaPath, (status) => 
-               {
-                   // Update status from LaunchService
-                   Application.Current.Dispatcher.Invoke(() => StatusMessage = status);
-               });
-
-               if (process != null)
-               {
-                   try
-                   {
-                       // Apply Process Priority
-                       int priorityRef = _configService.Settings.ProcessPriority;
-                       if (priorityRef == 1) // High
-                       {
-                           process.PriorityClass = System.Diagnostics.ProcessPriorityClass.High;
-                       }
-                       else
-                       {
-                           process.PriorityClass = System.Diagnostics.ProcessPriorityClass.Normal;
-                       }
-                   }
-                   catch (System.Exception ex)
-                   {
-                       System.Diagnostics.Debug.WriteLine($"Failed to set priority: {ex.Message}");
-                   }
-
-                   // Apply Launcher Visibility
-                   int visibility = _configService.Settings.LauncherVisibility;
-                   if (visibility == 2) // Close
-                   {
-                       Application.Current.Shutdown();
-                       return;
-                   }
-                   
-                   if (visibility == 1) // Hide
-                   {
-                       Application.Current.MainWindow.Hide();
-                   }
-
-                   StatusMessage = GetString("Status_Running");
-                   await process.WaitForExitAsync();
-                   
-                   // Restore Visibility if Hidden
-                   if (visibility == 1)
-                   {
-                       Application.Current.MainWindow.Show();
-                       Application.Current.MainWindow.WindowState = WindowState.Normal;
-                       Application.Current.MainWindow.Activate();
-                   }
-
-                   IsLaunching = false;
-                   StatusMessage = GetString("Status_Ready");
-
-                   if (process.ExitCode != 0)
-                   {
-                       var crashAnalyzer = new CrashAnalyzerService();
-                       var result = await crashAnalyzer.AnalyzeAsync(SelectedVersion.GameDir);
-                       
-                       if (result.IsCrashDetected)
-                       {
-                           MessageBox.Show($"Game Crashed!\n\nCause: {result.Cause}\nSolution: {result.Solution}", GetString("Title_Crash"), MessageBoxButton.OK, MessageBoxImage.Error);
-                       }
-                       else
-                       {
-                            MessageBox.Show($"Game exited with code {process.ExitCode}. Check logs for details.", GetString("Title_GameExited"), MessageBoxButton.OK, MessageBoxImage.Warning);
-                       }
-                   }
-               }
-            }
-            catch (System.Exception ex)
-            {
-                // Ensure window is shown if launch fails
-                Application.Current.MainWindow.Show();
-                
-                IsLaunching = false;
-                StatusMessage = GetString("Status_Failed");
-                MessageBox.Show($"Launch Failed: {ex.Message}");
-            }
-        }
-        [RelayCommand]
-        private async Task CheckUpdate()
-        {
-            var updateService = new UpdateService();
-            await updateService.CheckForUpdatesAsync();
-        }
-
-        [RelayCommand]
-        private async Task ExportModpack()
-        {
-            if (SelectedVersion == null) return;
-
-            var dialog = new Microsoft.Win32.SaveFileDialog
-            {
-                Filter = "Modrinth Modpack (*.mrpack)|*.mrpack",
-                FileName = $"{SelectedVersion.Id}.mrpack",
-                Title = "Export Modpack"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                try
-                {
-                    var modpackService = new GeminiLauncher.Services.Ecosystem.ModpackService();
-                    await modpackService.ExportMrPackAsync(SelectedVersion, dialog.FileName);
-                    MessageBox.Show(GetString("Title_ExportComplete"), "Export Complete");
-                }
-                catch (System.Exception ex)
-                {
-                    MessageBox.Show($"Export failed: {ex.Message}");
-                }
-            }
-        }
-        [RelayCommand]
-        private async Task UploadLog()
-        {
-            if (SelectedVersion == null) return;
-            string logPath = System.IO.Path.Combine(SelectedVersion.GameDir, "logs", "latest.log");
-
-            if (!System.IO.File.Exists(logPath))
-            {
-                MessageBox.Show("No log file found.");
-                return;
-            }
-
-            try
-            {
-                string logContent = await System.IO.File.ReadAllTextAsync(logPath);
-                
-                // Simulate Upload
-                // In production: POST to https://paste.ubuntu.com/ or a custom service
-                await Task.Delay(1000); 
-                string mockUrl = "https://hastebin.com/raw/mock" + System.Guid.NewGuid().ToString().Substring(0, 6);
-                
-                Clipboard.SetText(mockUrl);
-                MessageBox.Show($"{GetString("Title_UploadComplete")}\nURL copied to clipboard: {mockUrl}", "Upload Complete");
-            }
-            catch (System.Exception ex)
-            {
-                MessageBox.Show($"Upload failed: {ex.Message}");
-            }
-        }
-        public event System.Action<object>? RequestNavigation;
-        public event System.Action? RequestGoBack;
-
-        [RelayCommand]
-        private void OpenLaunchSettings()
-        {
-            if (SelectedVersion == null) return;
-            // Triggers navigation in MainWindow
-            RequestNavigation?.Invoke(new GeminiLauncher.Views.VersionSettingsPage(SelectedVersion));
-        }
-
-        [RelayCommand]
-        private void SaveVersionSettings()
-        {
-            if (SelectedVersion != null)
-            {
-                _gameService.SaveVersionConfig(SelectedVersion);
-            }
-            RequestGoBack?.Invoke();
-        }
-
-        [RelayCommand]
-        private void NavigateBack()
-        {
-            RequestGoBack?.Invoke();
-        }
-    }
-}
-- *cascade08-f *cascade08fi*cascade08ij *cascade08jk*cascade08kÑ *cascade08Ñà*cascade08àâ *cascade08âä*cascade08äú *cascade08ú£*cascade08£§ *cascade08§•*cascade08•¶ *cascade08¶∞*cascade08∞± *cascade08±æ*cascade08æø *cascade08ø¬*cascade08¬√ *cascade08√Õ*cascade08ÕŒ *cascade08Œ”*cascade08”‘ *cascade08‘Ÿ*cascade08Ÿ⁄ *cascade08⁄˙*cascade08˙˚ *cascade08˚¸*cascade08¸Ä *cascade08Ä¬*cascade08¬∂ *cascade08∂‹*cascade08‹ì *cascade08ì‘‘Ô*cascade08Ô˘ *cascade08˘∞ *cascade08∞±*cascade08±ª *cascade08ªü *cascade08üÿ	 *cascade08ÿ	ÄÄç*cascade08çï *cascade08ïÙ*cascade08Ùı *cascade08ı´*cascade08´ê *cascade08êª*cascade08ªø *cascade08ø’*cascade08’„ *cascade08„ı *cascade08ı®*cascade08®≥ *cascade08≥∫ *cascade08∫∆ *cascade08∆‘*cascade08‘‰ *cascade08‰¢¢≈ *cascade08≈ÿÿË*cascade08ËÏ *cascade08Ïó *cascade08ó“*cascade08“÷ *cascade08÷Á *cascade08Á£ *cascade08£‰*cascade08‰Û *cascade08Ûù *cascade08ù˘ *cascade08˘»%*cascade08»%Ÿ% *cascade08Ÿ%Ê% *cascade08Ê%Ó%*cascade08Ó%¯% *cascade08¯%˘% *cascade08˘%¸%¸%˝% *cascade08˝%˛%˛%æ& *cascade08æ&ø& *cascade08ø&œ&*cascade08œ&–& *cascade08–&ÿ&*cascade08ÿ&Ÿ& *cascade08Ÿ&˙&*cascade08˙&˚& *cascade08˚&ñ'*cascade08ñ'ó' *cascade08ó'µ'*cascade08µ'∂'*cascade08∂'∑'*cascade08∑'∏' *cascade08∏'ø'*cascade08ø'¿' *cascade08¿'Ê'*cascade08Ê'Á' *cascade08Á'Ï'*cascade08Ï'Ì' *cascade08Ì'Ó'*cascade08Ó'Ô' *cascade08Ô'˜'*cascade08˜'¯' *cascade08¯'à(*cascade08à(â( *cascade08â(ò(*cascade08ò(ö( *cascade08ö(Ø(*cascade08Ø(∞( *cascade08∞(ﬂ(*cascade08ﬂ(‡( *cascade08‡(‚(*cascade08‚(„( *cascade08„(Â(*cascade08Â(Ê( *cascade08Ê(∑)*cascade08∑)π) *cascade08π)Ω)*cascade08Ω)æ) *cascade08æ)œ)*cascade08œ)–) *cascade08–)Á)*cascade08Á)Ë) *cascade08Ë)˙)*cascade08˙)˚) *cascade08˚)¶**cascade08¶*®* *cascade08®*∆**cascade08∆*«* *cascade08«*ˆ**cascade08ˆ*˜* *cascade08˜*É+*cascade08É+Ñ+ *cascade08Ñ+ä+*cascade08ä+ã+ *cascade08ã+ç+*cascade08ç+é+ *cascade08é+í+*cascade08í+ì+ *cascade08ì+ô+*cascade08ô+ö+ *cascade08ö+Î+*cascade08Î+Ì+ *cascade08Ì+ú,*cascade08ú,ù, *cascade08ù,•,*cascade08•,¶, *cascade08¶,´,*cascade08´,¨, *cascade08¨,Æ,*cascade08Æ,Ø, *cascade08Ø,ƒ,*cascade08ƒ,≈, *cascade08≈,–,*cascade08–,˙,˙,˚, *cascade08˚,Å-*cascade08Å-Ç- *cascade08Ç-ñ-*cascade08ñ-ó- *cascade08ó-‘-*cascade08‘-’- *cascade08’-à.*cascade08à.â. *cascade08â.é. *cascade08é.©.©.›. *cascade08›.˘. *cascade08˘.É/ *cascade08É/†/ *cascade08†/º/ *cascade08º/Ω/*cascade08Ω/æ/ *cascade08æ/¬/*cascade08¬/≈/ *cascade08≈/Œ/*cascade08Œ/œ/ *cascade08œ/–/*cascade08–/”/ *cascade08”/ﬂ/*cascade08ﬂ/‡/ *cascade08‡/Â/*cascade08Â/Ê/ *cascade08Ê/Í/ *cascade08Í/Ù/*cascade08Ù/ı/ *cascade08ı/˘/*cascade08˘/˚/ *cascade08˚/¸/*cascade08¸/˛/ *cascade08˛/ˇ/*cascade08ˇ/Ä0 *cascade08Ä0Ç0 *cascade08Ç0É0 *cascade08É0Ñ0*cascade08Ñ0â0 *cascade08â0ä0 *cascade08ä0å0*cascade08å0é0 *cascade08é0ê0*cascade08ê0¢0 *cascade08¢0®0*cascade08®0©0 *cascade08©0´0*cascade08´0¨0 *cascade08¨0≠0*cascade08≠0Æ0 *cascade08Æ0∞0*cascade08∞0±0 *cascade08±0≤0*cascade08≤0≥0 *cascade08≥0¥0*cascade08¥0µ0 *cascade08µ0∑0*cascade08∑0∏0 *cascade08∏0ª0*cascade08ª0º0 *cascade08º0Ω0*cascade08Ω0ø0 *cascade08ø0«0*cascade08«0…0 *cascade08…0 0*cascade08 0À0 *cascade08À0Õ0*cascade08Õ0Œ0 *cascade08Œ0—0*cascade08—0“0 *cascade08“0’0*cascade08’0÷0 *cascade08÷0€0 *cascade08€0Â0*cascade08Â0Ê0 *cascade08Ê0Í0*cascade08Í0Ï0 *cascade08Ï0Ì0*cascade08Ì0Û0 *cascade08Û0Ù0 *cascade08Ù0ı0*cascade08ı0¯0 *cascade08¯0˘0 *cascade08˘0˙0*cascade08˙0˚0 *cascade08˚0Å1*cascade08Å1è1 *cascade08è1ë1 *cascade08ë1ï1 *cascade08ï1ù1 *cascade08ù1ø1*cascade08ø1¿1 *cascade08¿1¡1 *cascade08¡1¬1*cascade08¬1ƒ1 *cascade08ƒ1À1*cascade08À1Õ1 *cascade08Õ1Œ1*cascade08Œ1”1 *cascade08”1‘1*cascade08‘1’1 *cascade08’1÷1*cascade08÷1ÿ1 *cascade08ÿ1€1*cascade08€1‹1 *cascade08‹1ﬁ1*cascade08ﬁ1·1 *cascade08·1‰1*cascade08‰1Ê1 *cascade08Ê1Î1*cascade08Î1Ô1 *cascade08Ô1Ú1 *cascade08Ú1–6*cascade08–6ﬂ6 *cascade08ﬂ6„6 *cascade08„6‰6*cascade08‰6Â6 *cascade08Â6Ê6*cascade08Ê6Á6 *cascade08Á6Î6*cascade08Î6Ì6 *cascade08Ì6Ó6*cascade08Ó6Ô6 *cascade08Ô6Ò6*cascade08Ò6Ù6 *cascade08Ù6˜6*cascade08˜6¯6 *cascade08¯6˚6*cascade08˚6¸6 *cascade08¸6Ä7*cascade08Ä7Å7 *cascade08Å7É7*cascade08É7Ñ7 *cascade08Ñ7í7 *cascade08í7ì7*cascade08ì7•7 *cascade08•7≠7*cascade08≠7Æ7 *cascade08Æ7Ø7*cascade08Ø7»7 *cascade08»7…7*cascade08…7 7 *cascade08 7Ã7*cascade08Ã7ﬂ7 *cascade08ﬂ7‡7*cascade08‡7‰7 *cascade08‰7ƒ8*cascade08ƒ8‘8 *cascade08‘8˚8*cascade08˚8Ü9 *cascade08Ü9á9*cascade08á9à9 *cascade08à9â9*cascade08â9í9 *cascade08í9ì9*cascade08ì9î9 *cascade08î9ò9*cascade08ò9ô9 *cascade08ô9ö9*cascade08ö9Ω9 *cascade08Ω9ø9*cascade08ø9¡9 *cascade08¡9¬9*cascade08¬9√9 *cascade08√9ƒ9*cascade08ƒ9»9 *cascade08»9Œ9*cascade08Œ9œ9 *cascade08œ9“9*cascade08“9”9 *cascade08”9’9*cascade08’9÷9 *cascade08÷9◊9*cascade08◊9ÿ9 *cascade08ÿ9€9*cascade08€9›9 *cascade08›9ﬂ9*cascade08ﬂ9‚9 *cascade08‚9Í9*cascade08Í9Î9 *cascade08Î9Ï9*cascade08Ï9Ì9*cascade08Ì9Ô9 *cascade08Ô99*cascade089Û9*cascade08Û9ı9 *cascade08ı9ˆ9*cascade08ˆ9Ç: *cascade08Ç:ó:*cascade08ó:ô: *cascade08ô:ú:*cascade08ú:®: *cascade08®:™:*cascade08™:π: *cascade08π:æ:*cascade08æ:¿: *cascade08¿:¡:*cascade08¡:ƒ: *cascade08ƒ:À:*cascade08À:Ã: *cascade08Ã:Õ:*cascade08Õ:—: *cascade08—:”:*cascade08”:Í: *cascade08Í:Ï:*cascade08Ï:Ì: *cascade08Ì:Û:*cascade08Û:Ù: *cascade08Ù:˜:*cascade08˜:¯: *cascade08¯:˘:*cascade08˘:˙: *cascade08˙:˚:*cascade08˚:¸: *cascade08¸:˝: *cascade08˝:˛:*cascade08˛:ˇ: *cascade08ˇ:Ä;*cascade08Ä;Ç; *cascade08Ç;É;*cascade08É;Ñ; *cascade08Ñ;ä;*cascade08ä;ã; *cascade08ã;å;*cascade08å;ç; *cascade08ç;è;*cascade08è;ê;*cascade08ê;ë; *cascade08ë;î;*cascade08î;Ø; *cascade08Ø;±;*cascade08±;≥; *cascade08≥;¥;*cascade08¥;µ; *cascade08µ;∫;*cascade08∫;ª; *cascade08ª;¡;*cascade08¡;¬; *cascade08¬;≈;*cascade08≈;«; *cascade08«;–;*cascade08–;“; *cascade08“;”;*cascade08”;‘; *cascade08‘;’;*cascade08’;÷; *cascade08÷;ÿ;*cascade08ÿ;Ÿ; *cascade08Ÿ;€;*cascade08€;›; *cascade08›;ﬁ;*cascade08ﬁ;‡; *cascade08‡;Ê;*cascade08Ê;Á; *cascade08Á;Ë;*cascade08Ë;È; *cascade08È;Í;*cascade08Í;Ä< *cascade08Ä<É<*cascade08É<õ< *cascade08õ<†<*cascade08†<°< *cascade08°<¢<*cascade08¢<•< *cascade08•<¶<*cascade08¶<ß< *cascade08ß<®<*cascade08®<¨< *cascade08¨<Æ<*cascade08Æ<∞< *cascade08∞<±<*cascade08±<≤< *cascade08≤<π<*cascade08π<∫< *cascade08∫<Ω<*cascade08Ω<æ< *cascade08æ<ƒ<*cascade08ƒ<≈< *cascade08≈<∆<*cascade08∆<…< *cascade08…<œ<*cascade08œ<€< *cascade08€<‡<*cascade08‡<·< *cascade08·<‚<*cascade08‚<Â< *cascade08Â<Á<*cascade08Á<Ë< *cascade08Ë<È<*cascade08È<Î< *cascade08Î<Ô<*cascade08Ô<< *cascade08<Û<*cascade08Û<Ù< *cascade08Ù<ı<*cascade08ı<˜< *cascade08˜<˚<*cascade08˚<¸< *cascade08¸<ˇ<*cascade08ˇ<Å= *cascade08Å=Ü= *cascade08Ü=ì= *cascade08ì=î=*cascade08î=•= *cascade08•=ß=*cascade08ß=∫= *cascade08∫=º=*cascade08º=Ω= *cascade08Ω=ø=*cascade08ø=œ= *cascade08œ=–=*cascade08–=ﬂ= *cascade08ﬂ=Ë=*cascade08Ë=È= *cascade08È=ˆ= *cascade08ˆ=¯= *cascade08¯=˘=*cascade08˘=˚= *cascade08˚=˛=*cascade08˛=Ä> *cascade08Ä>Ö>*cascade08Ö>Ü> *cascade08Ü>á>*cascade08á>å> *cascade08å>ì>*cascade08ì>ó> *cascade08ó>ò>*cascade08ò>ô> *cascade08ô>ö>*cascade08ö>õ> *cascade08õ>ú> *cascade08ú>ù> *cascade08ù>°>*cascade08°>¢> *cascade08¢>≈> *cascade08≈>∆>*cascade08∆> > *cascade08 >Õ> *cascade08Õ>’>*cascade08’>÷> *cascade08÷>◊>*cascade08◊>ÿ> *cascade08ÿ>‡>*cascade08‡>·> *cascade08·>Ë>*cascade08Ë>È> *cascade08È>Ó>*cascade08Ó>> *cascade08>É?*cascade08É?Ñ? *cascade08Ñ?Ü?*cascade08Ü?á? *cascade08á?à?*cascade08à?ñ? *cascade08ñ?ó?*cascade08ó?•? *cascade08•?≥?*cascade08≥?∆? *cascade08∆?»? *cascade08
-»?ã@ ã@ï@*cascade08
-ï@ñ@ ñ@ù@*cascade08
-ù@¶@ ¶@ß@*cascade08
-ß@¨@ ¨@üC *cascade08üC©C*cascade08©C™C *cascade08™C∞C*cascade08∞C∏C *cascade08∏CπC*cascade08πC≤D *cascade08
-≤DÔD ÔD˘D*cascade08
-˘D˙D ˙DÅE*cascade08
-ÅEáE áEàE*cascade08
-àE¢E ¢E”E *cascade08”E‰E *cascade08‰EÚE*cascade08ÚE«F *cascade08«FÂF*cascade08ÂFÔF *cascade08ÔFûHûH†H *cascade08†H±H *cascade08±H«H«HÇI *cascade08ÇI˙R*cascade08
-˙RåS åSúS*cascade08
-úS§S §S•S*cascade08
-•SªS ªS‹S *cascade08‹S◊V*cascade08
-◊V•W •WØW*cascade08
-ØW∞W ∞W∑W*cascade08
-∑WΩW ΩWæW*cascade08
-æW¡W ¡W£X *cascade08£X•X*cascade08•X¶X *cascade08¶X©X*cascade08©X˙X *cascade08˙X¸X*cascade08¸X˝X *cascade08˝XÄY*cascade08ÄYä[ *cascade08ä[î[*cascade08î[ï[ *cascade08ï[õ[*cascade08õ[°[ *cascade08°[¢[*cascade08¢[ï] *cascade08ï]ü]*cascade08ü]†] *cascade08†]¶]*cascade08¶]±] *cascade08±]≤]*cascade08≤]§^ *cascade08§^Î^ *cascade08Î^_*cascade08_Ú_ *cascade08
-Ú_∏` ∏`¬`*cascade08
-¬`√` √`≈`*cascade08
-≈`∆` ∆`«`*cascade08
-«`»` »` `*cascade08
- `—` —`“`*cascade08
-“`’` ’`§a *cascade08§aØa *cascade08Øaµa *cascade08µa¯b *cascade08¯bÇc *cascade08Çcãf*cascade08ãfÕh *cascade08Õh◊h*cascade08◊hÿh *cascade08ÿh‹h*cascade08‹h›h *cascade08›hﬂh*cascade08ﬂh‰h *cascade08‰hÈh*cascade08ÈhÍh *cascade08ÍhÎh*cascade08ÎhÌh *cascade08ÌhÓh*cascade08Óhœj *cascade08œj◊q *cascade08◊q‡q*cascade08‡q·q *cascade08·qÍq*cascade08ÍqÔq *cascade08ÔqÙq*cascade08Ùqıq *cascade08ıqˆq*cascade08ˆq˜q *cascade08˜q˙q*cascade08˙q›s *cascade08›s·s *cascade08·sÉt *cascade08ÉtÑtÑtªt *cascade08ªtºtºt◊t *cascade08◊t€u *cascade08€uˇu*cascade08ˇuçv *cascade08çvñv*cascade08ñvóv *cascade08óvôv*cascade08ôvöv *cascade08övõv*cascade08õvúv *cascade08úvùv*cascade08ùvûv *cascade08ûv£v*cascade08£v§v *cascade08§vßv*cascade08ßvœv *cascade08œv“v*cascade08“v”v *cascade08”v’v*cascade08’v÷v *cascade08÷vŸv*cascade08Ÿv⁄v *cascade08⁄vﬂv*cascade08ﬂv‡v *cascade08‡v‰v*cascade08‰vÔv *cascade08Ôvıv*cascade08ıv˙v *cascade08˙v˚v*cascade08˚v˝v *cascade08˝vÄw*cascade08ÄwÇw *cascade08ÇwÑw*cascade08ÑwÖw *cascade08Öwáw*cascade08áwäw *cascade08äwãw*cascade08ãwïw *cascade08ïwów*cascade08ówòw *cascade08òwúw*cascade08úwùw *cascade08ùwüw*cascade08üw°w *cascade08°w¢w*cascade08¢w§w *cascade08§w´w*cascade08´w¨w *cascade08¨w≥w*cascade08≥w¥w *cascade08¥wµw*cascade08µwœw *cascade08œwÓw*cascade08Ówıw *cascade08ıw˚w*cascade08˚wèx *cascade08èxíx*cascade08íxûx *cascade08ûxüx*cascade08üx†x *cascade08†x•x*cascade08•xÃx *cascade08ÃxÌy*cascade08Ìy˛y *cascade08˛yÑz *cascade082Lfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/ViewModels/MainViewModel.cs

@@ -1,78 +1,0 @@
-€using System.Text.Json.Serialization;
-
-namespace GeminiLauncher.Models
-{
-    public class GameInstance
-    {
-        public string Id { get; set; } = string.Empty; // e.g. "1.16.5"
-        public string Type { get; set; } = "release"; // release, snapshot, old_beta...
-        public string MainClass { get; set; } = string.Empty;
-        public string RootPath { get; set; } = string.Empty; // The .minecraft folder (libraries/assets)
-        public string GameDir { get; set; } = string.Empty; // The working directory (mods/saves)
-        public string JavaPath { get; set; } = string.Empty;
-        public int RequiredJavaVersion { get; set; } = 8; // Default to 8 for older versions
-        public string JvmArgs { get; set; } = string.Empty;
-        public string MinecraftArguments { get; set; } = string.Empty; // For old versions (<1.13)
-        public string AssetIndexId { get; set; } = string.Empty; // e.g. "1.16" or "legacy"
-        public string ClientJarUrl { get; set; } = string.Empty;
-        public string ClientJarSha1 { get; set; } = string.Empty;
-        public long FileSize { get; set; } = 0;
-        
-        public LogConfig? LogConfig { get; set; }
-
-        public List<Library> Libraries { get; set; } = new List<Library>();
-        public List<string> InheritsFrom { get; set; } = new List<string>(); // For Forge/Fabric
-        
-        // For 1.13+ arguments
-        public List<Argument> GameArguments { get; set; } = new List<Argument>();
-        public List<Argument> JvmArguments { get; set; } = new List<Argument>();
-        
-        // PCL-style Override Config
-        public bool UseGlobalSettings { get; set; } = true;
-        public int CustomMemoryMb { get; set; } = 4096;
-        public string CustomJavaPath { get; set; } = string.Empty;
-        public string CustomJvmArgs { get; set; } = string.Empty;
-    }
-
-    public class Library
-    {
-        public string Name { get; set; } = string.Empty;
-        public string Path { get; set; } = string.Empty; // Relative path
-        public string Url { get; set; } = string.Empty;
-        public string Checksum { get; set; } = string.Empty;
-        public List<string> Rules { get; set; } = new List<string>(); // "allow", "disallow" logic
-        public Dictionary<string, string> Natives { get; set; } = new Dictionary<string, string>(); // os -> classifier
-        public bool IsNative { get; set; } = false;
-    }
-
-    public class Argument
-    {
-        public string Value { get; set; } = string.Empty; // The actual argument string
-        // Simple rule representation for now. Real logic is more complex.
-        public bool IsAllowed { get; set; } = true; 
-    }
-
-    public class LogConfig
-    {
-        public string Argument { get; set; } = string.Empty;
-        public LogFile File { get; set; } = new LogFile();
-        public string Type { get; set; } = string.Empty;
-    }
-
-    public class LogFile
-    {
-        public string Id { get; set; } = string.Empty;
-        public string Sha1 { get; set; } = string.Empty;
-        public long Size { get; set; }
-        public string Url { get; set; } = string.Empty;
-    }
-}
- *cascade08*cascade08 *cascade08*cascade08 *cascade08*cascade08 *cascade08*cascade08 *cascade08$*cascade08$‰ *cascade08‰‹*cascade08‹© *cascade08©º*cascade08ºÒ *cascade08ÒÚ*cascade08ÚÛ *cascade08Ûè*cascade08èé *cascade08éí*cascade08íî *cascade08î„*cascade08„… *cascade08…¨*cascade08¨© *cascade08©´*cascade08´ê *cascade08êÔ*cascade08Ôù *cascade08ùŸ*cascade08Ÿî *cascade08îÌ*cascade08Ì‰ *cascade08‰æ *cascade08æÃ*cascade08Ãùùû *cascade08û°	*cascade08°	Œ
- *cascade08Œ
-™
- *cascade08™
-£
-*cascade08£
-¤
- *cascade08¤
-² *cascade08²ß*cascade08ß£ *cascade08£áá¡ *cascade08¡Æ *cascade08Æâ *cascade08â—*cascade08—— *cascade08—ô*cascade08ô€ *cascade082Gfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Models/GameInstance.cs

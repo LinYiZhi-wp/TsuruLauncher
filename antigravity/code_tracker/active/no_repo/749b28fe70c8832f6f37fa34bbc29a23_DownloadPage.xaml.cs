@@ -1,21 +1,0 @@
-îusing System.Windows;
-using System.Windows.Controls;
-
-namespace GeminiLauncher.Views
-{
-    public partial class DownloadPage : Page
-    {
-        public DownloadPage()
-        {
-            InitializeComponent();
-        }
-        private void OpenDownloadManager_Click(object sender, RoutedEventArgs e)
-        {
-            if (NavigationService != null)
-            {
-                NavigationService.Navigate(new DownloadManagerPage());
-            }
-        }
-    }
-}
-*cascade08î *cascade08îè*cascade08èî *cascade082Kfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Views/DownloadPage.xaml.cs

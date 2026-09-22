@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "版本设置对话框实现计划，包含左侧Tab导航（概览、设置、Mod管理、导出）和右侧内容区域，支持版本个性化配置、启动选项、内存设置、Mod管理等功能。",
-  "updatedAt": "2026-02-11T13:15:40.820313200Z"
-}

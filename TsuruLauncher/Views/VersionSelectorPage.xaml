@@ -1,0 +1,41 @@
+<Page x:Class="TsuruLauncher.Views.VersionSelectorPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:anim="clr-namespace:TsuruLauncher.Services.Animation"
+        xmlns:motion="clr-namespace:TsuruLauncher.Services.Animation"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      Title="Version Selector">
+
+    <!-- 与 VersionSettingsPage 同一套做法：页面直接铺在内容区上 —— 页内不再套卡片、
+         不再有独立的「应用栏」、不再自己播进场 Storyboard（外壳 PlayPageEnter 已经在做，
+         页面再挂一份只会和外层抢同一个 RenderTransform，而且没有归位兜底）。
+         原来这里是 Border(iOS26.ContentLayer + RadiusCard + 40px 黑色投影) + 60px 标题条，
+         标题条还用了 Rect="0,0,10000,60" 的圆角 Clip —— 几何右边界在 x=10000 之外，
+         所以只有左边两个角倒角、右边是直边（就是「左边圆角右边直角」）。 -->
+    <Grid Margin="20,20,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 页头：标题 + 文件夹面板开关。没有底色条，所以不存在圆角对不齐的问题。 -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <TextBlock Text="{DynamicResource VersionSelector_Title}" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+            
+        </Grid>
+
+        <!-- Main Content：文件夹列表已经搬到右侧信息栏，这里只剩版本列表（吃满整宽） -->
+        <Grid Grid.Row="1">
+
+            
+
+            <!-- Version List -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="VersionsPanel" Margin="0,0,10,0"/>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</Page>

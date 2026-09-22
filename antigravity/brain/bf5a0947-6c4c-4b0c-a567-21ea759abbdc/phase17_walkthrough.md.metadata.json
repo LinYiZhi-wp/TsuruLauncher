@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_WALKTHROUGH",
-  "summary": "Walkthrough of Phase 17: Fixing UI Thread Starvation. Details the performance optimizations made to the Download Manager to prevent application hangs during high-speed background downloads.",
-  "updatedAt": "2026-02-11T17:16:43.613609700Z"
-}

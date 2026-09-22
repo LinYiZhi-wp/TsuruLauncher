@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "Plan to fix the UI hang in the Download Manager. Includes throttling progress updates to the UI, optimizing property change notifications, and adding defensive checks in DownloadManagerPage to ensure smooth navigation.",
-  "updatedAt": "2026-02-11T17:15:24.269751100Z"
-}

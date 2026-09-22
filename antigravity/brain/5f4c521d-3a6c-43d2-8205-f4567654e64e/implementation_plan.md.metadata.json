@@ -1,6 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "I will implement a resource integrity check that runs before launch. This involves:\n1.  Updating `GameInstance` to store download verification data (URL, SHA1) for the client JAR and libraries.\n2.  Refactoring `GameService` to parse the `downloads` JSON object.\n3.  Implementing `ValidateAndRepairAsync` in `LaunchService` to automatically download missing files.",
-  "updatedAt": "2026-02-12T07:18:04.188113200Z",
-  "version": "3"
-}

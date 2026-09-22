@@ -1,222 +1,0 @@
-•Eusing System;
-using System.Collections.Generic;
-using System.IO;
-using System.Net.Http;
-using System.Security.Cryptography;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Diagnostics;
-
-namespace GeminiLauncher.Services.Network
-{
-    public class DownloadRequest
-    {
-        public string Url { get; set; } = string.Empty;
-        public string DestinationPath { get; set; } = string.Empty;
-        public string? Sha1 { get; set; }
-        public long Size { get; set; }
-
-        public DownloadRequest() { }
-        public DownloadRequest(string url, string path, string? sha1 = null, long size = 0)
-        {
-            Url = url;
-            DestinationPath = path;
-            Sha1 = sha1;
-            Size = size;
-        }
-    }
-
-    public class DownloadService
-    {
-        private readonly HttpClient _httpClient;
-        private readonly SemaphoreSlim _semaphore;
-
-        public DownloadService(int maxConcurrency = 64)
-        {
-            // SocketsHttpHandler is better for connection pooling in .NET Core/5+
-            var handler = new SocketsHttpHandler
-            {
-                PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-                MaxConnectionsPerServer = maxConcurrency
-            };
-            _httpClient = new HttpClient(handler);
-            _httpClient.Timeout = TimeSpan.FromMinutes(5);
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) GeminiLauncher/1.0");
-            
-            _semaphore = new SemaphoreSlim(maxConcurrency);
-        }
-
-        public async Task<string> DownloadStringAsync(string url)
-        {
-            return await _httpClient.GetStringAsync(url);
-        }
-
-        public async Task DownloadFileAsync(string url, string path, string? expectedSha1 = null, IProgress<long>? progress = null, CancellationToken ct = default)
-        {
-            // Ensure directory exists
-            var dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-
-            // Check if file exists and is valid
-            if (File.Exists(path))
-            {
-                 if (string.IsNullOrEmpty(expectedSha1) || VerifyFile(path, expectedSha1))
-                 {
-                     return; 
-                 }
-                 // Invalid file, delete and redownload
-                 File.Delete(path);
-            }
-
-            string partialPath = path + ".partial";
-            
-            // Retry logic
-            int maxRetries = 3;
-            for (int i = 0; i < maxRetries; i++)
-            {
-                try
-                {
-                    await DownloadInternalAsync(url, path, partialPath, progress, ct);
-                    
-                    // Verify after download
-                    if (!string.IsNullOrEmpty(expectedSha1) && !VerifyFile(path, expectedSha1))
-                    {
-                        // Corruption? Delete and maybe retry without resume next time?
-                        File.Delete(path);
-                        if (File.Exists(partialPath)) File.Delete(partialPath);
-                        throw new IOException($"SHA1 mismatch for {url}");
-                    }
-                    
-                    return; // Success
-                }
-                catch (Exception ex)
-                {
-                    if (i == maxRetries - 1) throw; // Rethrow on last attempt
-                    await Task.Delay(1000 * (i + 1), ct); // Backoff
-                }
-            }
-        }
-        
-        private async Task DownloadInternalAsync(string url, string finalPath, string partialPath, IProgress<long>? progress, CancellationToken ct)
-        {
-            long startOffset = 0;
-            if (File.Exists(partialPath))
-            {
-                startOffset = new FileInfo(partialPath).Length;
-            }
-
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            if (startOffset > 0)
-            {
-                request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(startOffset, null);
-            }
-
-            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-            
-            if (response.StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable)
-            {
-                 // Server doesn't like range, reset
-                 startOffset = 0;
-                 File.Delete(partialPath);
-                 using var freshResponse = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-                 freshResponse.EnsureSuccessStatusCode();
-                 await SaveStream(freshResponse, partialPath, false, progress, ct);
-            }
-            else
-            {
-                response.EnsureSuccessStatusCode();
-                await SaveStream(response, partialPath, startOffset > 0, progress, ct);
-            }
-
-            File.Move(partialPath, finalPath, true);
-        }
-
-        private async Task SaveStream(HttpResponseMessage response, string path, bool append, IProgress<long>? progress, CancellationToken ct)
-        {
-            var expectedLength = response.Content.Headers.ContentLength;
-            using var contentStream = await response.Content.ReadAsStreamAsync(ct);
-            using var fileStream = new FileStream(path, append ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.Read, 8192, true);
-            
-            var buffer = new byte[8192];
-            int bytesRead;
-            long totalSavedInThisSession = 0;
-            
-            while (true)
-            {
-                // Aggressive timeout for reading to prevent hanging at 99%
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(TimeSpan.FromSeconds(30)); 
-
-                try
-                {
-                    bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                {
-                    throw new TimeoutException("ËØªÂèñÊï∞ÊçÆÊµÅË∂ÖÊó∂Ôºà30ÁßíÂÜÖÊó†Êï∞ÊçÆÔºâ");
-                }
-
-                if (bytesRead <= 0) break;
-
-                await fileStream.WriteAsync(buffer, 0, bytesRead, ct);
-                totalSavedInThisSession += bytesRead;
-                progress?.Report(bytesRead);
-            }
-
-            // Final safety check if we have Content-Length
-            if (expectedLength.HasValue && totalSavedInThisSession < expectedLength.Value && !append)
-            {
-                throw new IOException($"‰∏ãËΩΩ‰∏çÂÆåÊï¥: È¢ÑÊúü {expectedLength.Value} Â≠óËäÇ, ÂÆûÈôÖÊî∂Âà∞ {totalSavedInThisSession} Â≠óËäÇ");
-            }
-        }
-
-        private bool VerifyFile(string path, string expectedSha1)
-        {
-            try
-            {
-                using var sha1 = SHA1.Create();
-                using var stream = File.OpenRead(path);
-                var hash = sha1.ComputeHash(stream);
-                var hashString = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-                return hashString.Equals(expectedSha1, StringComparison.OrdinalIgnoreCase);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        public async Task DownloadBatchAsync(List<DownloadRequest> requests, IProgress<double> progress, CancellationToken ct = default)
-        {
-            int completedCount = 0;
-            var tasks = new List<Task>();
-            object lockObj = new object();
-
-            foreach (var req in requests)
-            {
-                tasks.Add(Task.Run(async () =>
-                {
-                    await _semaphore.WaitAsync(ct);
-                    try
-                    {
-                        // Pass a progress that reports back to the manager for speed tracking
-                        // (Note: This specific implementation would need to be very carefully tuned for perf)
-                        await DownloadFileAsync(req.Url, req.DestinationPath, req.Sha1, null, ct);
-                    }
-                    finally
-                    {
-                        _semaphore.Release();
-                        lock(lockObj)
-                        {
-                            completedCount++;
-                            progress.Report((double)completedCount / requests.Count);
-                        }
-                    }
-                }, ct));
-            }
-            
-            await Task.WhenAll(tasks);
-        }
-    }
-}
-˛ *cascade08˛ä*cascade08ä *cascade08Ü*cascade08Ü≤ *cascade08≤·*cascade08·‰ *cascade08‰Ù*cascade08Ùˆ *cascade08ˆ˘*cascade08˘˙ *cascade08˙˚*cascade08˚Ä *cascade08Äá*cascade08áö *cascade08öµ*cascade08µ∫ *cascade08∫Ω*cascade08ΩÀ *cascade08À—*cascade08—“ *cascade08“›*cascade08›ﬁ *cascade08ﬁﬂ*cascade08ﬂ‡ *cascade08‡‰*cascade08‰Â *cascade08ÂÊ*cascade08ÊÁ *cascade08ÁÚ*cascade08Ú‰ *cascade08‰Ò*cascade08Òº *cascade08ºí*cascade08íê *cascade08ê¢*cascade08¢£ *cascade08£™*cascade08™¯ *cascade08¯õ!*cascade08õ!¬! *cascade08¬!ƒ$*cascade08ƒ$é% *cascade08é%î%*cascade08î%ï% *cascade08ï%ô%*cascade08ô%Ω% *cascade08Ω%Ω)*cascade08Ω)À) *cascade08À)ï**cascade08ï*ñ+ *cascade08ñ+±+*cascade08±+ﬁ+ *cascade08ﬁ+ﬂ+*cascade08ﬂ+‡+ *cascade08‡+‚+*cascade08‚+“, *cascade08“,Å-*cascade08Å-ñ- *cascade08ñ-».*cascade08».…. *cascade08…. /*cascade08 /ê0 *cascade08ê0ó0*cascade08ó0ò0 *cascade08ò0ﬂ0*cascade08ﬂ0·0 *cascade08·0Â0*cascade08Â0Ê0 *cascade08Ê0Ç1*cascade08Ç1Ö1 *cascade08Ö1â1*cascade08â1ò1 *cascade08ò1º2*cascade08º2î3 *cascade08î3À3*cascade08À3Â3 *cascade08Â3∫6*cascade08∫6¥7 *cascade08¥7ÿ7*cascade08ÿ7˘7 *cascade08˘7˙7*cascade08˙7Ü8 *cascade08Ü8â8*cascade08â8æ8 *cascade08æ8¬8*cascade08¬8Ë8 *cascade08Ë8Î8*cascade08Î8˜8 *cascade08˜8¯8*cascade08¯8◊9 *cascade08◊9€9*cascade08€9¶: *cascade08¶:Ö;*cascade08Ö;µ< *cascade08µ<∂<*cascade08∂<π< *cascade08π<∫<*cascade08∫<ª< *cascade08ª<Ω<*cascade08Ω<¡< *cascade08¡<¬<*cascade08¬<°? *cascade08°?£?*cascade08£?§? *cascade08§?•?*cascade08•?´? *cascade08´?¨?*cascade08¨?¥? *cascade08¥?∂?*cascade08∂?ø? *cascade08ø?¿?*cascade08¿?√? *cascade08√?≈?*cascade08≈?…? *cascade08…?À?*cascade08À?Œ? *cascade08Œ?œ?*cascade08œ?–? *cascade08–?‘?*cascade08‘?’? *cascade08’?÷?*cascade08÷?›? *cascade08›?ﬁ?*cascade08ﬁ?„? *cascade08„?Â?*cascade08Â?Ñ@ *cascade08Ñ@á@*cascade08á@â@ *cascade08â@ä@*cascade08ä@ã@ *cascade08ã@ç@*cascade08ç@ê@ *cascade08ê@ë@*cascade08ë@ì@ *cascade08ì@ñ@*cascade08ñ@ó@ *cascade08ó@ò@*cascade08ò@™@ *cascade08™@≠@*cascade08≠@Æ@ *cascade08Æ@≤@*cascade08≤@≥@ *cascade08≥@µ@*cascade08µ@∂@ *cascade08∂@∏@*cascade08∏@π@ *cascade08π@Ω@*cascade08Ω@æ@ *cascade08æ@«@*cascade08«@»@ *cascade08»@Õ@*cascade08Õ@Œ@ *cascade08Œ@—@*cascade08—@“@ *cascade08“@Ÿ@*cascade08Ÿ@Ò@ *cascade08Ò@Û@*cascade08Û@àA *cascade08àAâA*cascade08âAãA *cascade08ãAéA*cascade08éAêA *cascade08êAëA*cascade08ëAîA *cascade08îAïA*cascade08ïAñA *cascade08ñAóA*cascade08óAôA *cascade08ôAõA*cascade08õAúA *cascade08úAùA*cascade08ùAûA *cascade08ûAüA*cascade08üA†A *cascade08†A£A*cascade08£A§A *cascade08§A¶A*cascade08¶AßA *cascade08ßA®A*cascade08®A©A *cascade08©A™A*cascade08™A´A *cascade08´A∞A*cascade08∞A±A *cascade08±AµA*cascade08µAñC *cascade08ñCóC*cascade08óCòC *cascade08òCõC*cascade08õCùC *cascade08ùCüC*cascade08üC£C *cascade08£C¶C*cascade08¶C•E *cascade082Tfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Services/Network/DownloadService.cs

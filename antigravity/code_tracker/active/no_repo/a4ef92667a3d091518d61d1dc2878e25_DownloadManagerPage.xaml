@@ -1,220 +1,0 @@
-ñY<Page x:Class="GeminiLauncher.Views.DownloadManagerPage"
-      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-      xmlns:conv="clr-namespace:GeminiLauncher.Converters"
-      mc:Ignorable="d" 
-      d:DesignHeight="650" d:DesignWidth="1000"
-      Title="DownloadManagerPage">
-
-    <Page.Resources>
-        <conv:ProgressToIconConverter x:Key="ProgressToIconConverter"/>
-        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
-    </Page.Resources>
-
-    <Grid Background="{DynamicResource iOS26.Background}">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="260"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-
-        <!-- Sidebar Statistics -->
-        <Border Grid.Column="0" 
-                Background="{DynamicResource iOS26.SidebarLayer}"
-                BorderBrush="#10FFFFFF"
-                BorderThickness="0,0,1,0">
-            <StackPanel Margin="24,60,24,20">
-                <TextBlock Text="{DynamicResource DownloadManager_StatsTitle}" FontSize="24" FontWeight="Bold" Foreground="White" Margin="0,0,0,40"/>
-
-                <!-- Stat Cards -->
-                <Border Background="#10FFFFFF" CornerRadius="12" Padding="16" Margin="0,0,0,16">
-                    <StackPanel>
-                        <TextBlock Text="{DynamicResource DownloadManager_TotalProgress}" FontSize="11" Opacity="0.6" Foreground="White"/>
-                        <TextBlock Text="{Binding TotalProgressText}" FontSize="24" FontWeight="Bold" Foreground="White" Margin="0,4,0,0"/>
-                    </StackPanel>
-                </Border>
-
-                <Border Background="#10FFFFFF" CornerRadius="12" Padding="16" Margin="0,0,0,16">
-                    <StackPanel>
-                        <TextBlock Text="{DynamicResource DownloadManager_Speed}" FontSize="11" Opacity="0.6" Foreground="White"/>
-                        <TextBlock Text="{Binding GlobalSpeedText}" FontSize="24" FontWeight="Bold" Foreground="#00E676" Margin="0,4,0,0"/>
-                    </StackPanel>
-                </Border>
-
-                <Border Background="#10FFFFFF" CornerRadius="12" Padding="16">
-                    <StackPanel>
-                        <TextBlock Text="{DynamicResource DownloadManager_Remaining}" FontSize="11" Opacity="0.6" Foreground="White"/>
-                        <TextBlock Text="{Binding TotalRemainingFiles}" FontSize="24" FontWeight="Bold" Foreground="White" Margin="0,4,0,0"/>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </Border>
-
-        <!-- Main Content (Task List) -->
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="80"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <!-- Custom Header -->
-            <Border Grid.Row="0" Margin="30,20,30,0">
-                <Grid>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <ui:Button Icon="{ui:SymbolIcon ArrowLeft24}" 
-                                   Appearance="Transparent"
-                                   Foreground="White"
-                                   Padding="10" Margin="0,0,15,0"
-                                   Click="Back_Click"/>
-                        <TextBlock Text="{DynamicResource DownloadManager_Title}" FontSize="20" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    
-                    <ui:Button HorizontalAlignment="Right" 
-                               Content="{DynamicResource DownloadManager_CancelAll}" 
-                               Appearance="Secondary"
-                               Foreground="#FF5252"
-                               Icon="{ui:SymbolIcon Dismiss24}"/>
-                </Grid>
-            </Border>
-
-            <!-- Task List -->
-            <ScrollViewer Grid.Row="1" Padding="30,10,30,30">
-                <ItemsControl ItemsSource="{Binding ActiveTasks}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Background="{DynamicResource iOS26.CardLayer}" 
-                                    CornerRadius="16" 
-                                    BorderBrush="#15FFFFFF"
-                                    BorderThickness="1"
-                                    Padding="24"
-                                    Margin="0,0,0,20">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-
-                                    <!-- Task Name & Main Progress -->
-                                    <Grid Grid.Row="0" Margin="0,0,0,20">
-                                        <StackPanel Orientation="Horizontal">
-                                            <ui:SymbolIcon Symbol="Games24" FontSize="24" Foreground="{DynamicResource SystemAccentColorBrush}" Margin="0,0,12,0"/>
-                                            <StackPanel>
-                                                <TextBlock Text="{Binding Name, StringFormat='Minecraft {0}'}" FontSize="18" FontWeight="Bold" Foreground="White"/>
-                                                <TextBlock Text="{Binding Status}" FontSize="12" Opacity="0.6" Foreground="White"/>
-                                            </StackPanel>
-                                        </StackPanel>
-                                        
-                                        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding ProgressPercentageText}" FontSize="18" FontWeight="Bold" Foreground="White" HorizontalAlignment="Right"/>
-                                            <TextBlock Text="{Binding SpeedText}" FontSize="11" Foreground="#00E676" HorizontalAlignment="Right"/>
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <!-- Main Progress Bar -->
-                                    <ProgressBar Grid.Row="1" Value="{Binding Progress, Mode=OneWay}" Maximum="1.0" Height="6" Margin="0,0,0,24">
-                                        <ProgressBar.Resources>
-                                            <Style TargetType="Border">
-                                                <Setter Property="CornerRadius" Value="3"/>
-                                            </Style>
-                                        </ProgressBar.Resources>
-                                    </ProgressBar>
-
-                                    <!-- Detailed Steps -->
-                                    <UniformGrid Grid.Row="2" Columns="4">
-                                        <!-- JSON -->
-                                        <StackPanel Margin="0,0,15,0">
-                                            <Grid>
-                                                <TextBlock Text="{DynamicResource DownloadManager_Step_JSON}" FontSize="11" Opacity="0.6" Foreground="White"/>
-                                                <ContentControl Content="{Binding JsonProgress, Converter={StaticResource ProgressToIconConverter}}" 
-                                                               HorizontalAlignment="Right"/>
-                                            </Grid>
-                                            <ProgressBar Value="{Binding JsonProgress}" Maximum="1.0" Height="3" Margin="0,6,0,4"/>
-                                            <TextBlock Text="{Binding JsonStatusText}" FontSize="10" Opacity="0.5" Foreground="White"/>
-                                        </StackPanel>
-
-                                        <!-- Libs -->
-                                        <StackPanel Margin="0,0,15,0">
-                                            <Grid>
-                                                <TextBlock Text="{DynamicResource DownloadManager_Step_Libs}" FontSize="11" Opacity="0.6" Foreground="White"/>
-                                                <TextBlock Text="{Binding LibrariesProgress, StringFormat='{}{0:P0}'}" FontSize="11" Foreground="White" HorizontalAlignment="Right"/>
-                                            </Grid>
-                                            <ProgressBar Value="{Binding LibrariesProgress}" Maximum="1.0" Height="3" Margin="0,6,0,4"/>
-                                            <TextBlock Text="{Binding LibrariesStatusText}" FontSize="10" Opacity="0.5" Foreground="White"/>
-                                        </StackPanel>
-
-                                        <!-- Assets -->
-                                        <StackPanel Margin="0,0,15,0">
-                                            <Grid>
-                                                <TextBlock Text="{DynamicResource DownloadManager_Step_Assets}" FontSize="11" Opacity="0.6" Foreground="White"/>
-                                                <TextBlock Text="{Binding AssetsProgress, StringFormat='{}{0:P0}'}" FontSize="11" Foreground="White" HorizontalAlignment="Right"/>
-                                            </Grid>
-                                            <ProgressBar Value="{Binding AssetsProgress}" Maximum="1.0" Height="3" Margin="0,6,0,4"/>
-                                            <TextBlock Text="{Binding AssetsStatusText}" FontSize="10" Opacity="0.5" Foreground="White"/>
-                                        </StackPanel>
-
-                                        <!-- Loader -->
-                                        <StackPanel>
-                                            <Grid>
-                                                <TextBlock Text="{DynamicResource DownloadManager_Step_Install}" FontSize="11" Opacity="0.6" Foreground="White"/>
-                                                <ContentControl Content="{Binding ComponentsProgress, Converter={StaticResource ProgressToIconConverter}}" 
-                                                               HorizontalAlignment="Right"/>
-                                            </Grid>
-                                            <ProgressBar Value="{Binding ComponentsProgress}" Maximum="1.0" Height="3" Margin="0,6,0,4"/>
-                                            <TextBlock Text="{Binding ComponentsStatusText}" FontSize="10" Opacity="0.5" Foreground="White"/>
-                                        </StackPanel>
-                                    </UniformGrid>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
-        </Grid>
-    </Grid>
-</Page>
-” *cascade08”Ğ*cascade08Ğú *cascade08úû*cascade08û *cascade08*cascade08µ *cascade08µ™ *cascade08™ç*cascade08çû *cascade08û„ *cascade08„…*cascade08…é *cascade08éï*cascade08ï¾ *cascade08¾Ä*cascade08ÄÅ *cascade08ÅÍ*cascade08ÍÎ *cascade08Îâ*cascade08âƒ	 *cascade08ƒ	„	*cascade08„	…	 *cascade08…	‹	*cascade08‹	Ú	 *cascade08Ú	Ü	*cascade08Ü	à	 *cascade08à	â	*cascade08â	ú	 *cascade08ú	ƒ
-*cascade08ƒ
-…
- *cascade08…
-Š
- *cascade08Š
-¶
-*cascade08¶
-¹
- *cascade08¹
-º
- *cascade08º
-»
-*cascade08»
-¼
- *cascade08¼
-Ô
-*cascade08Ô
-Õ
- *cascade08Õ
-×
-*cascade08×
-Ø
- *cascade08Ø
-Ú
-*cascade08Ú
-Û
- *cascade08Û
-Ü
-*cascade08Ü
-Ş
- *cascade08Ş
-ç
-*cascade08ç
-é
- *cascade08é
-ê
-*cascade08ê
-ü
- *cascade08ü
-ı
-*cascade08ı
-€ *cascade08€‚*cascade08‚“ *cascade08“š*cascade08šœ *cascade08œ¡*cascade08¡¢ *cascade08¢¥*cascade08¥· *cascade08·¾*cascade08¾¿ *cascade08¿Õ*cascade08ÕÖ *cascade08Ö×*cascade08×Ù *cascade08Ùì*cascade08ìî *cascade08îö*cascade08ö÷ *cascade08÷ù*cascade08ùı *cascade08ı…*cascade08…† *cascade08†‡*cascade08‡ *cascade08Ÿ*cascade08Ÿ  *cascade08 ¥*cascade08¥¿ *cascade08¿Ã*cascade08ÃÄ *cascade08ÄÈ*cascade08ÈÉ *cascade08ÉÊ*cascade08ÊË *cascade08ËÍ*cascade08ÍÎ *cascade08ÎÏ*cascade08ÏĞ *cascade08ĞÑ*cascade08ÑÔ *cascade08Ôƒ*cascade08ƒ… *cascade08…†*cascade08†ˆ *cascade08ˆŠ*cascade08Š‹ *cascade08‹*cascade08 *cascade08²*cascade08²· *cascade08·»*cascade08»ˆ *cascade08ˆ‰*cascade08‰— *cascade08—¡*cascade08¡¢ *cascade08¢ª*cascade08ª« *cascade08«¬*cascade08¬­ *cascade08­¿*cascade08¿Ä *cascade08ÄÈ*cascade08Èø *cascade08øú*cascade08úû *cascade08ûü*cascade08üş *cascade08şÿ*cascade08ÿ€ *cascade08€‚*cascade08‚• *cascade08•*cascade08  *cascade08 Å*cascade08ÅÇ *cascade08ÇÊ*cascade08ÊË *cascade08ËÑ*cascade08Ñà *cascade08àâ*cascade08âû *cascade08ûü*cascade08üı *cascade08ış*cascade08ş€ *cascade08€ƒ*cascade08ƒ„ *cascade08„†*cascade08†  *cascade08 ¤*cascade08¤¥ *cascade08¥¦*cascade08¦§ *cascade08§¬*cascade08¬­ *cascade08­®*cascade08®± *cascade08±Ø*cascade08Øå *cascade08åæ*cascade08æè *cascade08èì*cascade08ìî *cascade08îï*cascade08ïñ *cascade08ñô*cascade08ôö *cascade08ö÷*cascade08÷† *cascade08†‡*cascade08‡Œ *cascade08Œ*cascade08¡ *cascade08¡¤*cascade08¤Û *cascade08ÛÜ*cascade08Üê *cascade08ê‰*cascade08‰Š *cascade08Š”*cascade08”™ *cascade08™*cascade08Í *cascade08ÍÒ*cascade08ÒÓ *cascade08ÓÔ*cascade08Ô× *cascade08×Ù*cascade08Ùê *cascade08êò*cascade08òõ *cascade08õš*cascade08šœ *cascade08œŸ*cascade08Ÿ  *cascade08 ¦*cascade08¦¾ *cascade08¾¿*cascade08¿À *cascade08ÀÁ*cascade08ÁÃ *cascade08ÃÆ*cascade08ÆÇ *cascade08ÇÉ*cascade08Éã *cascade08ãç*cascade08çè *cascade08èé*cascade08éê *cascade08êï*cascade08ïğ *cascade08ğñ*cascade08ñô *cascade08ôŸ*cascade08Ÿ¬ *cascade08¬­*cascade08­¯ *cascade08¯¶*cascade08¶¹ *cascade08¹»*cascade08»Í *cascade08ÍÎ*cascade08ÎÓ *cascade08Ó×*cascade08×› *cascade08›œ*cascade08œ *cascade08 *cascade08 ¢ *cascade08¢ª*cascade08ª­ *cascade08­¯*cascade08¯± *cascade08±²*cascade08²µ *cascade08µ¾*cascade08¾¿ *cascade08¿Ã*cascade08ÃÄ *cascade08ÄÊ*cascade08ÊÌ *cascade08ÌĞ*cascade08ĞÑ *cascade08ÑÕ*cascade08ÕÖ *cascade08Öà*cascade08àö *cascade08öø*cascade08øù *cascade08ùÿ*cascade08ÿ *cascade08‚*cascade08‚— *cascade08—›*cascade08›œ *cascade08œ*cascade08İ *cascade08İá*cascade08áã *cascade08ãé*cascade08éê *cascade08êë*cascade08ëğ *cascade08ğò*cascade08òó *cascade08óõ*cascade08õå *cascade08åç*cascade08çĞ *cascade08ĞÓ*cascade08ÓÔ *cascade08ÔØ*cascade08ØÚ *cascade08ÚÛ*cascade08Ûğ *cascade08ğò*cascade08òô *cascade08ôö*cascade08ö„ *cascade08„…*cascade08…‡ *cascade08‡‰*cascade08‰ *cascade08–*cascade08–— *cascade08—š*cascade08š› *cascade08›­*cascade08­® *cascade08®¯*cascade08¯² *cascade08²¶*cascade08¶ˆ *cascade08ˆŒ*cascade08ŒĞ *cascade08ĞÑ*cascade08Ñğ *cascade08ğó*cascade08ó *cascade08‘*cascade08‘ã *cascade08ãç*cascade08çğ *cascade08ğò*cascade08ò *cascade08‚*cascade08‚‡ *cascade08‡‰*cascade08‰¨ *cascade08¨ª*cascade08ªÔ *cascade08ÔØ*cascade08Øé *cascade08é*cascade08œ *cascade08œ´*cascade08´÷ *cascade08÷û*cascade08û– *cascade08–µ *cascade08µ¶¶· *cascade08·ºº… *cascade08…°*cascade08°ó  *cascade08ó ü  *cascade08ü “!*cascade08“!å! *cascade08å!ğ!*cascade08ğ!Á# *cascade08Á#Ò#*cascade08Ò#Ó# *cascade08Ó#Ø# *cascade08Ø#Ü#*cascade08Ü#ß# *cascade08ß#à# *cascade08à#â# *cascade08â#™$ *cascade08™$š$*cascade08š$Ğ$ *cascade08Ğ$Ø$*cascade08Ø$Â% *cascade08Â%Ã%*cascade08Ã%ñ' *cascade08ñ'¹(*cascade08¹(¥) *cascade08¥)¦)*cascade08¦)§) *cascade08§)¨)*cascade08¨)©) *cascade08©)²)*cascade08²)³) *cascade08³)¹)*cascade08¹)³* *cascade08³*á+ *cascade08á+æ+æ+é, *cascade08é,–- *cascade08–- -*cascade08 -¡- *cascade08¡-§- *cascade08§-Û-*cascade08Û-. *cascade08.¯.*cascade08¯.». *cascade08».Ê.*cascade08Ê.Î. *cascade08Î.Ï.*cascade08Ï.Ñ. *cascade08Ñ.Ö.*cascade08Ö.Ø. *cascade08Ø.Ú.*cascade08Ú.Û. *cascade08Û.İ.*cascade08İ.Š/ *cascade08Š//*cascade08// *cascade08/‘/*cascade08‘/’/ *cascade08’/—/*cascade08—/˜/ *cascade08˜/¯/*cascade08¯/°/ *cascade08°/Ğ/*cascade08Ğ/Ñ/ *cascade08Ñ/®0*cascade08®0¯0 *cascade08¯0±0*cascade08±0Í0 *cascade08Í0é0*cascade08é0—1 *cascade08—1¡1*cascade08¡1¢1 *cascade08¢1°1*cascade08°1±1 *cascade08±1¼1*cascade08¼1½1 *cascade08½1Ë1*cascade08Ë1Í1 *cascade08Í1Ò1*cascade08Ò1Ô1 *cascade08Ô1Ş1*cascade08Ş1ß1 *cascade08ß1å1*cascade08å1ç1 *cascade08ç1ğ1*cascade08ğ1ñ1 *cascade08ñ1ò1*cascade08ò1ó1 *cascade08ó1ü1*cascade08ü1ı1 *cascade08ı1€2*cascade08€22 *cascade082Œ2*cascade08Œ22 *cascade082“2*cascade08“2”2 *cascade08”2—2*cascade08—2˜2 *cascade08˜2š2*cascade08š2È2 *cascade08È2Ò2*cascade08Ò2Ó2 *cascade08Ó2á2*cascade08á2â2 *cascade08â2í2*cascade08í2î2 *cascade08î2û2*cascade08û2ü2 *cascade08ü2ÿ2*cascade08ÿ2€3 *cascade08€33*cascade083‚3 *cascade08‚3„3*cascade08„3…3 *cascade08…3†3*cascade08†3ˆ3 *cascade08ˆ3“3*cascade08“3”3 *cascade08”3—3*cascade08—3˜3 *cascade08˜3™3*cascade08™3š3 *cascade08š3¡3*cascade08¡3¤3 *cascade08¤3¥3*cascade08¥3¦3 *cascade08¦3®3*cascade08®3Ø3 *cascade08Ø3ß3*cascade08ß3â3 *cascade08â3ä3*cascade08ä3¿4 *cascade08¿4À4*cascade08À4Á4 *cascade08Á4Ê4*cascade08Ê4Ì4 *cascade08Ì4Ğ4*cascade08Ğ4ü4 *cascade08ü4„5*cascade08„5…5 *cascade08…5†5*cascade08†5”5 *cascade08”5£5*cascade08£5¤5 *cascade08¤5­5*cascade08­5®5 *cascade08®5»5*cascade08»5¼5 *cascade08¼5Õ5 *cascade08Õ5µ7*cascade08µ7Á7 *cascade08Á7È7*cascade08È7Ì7 *cascade08Ì7œ8*cascade08œ88 *cascade088±8*cascade08±8²8 *cascade08²8³8*cascade08³8´8 *cascade08´8í8*cascade08í8î8 *cascade08î8ù8*cascade08ù8ş8 *cascade08ş8§9 *cascade08§9¨9*cascade08¨9©9 *cascade08©9«9*cascade08«9¬9 *cascade08¬9¯9*cascade08¯9±9 *cascade08±9µ9*cascade08µ9à9 *cascade08à9ç9*cascade08ç9ì9 *cascade08ì9í9*cascade08í9ï9 *cascade08ï9ş9*cascade08ş9ÿ9 *cascade08ÿ9€:*cascade08€:‚: *cascade08‚:ƒ:*cascade08ƒ:¯: *cascade08¯:³:*cascade08³:´: *cascade08´:¸:*cascade08¸:¹: *cascade08¹:»:*cascade08»:ç: *cascade08ç:è:*cascade08è:é: *cascade08é:î:*cascade08î:ï: *cascade08ï:ñ:*cascade08ñ:ò: *cascade08ò:ö:*cascade08ö:÷: *cascade08÷:ø:*cascade08ø:ú: *cascade08ú:;*cascade08;³; *cascade08³;µ;*cascade08µ;æ; *cascade08æ;ê;*cascade08ê;ë; *cascade08ë;ñ;*cascade08ñ;ò; *cascade08ò;ö;*cascade08ö;÷; *cascade08÷;û; *cascade08û;‹<*cascade08‹<Œ< *cascade08Œ<¡<*cascade08¡<¥< *cascade08¥<¦<*cascade08¦<ª< *cascade08ª<«< *cascade08«<­<*cascade08­<®< *cascade08®<º<*cascade08º<»< *cascade08»<Å<*cascade08Å<Æ< *cascade08Æ<Ì<*cascade08Ì<Í< *cascade08Í<×<*cascade08×<Ú< *cascade08Ú<Ş<*cascade08Ş<ñ= *cascade08ñ=ó=*cascade08ó=®> *cascade08®>°>*cascade08°>Å> *cascade08Å>É>*cascade08É>ü> *cascade08ü>ı>*cascade08ı>? *cascade08?„?*cascade08„?±? *cascade08±?»? *cascade08»?¼? *cascade08¼?Æ?*cascade08Æ?Ç? *cascade08Ç?È?*cascade08È?É? *cascade08É?†@*cascade08†@±@ *cascade08±@µ@*cascade08µ@¶@ *cascade08¶@¿@*cascade08¿@À@ *cascade08À@È@*cascade08È@É@ *cascade08É@Õ@*cascade08Õ@Ö@ *cascade08Ö@å@*cascade08å@æ@ *cascade08æ@ç@*cascade08ç@è@ *cascade08è@û@*cascade08û@ü@ *cascade08ü@A*cascade08A»A *cascade08»AÂA*cascade08ÂAÄA *cascade08ÄAÆA*cascade08ÆAÇA *cascade08ÇAÉA*cascade08ÉAôA *cascade08ôAùA*cascade08ùAúA *cascade08úAûA*cascade08ûAüA *cascade08üAÿA*cascade08ÿA«B *cascade08«B²B*cascade08²B´B *cascade08´BºB*cascade08ºB¾B *cascade08¾BÅB*cascade08ÅB÷B *cascade08÷BùB*cascade08ùBªC *cascade08ªC®C*cascade08®C¯C *cascade08¯C´C*cascade08´CµC *cascade08µCºC*cascade08ºC»C *cascade08»C¿C *cascade08¿CêC*cascade08êCîC *cascade08îCğC *cascade08ğCñC*cascade08ñCòC *cascade08òC‰D*cascade08‰DŠD *cascade08ŠDD*cascade08D‘D *cascade08‘D›D*cascade08›DD *cascade08D¢D*cascade08¢DŠE *cascade08ŠEŒE*cascade08ŒE•E *cascade08•EÓE*cascade08ÓEF *cascade08F„F*cascade08„F†F *cascade08†FˆF*cascade08ˆF¶F *cascade08¶F¹F *cascade08¹FºF *cascade08ºF»F*cascade08»F½F *cascade08½FÑF*cascade08ÑFÒF *cascade08ÒFİF*cascade08İFßF *cascade08ßFìF*cascade08ìFíF *cascade08íFîF*cascade08îFğF *cascade08ğFòF*cascade08òFõF *cascade08õFöF*cascade08öFıF *cascade08ıFG*cascade08GËG *cascade08ËGßG*cascade08ßGáG *cascade08áGñG*cascade08ñGóG *cascade08óGøG*cascade08øGûG *cascade08ûGüG*cascade08üGşG *cascade08şGƒH*cascade08ƒH„H *cascade08„H…H*cascade08…H‡H *cascade08‡HŠH*cascade08ŠHŒH *cascade08ŒHH*cascade08HH *cascade08H”H*cascade08”H•H *cascade08•H–H*cascade08–H˜H *cascade08˜H›H*cascade08›HÌH *cascade08ÌHÖH*cascade08ÖH½I *cascade08½IÇI*cascade08ÇIÕI *cascade08ÕIØI*cascade08ØIÁJ *cascade08ÁJÂJ*cascade08ÂJÃJ *cascade08ÃJÄJ*cascade08ÄJÅJ *cascade08ÅJÇJ*cascade08ÇJÈJ *cascade08ÈJÊJ*cascade08ÊJËJ *cascade08ËJÎJ*cascade08ÎJÑJ *cascade08ÑJşJ*cascade08şJ€K *cascade08€KK*cascade08K„K *cascade08„K…K*cascade08…K†K *cascade08†KK*cascade08KK *cascade08K’K*cascade08’K”K *cascade08”K•K*cascade08•K—K *cascade08—KšK*cascade08šKœK *cascade08œKK*cascade08KŸK *cascade08ŸK¢K*cascade08¢K¥K *cascade08¥KªK*cascade08ªK¬K *cascade08¬K¯K*cascade08¯K²K *cascade08²K¶K*cascade08¶KšL *cascade08šLœL*cascade08œL¦L *cascade08¦L³L*cascade08³L´L *cascade08´LÆL*cascade08ÆLÇL *cascade08ÇLæL*cascade08æL’M *cascade08’M•M*cascade08•M—M *cascade08—M™M*cascade08™MÇM *cascade08ÇMÊM *cascade08ÊMËM *cascade08ËMÌM*cascade08ÌMÎM *cascade08ÎMâM*cascade08âMãM *cascade08ãMëM*cascade08ëMíM *cascade08íMúM*cascade08úMûM *cascade08ûMüM*cascade08üMşM *cascade08şM€N*cascade08€NƒN *cascade08ƒN„N*cascade08„N‹N *cascade08‹NN*cascade08NÙN *cascade08ÙNáN*cascade08áNâN *cascade08âNãN*cascade08ãNäN *cascade08äNòN*cascade08òNóN *cascade08óNıN*cascade08ıNşN *cascade08şNƒO*cascade08ƒO†O *cascade08†O‡O*cascade08‡O‰O *cascade08‰OO*cascade08OO *cascade08OO*cascade08O’O *cascade08’O•O*cascade08•O—O *cascade08—OšO*cascade08šO›O *cascade08›OœO*cascade08œOO *cascade08OŸO*cascade08ŸO O *cascade08 O¡O*cascade08¡O£O *cascade08£O¦O*cascade08¦O×O *cascade08×OáO*cascade08áO“P *cascade08“P•P*cascade08•P–P *cascade08–P—P*cascade08—P˜P *cascade08˜P™P*cascade08™PÈP *cascade08ÈPÒP*cascade08ÒPºQ *cascade08ºQÀQ*cascade08ÀQÁQ *cascade08ÁQÅQ*cascade08ÅQÆQ *cascade08ÆQÇQ*cascade08ÇQÈQ *cascade08ÈQÊQ *cascade08ÊQøQ*cascade08øQûQ *cascade08ûQıQ *cascade08ıQ‡R*cascade08‡RˆR *cascade08ˆRŒR*cascade08ŒRR *cascade08RR*cascade08R’R *cascade08’R§R*cascade08§RßR *cascade08ßRêR*cascade08êRëR *cascade08ëRîR*cascade08îRïR *cascade08ïRğR*cascade08ğRñR *cascade08ñR÷R*cascade08÷RùR *cascade08ùRúR*cascade08úRûR *cascade08ûR S*cascade08 S¢S *cascade08¢S¦S*cascade08¦S§S *cascade08§S«S*cascade08«S¬S *cascade08¬SÀS*cascade08ÀSÁS *cascade08ÁSÅS*cascade08ÅSÆS *cascade08ÆSÇS*cascade08ÇSˆT *cascade08ˆT‰T*cascade08‰TŠT *cascade08ŠTT*cascade08TT *cascade08T”T*cascade08”T•T *cascade08•T˜T*cascade08˜T™T *cascade08™T›T*cascade08›TT *cascade08TT*cascade08T£T *cascade08£T¥T*cascade08¥TÓT *cascade08ÓTÖT*cascade08ÖTØT *cascade08ØTÚT*cascade08ÚTÜT *cascade08ÜTÜT*cascade08ÜTˆU *cascade08ˆU‹U *cascade08‹UŒU *cascade08ŒUU*cascade08UU *cascade08U“U*cascade08“U”U *cascade08”U˜U*cascade08˜U™U *cascade08™UŸU*cascade08ŸU¡U *cascade08¡UÁU*cascade08ÁUÃU *cascade08ÃUÅU*cascade08ÅUÆU *cascade08ÆUÑU*cascade08ÑUİU *cascade08İUŞU*cascade08ŞUáU *cascade08áUâU*cascade08âUV *cascade08V¦V*cascade08¦V§V *cascade08§V¨V*cascade08¨V©V *cascade08©V­V*cascade08­V°V *cascade08°V²V*cascade08²V³V *cascade08³V½V*cascade08½VÁV *cascade08ÁVÌV*cascade08ÌVÎV *cascade08ÎVĞV*cascade08ĞVÒV *cascade08ÒVÕV*cascade08ÕVØV *cascade08ØVÙV*cascade08ÙVÛV *cascade08ÛVãV*cascade08ãVäV *cascade08äVèV*cascade08èVéV *cascade08éVïV*cascade08ïV W *cascade08 WªW*cascade08ªWÓW *cascade08ÓWÔW*cascade08ÔWÕW *cascade08ÕWŞW*cascade08ŞWñY *cascade082Ofile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Views/DownloadManagerPage.xaml

@@ -1,0 +1,112 @@
+<Window x:Class="TsuruLauncher.Views.LaunchLogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="启动日志 · Tsuru Launcher"
+        Height="580" Width="960"
+        MinHeight="360" MinWidth="640"
+        WindowStartupLocation="CenterOwner"
+        Background="#0A0D12"
+        FontFamily="Microsoft YaHei UI"
+        TextOptions.TextFormattingMode="Display">
+        <Window.Resources>
+            <Style x:Key="LogButtonStyle" TargetType="Button">
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Padding" Value="14,0"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="#B9C7DA"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" CornerRadius="8" Background="#1A212C" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#232C3A"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <Style x:Key="LogButtonStyleAccent" TargetType="Button" BasedOn="{StaticResource LogButtonStyle}">
+                <Setter Property="Foreground" Value="#0A0D12"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" CornerRadius="8" Background="#4ADE80" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#6EE79A"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 头部：版本 + 状态 -->
+        <Border Grid.Row="0" Background="#11151D" Padding="18,14,18,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock x:Name="TitleText" Text="启动日志" FontSize="16" FontWeight="SemiBold" Foreground="#E7EEF8"/>
+                    <TextBlock x:Name="SubTitleText" Text="等待启动" FontSize="11" Foreground="#66748C" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock x:Name="StatusText" Text="等待启动" FontSize="12" Foreground="#4ADE80" HorizontalAlignment="Right"/>
+                    <TextBlock x:Name="StateText" Text="空闲" FontSize="11" Foreground="#66748C" HorizontalAlignment="Right" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <ProgressBar Grid.Row="1" x:Name="StatusProgress" Height="3" Minimum="0" Maximum="100" Value="0"
+                     Background="#11151D" Foreground="#4ADE80" BorderThickness="0"/>
+
+        <!-- 日志正文 -->
+        <Border Grid.Row="2" Margin="14,12,14,0" CornerRadius="12" Background="#0D1117" BorderBrush="#1B2330" BorderThickness="1">
+            <RichTextBox x:Name="LogBox" IsReadOnly="True" Background="Transparent" BorderThickness="0"
+                         Foreground="#C6D2E2" FontSize="12.5" Padding="12,10"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                         IsDocumentEnabled="True" SpellCheck.IsEnabled="False"/>
+        </Border>
+
+        <!-- 底部操作 -->
+        <Border Grid.Row="3" Background="#11151D" Padding="14,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <CheckBox Grid.Column="0" x:Name="AutoScrollCheck" Content="自动滚动" IsChecked="True"
+                          Foreground="#93A3B8" VerticalAlignment="Center" FontSize="12"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button x:Name="CopyBtn" Content="复制全部" Click="Copy_Click" Style="{StaticResource LogButtonStyle}"/>
+                    <Button x:Name="SaveBtn" Content="保存日志" Click="Save_Click" Style="{StaticResource LogButtonStyle}"/>
+                    <Button x:Name="ClearBtn" Content="清空" Click="Clear_Click" Style="{StaticResource LogButtonStyle}"/>
+                    <Button x:Name="WrapBtn" Content="自动换行" Click="Wrap_Click" Style="{StaticResource LogButtonStyle}"/>
+                    <Button x:Name="OpenFolderBtn" Content="打开日志文件夹" Click="OpenFolder_Click" Style="{StaticResource LogButtonStyle}"/>
+                    <Button x:Name="CloseBtn" Content="关闭" Click="Close_Click" Style="{StaticResource LogButtonStyleAccent}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

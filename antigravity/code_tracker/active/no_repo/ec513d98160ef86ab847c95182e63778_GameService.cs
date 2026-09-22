@@ -1,352 +1,0 @@
-ìvusing System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using Newtonsoft.Json.Linq;
-using System;
-using GeminiLauncher.Models;
-
-namespace GeminiLauncher.Services
-{
-    public class GameService
-    {
-        public List<GameInstance> ScanVersions(string dotMinecraftPath, bool isIsolationEnabled)
-        {
-            var versions = new List<GameInstance>();
-            var versionsDir = Path.Combine(dotMinecraftPath, "versions");
-
-            if (!Directory.Exists(versionsDir))
-                return versions;
-
-            foreach (var dir in Directory.GetDirectories(versionsDir))
-            {
-                var dirName = new DirectoryInfo(dir).Name;
-                var jsonPath = Path.Combine(dir, $"{dirName}.json");
-
-                if (File.Exists(jsonPath))
-                {
-                    try
-                    {
-                        var instance = ParseVersionJson(jsonPath, dotMinecraftPath, isIsolationEnabled);
-                        if (instance != null)
-                        {
-                            versions.Add(instance);
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        // Log error scanning version
-                    }
-                }
-            }
-
-            return versions;
-        }
-
-        public GameInstance? ParseVersionJson(string jsonPath, string dotMinecraftPath, bool isIsolationEnabled)
-        {
-            try
-            {
-                string jsonContent = File.ReadAllText(jsonPath);
-                JObject json = JObject.Parse(jsonContent);
-
-                string id = json["id"]?.ToString() ?? "";
-                string? versionDir = Path.GetDirectoryName(jsonPath);
-                if (string.IsNullOrEmpty(versionDir)) return null;
-
-                // Parse Downloads (Client)
-                string clientJarUrl = "";
-                string clientJarSha1 = "";
-                long clientJarSize = 0;
-
-                var downloads = json["downloads"];
-                if (downloads != null)
-                {
-                    var client = downloads["client"];
-                    if (client != null)
-                    {
-                        clientJarUrl = client["url"]?.ToString() ?? "";
-                        clientJarSha1 = client["sha1"]?.ToString() ?? "";
-                        clientJarSize = (long)(client["size"] ?? 0);
-                    }
-                }
-
-                // Handle Inheritance (Recursion)
-                GameInstance instance;
-                if (json.ContainsKey("inheritsFrom"))
-                {
-                    string parentId = json["inheritsFrom"]?.ToString() ?? "";
-                    string parentDir = Path.Combine(dotMinecraftPath, "versions", parentId);
-                    string parentJson = Path.Combine(parentDir, $"{parentId}.json");
-                    
-                    if (File.Exists(parentJson))
-                    {
-                        // Recursively parse parent
-                        instance = ParseVersionJson(parentJson, dotMinecraftPath, isIsolationEnabled) ?? new GameInstance();
-                        // Update ID and specific paths to the child version
-                        instance.Id = id;
-                        instance.GameDir = isIsolationEnabled ? versionDir : dotMinecraftPath; 
-                        // Note: If parent was isolated, it might set GameDir to parentDir. We overwrite it here if child is isolated.
-                        // Actually, let's re-evaluate isolation for the child:
-                        bool isIsolated = isIsolationEnabled || 
-                                          Directory.Exists(Path.Combine(versionDir, "mods")) || 
-                                          File.Exists(Path.Combine(versionDir, "options.txt"));
-                        instance.GameDir = isIsolated ? versionDir : dotMinecraftPath;
-                    }
-                    else
-                    {
-                        // Parent missing? Fallback to bare instance (might crash later)
-                        instance = new GameInstance { Id = id, RootPath = dotMinecraftPath };
-                    }
-                }
-                else
-                {
-                    // Base version
-                    bool isIsolated = isIsolationEnabled || 
-                                      Directory.Exists(Path.Combine(versionDir, "mods")) || 
-                                      File.Exists(Path.Combine(versionDir, "options.txt"));
-
-                    instance = new GameInstance
-                    {
-                        Id = id,
-                        RootPath = dotMinecraftPath,
-                        GameDir = isIsolated ? versionDir : dotMinecraftPath,
-                        Type = json["type"]?.ToString() ?? "release"
-                    };
-                }
-
-                // Assign parsed downloads
-                if (!string.IsNullOrEmpty(clientJarUrl))
-                {
-                    instance.ClientJarUrl = clientJarUrl;
-                    instance.ClientJarSha1 = clientJarSha1;
-                    instance.FileSize = clientJarSize;
-                }
-
-                // Merge/Overwrite properties from current JSON
-                // MainClass: Child overrides parent
-                if (json["mainClass"] != null) instance.MainClass = json["mainClass"]?.ToString() ?? "";
-                if (json["minecraftArguments"] != null) instance.MinecraftArguments = json["minecraftArguments"]?.ToString() ?? "";
-                
-                // Assets: Child overrides parent (usually)
-                if (json["assetIndex"] != null) instance.AssetIndexId = json["assetIndex"]?["id"]?.ToString() ?? "legacy";
-                
-                int defaultJava = 8;
-                try 
-                {
-                    // Detect default Java by MC version if missing in JSON
-                    var versionParts = id.Split('.');
-                    if (versionParts.Length >= 2 && int.TryParse(versionParts[1], out int minor))
-                    {
-                        if (minor >= 21) defaultJava = 21; // 1.21+ (actually 1.20.5+)
-                        else if (minor >= 18) defaultJava = 17; // 1.18+
-                        else if (minor >= 17) defaultJava = 17; // 1.17 (16 actually, but 17 is standard now)
-                    }
-                } catch {}
-
-                if (json["javaVersion"] != null) instance.RequiredJavaVersion = json["javaVersion"]?["majorVersion"]?.ToObject<int>() ?? defaultJava;
-                else instance.RequiredJavaVersion = defaultJava;
-
-                // Libraries: Append child libraries to parent libraries
-                var libs = json["libraries"] as JArray;
-                if (libs != null)
-                {
-                    foreach (var lib in libs)
-                    {
-                        var library = ParseLibrary(lib);
-                        if (library != null) instance.Libraries.Add(library);
-                    }
-                }
-
-                // Arguments: Append/Merge
-                var args = json["arguments"];
-                if (args != null)
-                {
-                    ParseArguments(args, instance);
-                }
-
-                // Custom Config
-                LoadVersionConfig(instance);
-
-                return instance;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private Library? ParseLibrary(JToken libToken)
-        {
-            var name = libToken["name"]?.ToString();
-            if (string.IsNullOrEmpty(name)) return null;
-
-            // Simple artifact path construction logic (Maven standard)
-            // Group:Artifact:Version -> group/artifact/version/artifact-version.jar
-            var parts = name.Split(':');
-            var group = parts[0].Replace('.', '/');
-            var artifact = parts[1];
-            var version = parts[2];
-            var path = $"{group}/{artifact}/{version}/{artifact}-{version}.jar";
-
-            // Check rules (simplified: check if os allowed)
-            // TODO: Implement full rule parsing (os name, version, arch)
-
-            // Parse URL and Checksum
-            var downloads = libToken["downloads"];
-            var artifactToken = downloads?["artifact"];
-            string url = artifactToken?["url"]?.ToString() ?? "";
-            string sha1 = artifactToken?["sha1"]?.ToString() ?? "";
-
-            // Check for natives
-            var natives = libToken["natives"];
-            if (natives != null)
-            {
-                // Determine OS classifier
-                string osName = "windows"; // Simple OS check for now (we are on Windows)
-                // TODO: dynamic OS check
-                
-                var classifierNode = natives[osName];
-                if (classifierNode != null)
-                {
-                    string classifier = classifierNode.ToString().Replace("${arch}", IntPtr.Size == 8 ? "64" : "32");
-                    
-                    if (downloads?["classifiers"] is JObject classifiers && classifiers[classifier] is JToken classToken)
-                    {
-                         // Use classifier info instead of artifact
-                         path = classToken["path"]?.ToString() ?? path; // Update path to native path
-                         url = classToken["url"]?.ToString() ?? "";
-                         sha1 = classToken["sha1"]?.ToString() ?? "";
-                    }
-                }
-            }
-
-            // Fallback for legacy libraries without explicit download info
-            if (string.IsNullOrEmpty(url))
-            {
-                url = "https://bmclapi2.bangbang93.com/maven/" + path;
-            }
-            else if (url.StartsWith("https://libraries.minecraft.net/"))
-            {
-                // Replace official source with BMCLAPI mirror for better connectivity
-                url = url.Replace("https://libraries.minecraft.net/", "https://bmclapi2.bangbang93.com/maven/");
-            }
-
-            return new Library
-            {
-                Name = name,
-                Path = path,
-                Url = url,
-                Checksum = sha1
-            };
-        }
-
-        private void ParseArguments(JToken argsToken, GameInstance instance)
-        {
-            // "game": [...]
-            if (argsToken["game"] is JArray gameArgs)
-            {
-                foreach (var item in gameArgs)
-                {
-                    if (item is JValue val)
-                    {
-                        instance.GameArguments.Add(new Argument { Value = val.ToString() });
-                    }
-                    else if (item is JObject obj)
-                    {
-                        // Handle rule-based arguments
-                        if (CheckRules(obj["rules"] as JArray))
-                        {
-                            var value = obj["value"];
-                            if (value is JArray valArray)
-                                foreach (var v in valArray) instance.GameArguments.Add(new Argument { Value = v.ToString() });
-                            else if (value != null)
-                                instance.GameArguments.Add(new Argument { Value = value.ToString() });
-                        }
-                    }
-                }
-            }
-
-            // "jvm": [...]
-            if (argsToken["jvm"] is JArray jvmArgs)
-            {
-                foreach (var item in jvmArgs)
-                {
-                    if (item is JValue val)
-                    {
-                        instance.JvmArguments.Add(new Argument { Value = val.ToString() });
-                    }
-                    else if (item is JObject obj)
-                    {
-                        // Handle rule-based arguments (e.g., -XX:HeapDumpPath for windows)
-                        if (CheckRules(obj["rules"] as JArray))
-                        {
-                            var value = obj["value"];
-                            if (value is JArray valArray)
-                                foreach (var v in valArray) instance.JvmArguments.Add(new Argument { Value = v.ToString() });
-                            else if (value != null)
-                                instance.JvmArguments.Add(new Argument { Value = value.ToString() });
-                        }
-                    }
-                }
-            }
-        }
-
-        private bool CheckRules(JArray? rules)
-        {
-            if (rules == null || rules.Count == 0) return true;
-            
-            bool allowed = false;
-            foreach (var rule in rules)
-            {
-                string action = rule["action"]?.ToString() ?? "allow";
-                var os = rule["os"];
-                
-                bool match = true;
-                if (os != null)
-                {
-                    string osName = os["name"]?.ToString() ?? "";
-                    if (!string.IsNullOrEmpty(osName) && osName != "windows") match = false;
-                    // Simple arch check if needed
-                }
-
-                if (match) allowed = (action == "allow");
-            }
-            return allowed;
-        }
-
-        public void LoadVersionConfig(GameInstance instance)
-        {
-            try
-            {
-                string configPath = Path.Combine(instance.GameDir, "linlaunch_profile.json");
-                if (File.Exists(configPath))
-                {
-                    var json = JObject.Parse(File.ReadAllText(configPath));
-                    if (json.ContainsKey("UseGlobalSettings")) instance.UseGlobalSettings = (bool?)json["UseGlobalSettings"] ?? false;
-                    if (json.ContainsKey("CustomMemoryMb")) instance.CustomMemoryMb = (int?)json["CustomMemoryMb"] ?? 0;
-                    if (json.ContainsKey("CustomJavaPath")) instance.CustomJavaPath = json["CustomJavaPath"]?.ToString() ?? "";
-                    if (json.ContainsKey("CustomJvmArgs")) instance.CustomJvmArgs = json["CustomJvmArgs"]?.ToString() ?? "";
-                }
-            }
-            catch {}
-        }
-
-        public void SaveVersionConfig(GameInstance instance)
-        {
-            try
-            {
-                var json = new JObject();
-                json["UseGlobalSettings"] = instance.UseGlobalSettings;
-                json["CustomMemoryMb"] = instance.CustomMemoryMb;
-                json["CustomJavaPath"] = instance.CustomJavaPath;
-                json["CustomJvmArgs"] = instance.CustomJvmArgs;
-
-                string configPath = Path.Combine(instance.GameDir, "linlaunch_profile.json");
-                File.WriteAllText(configPath, json.ToString());
-            }
-            catch {}
-        }
-    }
-}
-{ *cascade08{ä*cascade08ä‚ *cascade08‚„*cascade08„ê *cascade08ê‘‘◊ *cascade08◊Ÿ*cascade08ŸÈ *cascade08ÈÏ *cascade08Ïá*cascade08á• *cascade08•∑ *cascade08∑·*cascade08·‚ *cascade08‚‰*cascade08‰Ê *cascade08ÊÏ*cascade08ÏÌ *cascade08Ì˚*cascade08˚¸ *cascade08¸∞*cascade08∞± *cascade08±¡*cascade08¡√ *cascade08√÷*cascade08÷◊ *cascade08◊‹*cascade08‹› *cascade08›Ê*cascade08Ê˙ *cascade08˙˚*cascade08˚¸ *cascade08¸Å*cascade08ÅÇ *cascade08Çï*cascade08ïñ *cascade08ñó*cascade08óò *cascade08ò•*cascade08•¶ *cascade08¶≠*cascade08≠Æ *cascade08Æ≥*cascade08≥¥ *cascade08¥Ë*cascade08ËÍ *cascade08Í¸*cascade08¸˝ *cascade08˝Ä*cascade08ÄÅ *cascade08ÅÇ*cascade08ÇÉ *cascade08Éï*cascade08ïó *cascade08óû*cascade08ûü *cascade08ü—*cascade08—” *cascade08”Å*cascade08ÅÇ *cascade08Çï*cascade08ïñ *cascade08ñô*cascade08ôö *cascade08öõ*cascade08õú *cascade08úû*cascade08ûü *cascade08ü°*cascade08°¢ *cascade08¢Ÿ*cascade08Ÿﬂ *cascade08ﬂÙ*cascade08Ùı *cascade08ı¯*cascade08¯˘ *cascade08˘¨*cascade08¨Æ *cascade08ÆØ*cascade08Øø *cascade08ø∆*cascade08∆… *cascade08…œ*cascade08œ— *cascade08—“*cascade08“” *cascade08”’*cascade08’÷ *cascade08÷◊*cascade08◊ÿ *cascade08ÿﬂ*cascade08ﬂ‡ *cascade08‡Â*cascade08ÂÊ *cascade08ÊÁ*cascade08ÁË *cascade08ËÈ*cascade08ÈÍ *cascade08Í˜*cascade08˜˙ *cascade08˙ñ*cascade08ñó *cascade08óú*cascade08úù *cascade08ùæ*cascade08æø *cascade08ø∆*cascade08∆« *cascade08«“*cascade08“‘ *cascade08‘’*cascade08’÷ *cascade08÷⁄*cascade08⁄€ *cascade08€‹*cascade08‹› *cascade08›Ê*cascade08ÊÓ *cascade08ÓÛ*cascade08Ûı *cascade08ı¯*cascade08¯˘ *cascade08˘¸*cascade08¸˝ *cascade08˝ò*cascade08òô *cascade08ô§*cascade08§• *cascade08•Æ*cascade08Æ∞ *cascade08∞∂*cascade08∂Ω *cascade08Ω¡*cascade08¡¬ *cascade08¬◊*cascade08◊ÿ *cascade08ÿ›*cascade08›ﬁ *cascade08ﬁ„*cascade08„‰ *cascade08‰Ô*cascade08Ô *cascade08â*cascade08âä *cascade08ä¨*cascade08¨≠ *cascade08≠≤*cascade08≤≥ *cascade08≥¥*cascade08¥µ *cascade08µπ*cascade08π∫ *cascade08∫¬*cascade08¬√ *cascade08√“*cascade08“‘ *cascade08‘’*cascade08’÷ *cascade08÷ﬂ*cascade08ﬂ· *cascade08·È*cascade08È£ *cascade08£©*cascade08©À *cascade08ÀÕ*cascade08Õß *cascade08ßØ*cascade08ØÊ *cascade08ÊÌ*cascade08ÌÜ *cascade08Üé*cascade08éë *cascade08ëô*cascade08ôö *cascade08öõ*cascade08õú *cascade08úü*cascade08ü† *cascade08†§*cascade08§• *cascade08•≠*cascade08≠Æ *cascade08Æ∞*cascade08∞± *cascade08±≤*cascade08≤≥ *cascade08≥Ï*cascade08ÏÔ *cascade08ÔÛ*cascade08Ûõ  *cascade08õ † *cascade08† °  *cascade08° © *cascade08© ™  *cascade08™ ﬁ *cascade08ﬁ Ù  *cascade08Ù ˇ *cascade08ˇ Ñ! *cascade08Ñ!é!*cascade08é!è! *cascade08è!í!*cascade08í!ì! *cascade08ì!°!*cascade08°!£! *cascade08£!Æ!*cascade08Æ!∞! *cascade08∞!Ú!*cascade08Ú!Ù! *cascade08Ù!˘!*cascade08˘!è" *cascade08è"í"*cascade08í"ñ" *cascade08ñ"™"*cascade08™"´" *cascade08´"≤"*cascade08≤"≥" *cascade08≥"¥"*cascade08¥"µ" *cascade08µ"Œ"*cascade08Œ"œ" *cascade08œ"—"*cascade08—"“" *cascade08“"”"*cascade08”"‘" *cascade08‘"⁄"*cascade08⁄"›" *cascade08›"‡"*cascade08‡"‚" *cascade08‚"„"*cascade08„"‰" *cascade08‰"Â"*cascade08Â"Ê" *cascade08Ê"Á"*cascade08Á"Ë" *cascade08Ë"Ï"*cascade08Ï"Ì" *cascade08Ì"®#*cascade08®#©# *cascade08©#™#*cascade08™#´# *cascade08´#∞#*cascade08∞#±# *cascade08±#≤#*cascade08≤#≥# *cascade08≥#ª#*cascade08ª#º# *cascade08º#Ω#*cascade08Ω#æ# *cascade08æ#ø#*cascade08ø#¿# *cascade08¿#ƒ#*cascade08ƒ#∆# *cascade08∆# #*cascade08 #À# *cascade08À#—#*cascade08—#”# *cascade08”#€#*cascade08€#Ô# *cascade08Ô#˙#*cascade08˙#˚# *cascade08˚#¸#*cascade08¸#˝# *cascade08˝#Ü$*cascade08Ü$à$ *cascade08à$å$*cascade08å$ç$ *cascade08ç$ê$*cascade08ê$ë$ *cascade08ë$ò$*cascade08ò$ô$ *cascade08ô$°$*cascade08°$¢$ *cascade08¢$•$*cascade08•$¶$ *cascade08¶$Ω$*cascade08Ω$æ$ *cascade08æ$¬$*cascade08¬$√$ *cascade08√$»$*cascade08»$…$ *cascade08…$À$*cascade08À$Ã$ *cascade08Ã$—$*cascade08—$”$ *cascade08”$÷$*cascade08÷$Ÿ$ *cascade08Ÿ$⁄$*cascade08⁄$›$ *cascade08›$ﬁ$*cascade08ﬁ$ﬂ$ *cascade08ﬂ$é%*cascade08é%í% *cascade08í%ì%*cascade08ì%ï% *cascade08ï%ö%*cascade08ö%ú% *cascade08ú%†%*cascade08†%“% *cascade08“%÷%*cascade08÷%∂& *cascade08∂&º&*cascade08º&æ& *cascade08æ&ø&*cascade08ø&¿& *cascade08¿&…&*cascade08…& & *cascade08 &“&*cascade08“&’& *cascade08’&ÿ&*cascade08ÿ&Ÿ& *cascade08Ÿ&‡&*cascade08‡&‚& *cascade08‚&Á&*cascade08Á&Î& *cascade08Î&˝&*cascade08˝&å' *cascade08å'î'*cascade08î'õ' *cascade08õ'ß' *cascade08ß'Â)*cascade08Â)Ì) *cascade08Ì)Ó) *cascade08Ó)Ò)*cascade08Ò)Ú) *cascade08Ú)à**cascade08à*ä* *cascade08ä*ç**cascade08ç*é* *cascade08é*ß**cascade08ß*®* *cascade08®*∏**cascade08∏*ª* *cascade08ª*ø**cascade08ø*¿* *cascade08¿*Ÿ**cascade08Ÿ*⁄* *cascade08⁄*ﬂ**cascade08ﬂ*·* *cascade08·*ä+*cascade08ä+ì+ *cascade08ì+î+*cascade08î+ï+ *cascade08ï+ô+*cascade08ô+ö+ *cascade08ö+§+*cascade08§+ß+ *cascade08ß+Ø+*cascade08Ø+∞+ *cascade08∞+À+*cascade08À+Œ+ *cascade08Œ+”+*cascade08”+‘+ *cascade08‘+◊+*cascade08◊+ÿ+ *cascade08ÿ+Ú+*cascade08Ú+Û+ *cascade08Û+˘+*cascade08˘+˙+ *cascade08˙+Ö,*cascade08Ö,Ü, *cascade08Ü,ã,*cascade08ã,ç, *cascade08ç,°,*cascade08°,ß, *cascade08ß,®,*cascade08®,©, *cascade08©,™,*cascade08™,¨, *cascade08¨,≠,*cascade08≠,≥, *cascade08≥,Ö-*cascade08Ö-ó- *cascade08ó-ô-*cascade08ô-ö- *cascade08ö-≠-*cascade08≠-Æ- *cascade08Æ-∞-*cascade08∞-±- *cascade08±-∂-*cascade08∂-∑- *cascade08∑-¿-*cascade08¿-Ä. *cascade08Ä.Å.*cascade08Å.ì. *cascade08ì.∏3*cascade08∏3±4 *cascade08±4˛4*cascade08˛4ó5 *cascade08ó5√5*cascade08√5”8 *cascade08”8‘8*cascade08‘8’8 *cascade08’8·8*cascade08·8•: *cascade08•:¶:*cascade08¶:¨: *cascade08¨:≠:*cascade08≠:⁄A *cascade08⁄A¡B *cascade08¡B∆B*cascade08∆BÉC *cascade08ÉCàC*cascade08àC«C *cascade08«CÃC*cascade08ÃC˚C *cascade08˚CÀL*cascade08ÀL„M *cascade08„M»N*cascade08»N·N *cascade08·NÈN*cascade08ÈNÍN *cascade08ÍNN*cascade08NÒN *cascade08ÒNâO*cascade08âOäO *cascade08äOãO*cascade08ãOåO *cascade08åO°O*cascade08°O£O *cascade08£OªPªP€P *cascade08€P∑Q *cascade08∑QıQ*cascade08ıQóS *cascade08óSôS*cascade08ôSöS *cascade08öSõS*cascade08õS≠S *cascade08≠SÆS*cascade08ÆS·U *cascade08·UÂU*cascade08ÂUÊU *cascade08ÊUËU*cascade08ËUÈU *cascade08ÈUÏU*cascade08ÏUÌU *cascade08ÌUÒU*cascade08ÒU˙U *cascade08˙UπV*cascade08πVﬂV *cascade08ﬂVéW*cascade08éWêW *cascade08êWñW*cascade08ñW¢W *cascade08¢W©W*cascade08©W´W *cascade08´W∂W*cascade08∂W¬W *cascade08¬WÀW*cascade08ÀWÃW *cascade08ÃW“W*cascade08“W”W *cascade08”W÷W*cascade08÷W◊W *cascade08◊WﬁW*cascade08ﬁWﬂW *cascade08ﬂW‡W*cascade08‡W‚W *cascade08‚W„W*cascade08„WÔW *cascade08ÔWÇX*cascade08ÇXÑX *cascade08ÑXçX*cascade08çXéX *cascade08éX¥X*cascade08¥XµX *cascade08µX∆X*cascade08∆X«X *cascade08«X‰X*cascade08‰XÂX *cascade08ÂXÊX*cascade08ÊXÈX *cascade08ÈXÓX*cascade08ÓXÔX *cascade08ÔX˜X*cascade08˜X¯X *cascade08¯XÄY*cascade08ÄYÅY *cascade08ÅYÑY*cascade08ÑYÖY *cascade08ÖYëY*cascade08ëYíY *cascade08íYîY*cascade08îYïY *cascade08ïYªY*cascade08ªYΩY *cascade08ΩY¬Y*cascade08¬Y√Y *cascade08√Y‹Y*cascade08‹Y›Y *cascade08›YˆY*cascade08ˆY˜Y *cascade08˜YáZ*cascade08áZàZ *cascade08àZêZ*cascade08êZìZ *cascade08ìZùZ*cascade08ùZûZ *cascade08ûZ∑Z*cascade08∑Z∆Z *cascade08∆Zπ[*cascade08π[Ω[ *cascade08Ω[ÿ[*cascade08ÿ[ˇ] *cascade08ˇ]Ã^*cascade08Ã^–^ *cascade08–^ˆ^*cascade08ˆ^¯^ *cascade08¯^˘^*cascade08˘^˙^ *cascade08˙^ä_*cascade08ä_å_ *cascade08å_µ_*cascade08µ_∑_ *cascade08∑_»_*cascade08»_ _ *cascade08 _ó`*cascade08ó`ô` *cascade08ô`ü`*cascade08ü`†` *cascade08†`Öa*cascade08ÖaÜa *cascade08Üaüa*cascade08üa†a *cascade08†aπa*cascade08πa∫a *cascade08∫aªa*cascade08ªaºa *cascade08ºaΩa*cascade08Ωaæa *cascade08æa«a*cascade08«a»a *cascade08»a…a*cascade08…a a *cascade08 aÏc*cascade08ÏcÌc *cascade08ÌcÄd*cascade08ÄdÅd *cascade08Ådàd*cascade08àdâd *cascade08âd¸d*cascade08¸dˇd *cascade08ˇdÇe*cascade08ÇeÉe *cascade08Éeóe*cascade08óeòe *cascade08òe÷e*cascade08÷e◊e *cascade08◊e‚e*cascade08‚e„e *cascade08„e÷f*cascade08÷f◊f *cascade08◊f·f*cascade08·f‚f *cascade08‚fˇf*cascade08ˇfÄg *cascade08ÄgÆg*cascade08ÆgØg *cascade08Øgµg*cascade08µg∂g *cascade08∂gÏh*cascade08ÏhÅi *cascade08Åiæi*cascade08æiÀi *cascade08ÀiËi*cascade08ËiÆm *cascade08ÆmØm*cascade08Øm…m *cascade08…m“m*cascade08“mØn *cascade08Øn∞n*cascade08∞n«n *cascade08«nÃn*cascade08Ãnìv *cascade082Hfile:///c:/Users/Linyizhi/.gemini/GeminiLauncher/Services/GameService.cs

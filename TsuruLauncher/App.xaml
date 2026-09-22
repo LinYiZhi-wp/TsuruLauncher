@@ -1,0 +1,65 @@
+<Application x:Class="TsuruLauncher.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:converters="clr-namespace:TsuruLauncher.Converters"
+             Startup="Application_Startup">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ui:ThemesDictionary Theme="Dark" />
+                <ui:ControlsDictionary />
+                <ResourceDictionary Source="Resources/Languages/en-US.xaml"/>
+                <ResourceDictionary Source="Styles/Colors.xaml"/>
+                <ResourceDictionary Source="Styles/Resources.xaml"/>
+                <ResourceDictionary Source="Styles/iOS26.xaml"/>
+                <ResourceDictionary Source="Styles/GlassScrollBar.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- ========== GLOBAL STYLES ========== -->
+            <Style TargetType="{x:Type TextBlock}">
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            </Style>
+
+            <Style TargetType="{x:Type ui:Card}">
+                <Setter Property="Background" Value="{DynamicResource Surface5Brush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="16"/>
+            </Style>
+
+            <Style TargetType="{x:Type ui:Button}">
+                <Setter Property="CornerRadius" Value="12"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource Surface5Brush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style TargetType="{x:Type ui:NavigationViewItem}">
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Margin" Value="0,2"/>
+            </Style>
+
+            <Style TargetType="{x:Type TextBox}" BasedOn="{StaticResource iOS26.GlassTextBox}"/>
+            <Style TargetType="{x:Type ComboBox}" BasedOn="{StaticResource iOS26.GlassComboBox}"/>
+            <Style TargetType="{x:Type ProgressBar}" BasedOn="{StaticResource iOS26.GlassProgressBar}"/>
+
+            <!-- Converters -->
+            <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
+            <converters:StringMatchToBoolConverter x:Key="StringMatchToBoolConverter" />
+            <converters:StringsMatchConverter x:Key="StringsMatchConverter" />
+            <converters:ExpandIconConverter x:Key="ExpandIconConverter" />
+            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+            <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
+            <!-- 折叠态 Center（用户要「显示在中间」）/ 展开态 Right（用户标红框的位置） -->
+            <converters:BoolToHorizontalAlignmentConverter x:Key="BoolToHorizontalAlignmentConverter"
+                                                           TrueAlignment="Center" FalseAlignment="Right" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

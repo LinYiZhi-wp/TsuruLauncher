@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_WALKTHROUGH",
-  "summary": "记录Phase 4下载页开发成果，包括UI设计（iOS风格分段控制）、BMCLAPI集成、版本筛选与搜索、以及基础下载功能（下载version.json和client.jar）。",
-  "updatedAt": "2026-02-11T13:35:39.692473100Z"
-}

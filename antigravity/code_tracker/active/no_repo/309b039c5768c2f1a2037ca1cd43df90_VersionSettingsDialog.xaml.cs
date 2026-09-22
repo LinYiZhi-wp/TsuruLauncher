@@ -1,1268 +1,0 @@
-»­using System.Windows;
-using System.Windows.Controls;
-using System.IO.Compression;
-using GeminiLauncher.Models;
-
-namespace GeminiLauncher.Views
-{
-    public partial class VersionSettingsDialog : Window
-    {
-        private GameInstance _version;
-        private VersionSettings _settings;
-
-        public VersionSettingsDialog(GameInstance version)
-        {
-            InitializeComponent();
-            _version = version;
-            _settings = LoadVersionSettings(version.Id);
-            
-            // æ›´æ–°æ ‡é¢˜
-            SubtitleText.Text = version.Id;
-            
-            // é»˜è®¤æ˜¾ç¤ºæ¦‚è§ˆTab
-            ShowOverviewTab();
-        }
-
-        private VersionSettings LoadVersionSettings(string versionId)
-        {
-            // TODO: ä»é…ç½®æ–‡ä»¶åŠ è½½
-            return new VersionSettings
-            {
-                VersionId = versionId,
-                CustomName = _version.Id,
-                VersionIsolation = true,
-                MemoryMode = MemoryAllocation.Auto,
-                MinMemoryMB = 512,
-                MaxMemoryMB = 4096
-            };
-        }
-
-        private void TabButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button button && button.Tag is string tag)
-            {
-                // é‡ç½®æ‰€æœ‰TabçŠ¶æ€
-                TabOverview.IsEnabled = true;
-                TabSettings.IsEnabled = true;
-                TabMods.IsEnabled = true;
-                TabOverview.IsEnabled = true;
-                TabSettings.IsEnabled = true;
-                TabMods.IsEnabled = true;
-                TabExport.IsEnabled = true;
-                TabMaintenance.IsEnabled = true;
-                
-                // è®¾ç½®å½“å‰Tab
-                button.IsEnabled = false;
-                
-                // åŠ è½½å¯¹åº”å†…å®¹
-                switch (tag)
-                {
-                    case "overview":
-                        ShowOverviewTab();
-                        break;
-                    case "settings":
-                        ShowSettingsTab();
-                        break;
-                    case "mods":
-                        ShowModsTab();
-                        break;
-                    case "export":
-                        ShowExportTab();
-                        break;
-                    case "maintenance":
-                        ShowMaintenanceTab();
-                        break;
-                }
-            }
-        }
-
-        private void ShowOverviewTab()
-        {
-            ContentArea.Children.Clear();
-            ContentArea.Children.Add(CreateOverviewContent());
-        }
-
-        private UIElement CreateOverviewContent()
-        {
-            var panel = new StackPanel();
-
-            // ç‰ˆæœ¬ä¿¡æ¯å¡ç‰‡
-            var infoCard = new Border
-            {
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(30, 255, 255, 255)),
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(20, 20, 20, 20),
-                Margin = new Thickness(0, 0, 0, 20)
-            };
-
-            var infoStack = new StackPanel { Orientation = Orientation.Horizontal };
-            
-            // å›¾æ ‡
-            var icon = new TextBlock
-            {
-                Text = "ğŸ“¦", // Default icon
-                FontSize = 48,
-                Margin = new Thickness(0, 0, 20, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            infoStack.Children.Add(icon);
-
-            // ç‰ˆæœ¬ä¿¡æ¯
-            var versionInfo = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            versionInfo.Children.Add(new TextBlock
-            {
-                Text = _version.Id,
-                FontSize = 20,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = System.Windows.Media.Brushes.White,
-                Margin = new Thickness(0, 0, 0, 5)
-            });
-            versionInfo.Children.Add(new TextBlock
-            {
-                Text = $"{_version.Type} ({_version.Id})",
-                FontSize = 14,
-                Opacity = 0.7,
-                Foreground = System.Windows.Media.Brushes.White
-            });
-            infoStack.Children.Add(versionInfo);
-
-            infoCard.Child = infoStack;
-            panel.Children.Add(infoCard);
-
-            // å¿«æ·æ–¹å¼
-            panel.Children.Add(CreateSectionHeader("å¿«æ·æ–¹å¼"));
-            panel.Children.Add(CreateQuickActionsPanel());
-
-            // é«˜çº§ç®¡ç†
-            panel.Children.Add(CreateSectionHeader("é«˜çº§ç®¡ç†"));
-            panel.Children.Add(CreateAdvancedActionsPanel());
-
-            return panel;
-        }
-
-        private UIElement CreateQuickActionsPanel()
-        {
-            var buttonsPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 20) };
-            
-            buttonsPanel.Children.Add(CreateActionButton("ğŸ“ ç‰ˆæœ¬æ–‡ä»¶å¤¹", OpenVersionFolder_Click));
-            buttonsPanel.Children.Add(CreateActionButton("ğŸ’¾ å­˜æ¡£æ–‡ä»¶å¤¹", OpenSavesFolder_Click));
-            buttonsPanel.Children.Add(CreateActionButton("ğŸ§© Modæ–‡ä»¶å¤¹", OpenModsFolder_Click));
-
-            return buttonsPanel;
-        }
-
-        private UIElement CreateAdvancedActionsPanel()
-        {
-            var buttonsPanel = new WrapPanel();
-            
-            buttonsPanel.Children.Add(CreateActionButton("ğŸ“œ å¯¼å‡ºå¯åŠ¨è„šæœ¬", ExportScript_Click));
-            buttonsPanel.Children.Add(CreateActionButton("ğŸ—‘ï¸ åˆ é™¤ç‰ˆæœ¬", DeleteVersion_Click, "#C62828"));
-
-            return buttonsPanel;
-        }
-
-        private Button CreateActionButton(string text, RoutedEventHandler clickHandler, string bgColor = "#30FFFFFF")
-        {
-            var button = new Button
-            {
-                Content = text,
-                Height = 40,
-                Padding = new Thickness(20, 0, 20, 0),
-                Margin = new Thickness(0, 0, 10, 10),
-                Background = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(bgColor)),
-                Foreground = System.Windows.Media.Brushes.White,
-                BorderThickness = new Thickness(0),
-                FontSize = 14,
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-            button.Click += clickHandler;
-            return button;
-        }
-
-        private TextBlock CreateSectionHeader(string text)
-        {
-            return new TextBlock
-            {
-                Text = text,
-                FontSize = 16,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = System.Windows.Media.Brushes.White,
-                Margin = new Thickness(0, 10, 0, 15)
-            };
-        }
-
-        private void ShowSettingsTab()
-        {
-            ContentArea.Children.Clear();
-            var panel = new StackPanel();
-            
-            // æç¤ºä¿¡æ¯
-            var alertBorder = new Border
-            {
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(20, 33, 150, 243)),
-                BorderBrush = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(100, 33, 150, 243)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(15, 10, 15, 10),
-                Margin = new Thickness(0, 0, 0, 20)
-            };
-            alertBorder.Child = new TextBlock
-            {
-                Text = "â„¹ï¸ è¿™äº›è®¾ç½®åªå¯¹è¯¥æ¸¸æˆç‰ˆæœ¬ç”Ÿæ•ˆï¼Œä¸å½±å“å…¶ä»–ç‰ˆæœ¬ã€‚",
-                Foreground = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(100, 181, 246)),
-                FontSize = 13
-            };
-            panel.Children.Add(alertBorder);
-
-            // Java ComboBox Logic
-            var javaItems = new System.Collections.Generic.List<string> { "è·Ÿéšå…¨å±€è®¾ç½®" };
-            
-            // Auto Select Option
-            string autoText = "æ™ºèƒ½åŒ¹é… (Auto)";
-            int reqVer = _version.RequiredJavaVersion > 0 ? _version.RequiredJavaVersion : 8; // default to 8 if unknown
-            autoText += $" - æ¨è Java {reqVer}";
-            javaItems.Add(autoText);
-
-            // Scan available Javas
-            var javaService = new GeminiLauncher.Services.JavaService();
-            var installs = javaService.FindInstallations();
-            foreach(var j in installs)
-            {
-                javaItems.Add($"{j.Version} ({j.Path})");
-            }
-            javaItems.Add("æµè§ˆ... (è‡ªå®šä¹‰è·¯å¾„)");
-
-            int selectedJavaIndex = 0; // Default: Global
-            if (!string.IsNullOrEmpty(_version.CustomJavaPath))
-            {
-                // Check if it matches any scanned
-                var match = installs.FirstOrDefault(j => j.Path == _version.CustomJavaPath);
-                if (match != null)
-                {
-                    selectedJavaIndex = javaItems.IndexOf($"{match.Version} ({match.Path})");
-                }
-                else
-                {
-                    // Custom path not in scan? Add it or default to Browse
-                    javaItems.Insert(2, $"è‡ªå®šä¹‰: {_version.CustomJavaPath}");
-                    selectedJavaIndex = 2;
-                }
-            }
-
-            var javaCombo = CreateComboBox(javaItems.ToArray(), selectedJavaIndex);
-            javaCombo.SelectionChanged += (s, e) => 
-            {
-                if (javaCombo.SelectedItem as string == "æµè§ˆ... (è‡ªå®šä¹‰è·¯å¾„)")
-                {
-                    var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Java Executable (javaw.exe)|javaw.exe" };
-                    if (dlg.ShowDialog() == true)
-                    {
-                        var info = javaService.GetJavaInfo(dlg.FileName);
-                        string entry = info != null ? $"{info.Version} ({info.Path})" : $"Unknown ({dlg.FileName})";
-                        javaItems.Insert(2, entry);
-                        javaCombo.ItemsSource = null;
-                        javaCombo.ItemsSource = javaItems;
-                        javaCombo.SelectedIndex = 2;
-                        _version.CustomJavaPath = dlg.FileName;
-                    }
-                    else
-                    {
-                        javaCombo.SelectedIndex = 0; // Reset
-                    }
-                }
-                else if (javaCombo.SelectedIndex == 1) // Auto
-                {
-                     // We don't set CustomJavaPath here, handled by LaunchService logic if we had a flag.
-                     // But for now let's say "Auto" clears CustomJavaPath and relies on Global, 
-                     // OR we need a "UseAutoJava" flag.
-                     // The user requested explicit "Auto". 
-                     // Actually, my LaunchService update handles "Smart Selection" if version mismatch.
-                     // But user might want to FORCE it.
-                     // Let's set CustomJavaPath to empty (Global) for now, but really "Auto" implies dynamic.
-                     // Simpler approach: If 'Auto' selected, we set CustomJavaPath to the BEST detected Java path RIGHT NOW.
-                     var best = javaService.AutoDetectBestJava(_version.RequiredJavaVersion);
-                     if (best != null) _version.CustomJavaPath = best;
-                }
-                else if (javaCombo.SelectedIndex == 0) // Global
-                {
-                    _version.CustomJavaPath = "";
-                }
-                else
-                {
-                     // Parse path from string "Version (Path)"
-                     string sel = javaCombo.SelectedItem as string ?? "";
-                     int pFrom = sel.IndexOf('(') + 1;
-                     int pTo = sel.LastIndexOf(')');
-                     if (pFrom > 0 && pTo > pFrom)
-                     {
-                         _version.CustomJavaPath = sel.Substring(pFrom, pTo - pFrom);
-                     }
-                }
-            };
-            
-            // Isolation Toggle
-            var isoCombo = CreateComboBox(new[] { "å¼€å¯ (æ¨è)", "å…³é—­" }, _version.GameDir != _version.RootPath ? 0 : 1);
-            isoCombo.SelectionChanged += (s, e) => 
-            {
-                 // Logic to toggle isolation is complex (move files), so for now we just save the PREFERENCE
-                 // Real isolation happens at launch or install. 
-                 // We'll just save the setting.
-                 _version.UseGlobalSettings = isoCombo.SelectedIndex == 1; // Reuse this flag? No, GameInstance has specific logic.
-                 // Actually GameInstance.GameDir is derived.
-                 // Let's just update the config flag "VersionIsolation".
-                 // But wait, "VersionIsolation" isn't in GameInstance explicitly as a bool to toggle, it's a directory structure state.
-                 // We will skip actual isolation toggling here as it requires moving files.
-                 // Let's focus on Java.
-            };
-
-            // å¯åŠ¨é€‰é¡¹ç»„
-            panel.Children.Add(CreateSettingsGroup("å¯åŠ¨é€‰é¡¹", new UIElement[]
-            {
-                CreateSettingItem("ç‰ˆæœ¬éš”ç¦»", isoCombo), // Just visual for now
-                CreateSettingItem("æ¸¸æˆçª—å£æ ‡é¢˜", CreateTextBox("è·Ÿéšå…¨å±€è®¾ç½®")),
-                CreateSettingItem("æ¸¸æˆ Java", javaCombo),
-
-                // Memory Slider
-                CreateSettingItem("æœ€å¤§å†…å­˜", CreateRealMemorySlider())
-            }));
-
-            // Save Button
-            var saveBtn = new Button 
-            { 
-                Content = "ğŸ’¾ ä¿å­˜é…ç½®",
-                Height = 40,
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(0, 230, 118)),
-                Foreground = System.Windows.Media.Brushes.White,
-                FontSize = 16,
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, 20, 0, 0),
-                Cursor = System.Windows.Input.Cursors.Hand,
-                 Style = (Style)FindResource(typeof(Button)) // Keep glass style if possible, or override
-            };
-            saveBtn.Click += (s, e) => 
-            {
-                if (Application.Current.MainWindow?.DataContext is ViewModels.MainViewModel vm)
-                {
-                    var gs = new GeminiLauncher.Services.GameService(vm.ConfigService);
-                    gs.SaveVersionConfig(_version);
-                    MessageBox.Show("è®¾ç½®å·²ä¿å­˜ï¼éƒ¨åˆ†è®¾ç½®å°†åœ¨ä¸‹æ¬¡å¯åŠ¨æ—¶ç”Ÿæ•ˆã€‚", "ä¿å­˜æˆåŠŸ", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-            };
-            panel.Children.Add(saveBtn);
-
-            ContentArea.Children.Add(panel);
-        }
-
-        private Border CreateSettingsGroup(string title, UIElement[] items)
-        {
-            var border = new Border
-            {
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(20, 255, 255, 255)),
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(20),
-                Margin = new Thickness(0, 0, 0, 20)
-            };
-
-            var stack = new StackPanel();
-            stack.Children.Add(new TextBlock
-            {
-                Text = title,
-                FontSize = 16,
-                FontWeight = FontWeights.Bold,
-                Foreground = System.Windows.Media.Brushes.White,
-                Margin = new Thickness(0, 0, 0, 15)
-            });
-
-            foreach (var item in items)
-            {
-                stack.Children.Add(item);
-            }
-
-            border.Child = stack;
-            return border;
-        }
-
-        private Grid CreateSettingItem(string label, UIElement control)
-        {
-            var grid = new Grid { Margin = new Thickness(0, 0, 0, 15) };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var labelText = new TextBlock
-            {
-                Text = label,
-                Foreground = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(180, 255, 255, 255)),
-                VerticalAlignment = VerticalAlignment.Center,
-                FontSize = 14
-            };
-
-            Grid.SetColumn(control, 1);
-            grid.Children.Add(labelText);
-            grid.Children.Add(control);
-
-            return grid;
-        }
-
-        private TextBox CreateTextBox(string placeholder)
-        {
-            return new TextBox
-            {
-                Text = placeholder,
-                Height = 35,
-                Padding = new Thickness(10, 8, 10, 8),
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(30, 255, 255, 255)),
-                Foreground = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(150, 255, 255, 255)), // Placeholder color
-                BorderThickness = new Thickness(1),
-                BorderBrush = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(50, 255, 255, 255)),
-                VerticalContentAlignment = VerticalAlignment.Center
-            };
-        }
-
-        private ComboBox CreateComboBox(string[] items, int selectedIndex)
-        {
-            var cb = new ComboBox
-            {
-                ItemsSource = items,
-                SelectedIndex = selectedIndex,
-                Height = 35,
-                Padding = new Thickness(10, 0, 0, 0),
-                VerticalContentAlignment = VerticalAlignment.Center
-            };
-            return cb;
-        }
-
-        private RadioButton CreateRadioButton(string content, bool check)
-        {
-            return new RadioButton
-            {
-                Content = content,
-                IsChecked = check,
-                Foreground = System.Windows.Media.Brushes.White,
-                Margin = new Thickness(0, 0, 0, 8),
-                FontSize = 14
-            };
-        }
-        
-        private UIElement CreateRealMemorySlider()
-        {
-            var panel = new StackPanel();
-            
-            // Value Display
-            var valueText = new TextBlock
-            {
-                Text = $"{(_version.CustomMemoryMb <= 0 ? 4096 : _version.CustomMemoryMb)} MB",
-                Foreground = System.Windows.Media.Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 0, 5, 5)
-            };
-            panel.Children.Add(valueText);
-
-            // Slider
-            var slider = new Slider
-            {
-                Minimum = 1024,
-                Maximum = 16384,
-                TickFrequency = 512,
-                IsSnapToTickEnabled = true,
-                Value = _version.CustomMemoryMb <= 0 ? 4096 : _version.CustomMemoryMb,
-                Width = 300,
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-
-            slider.ValueChanged += (s, e) =>
-            {
-                int val = (int)e.NewValue;
-                _version.CustomMemoryMb = val;
-                valueText.Text = $"{val} MB";
-            };
-
-            panel.Children.Add(slider);
-            return panel;
-        }
-
-        private Grid CreateMemorySlider(string text, double value)
-        {
-            var grid = new Grid { Height = 30 };
-            
-            // Track
-            var track = new Border 
-            { 
-                Height = 4, 
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(50, 255, 255, 255)),
-                CornerRadius = new CornerRadius(2),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            
-            // Fill (Mockup)
-            var fill = new Border
-            {
-                Height = 4,
-                Width = 200, // Fixed width for mockup
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(0, 230, 118)),
-                CornerRadius = new CornerRadius(2),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            
-            // Thumb (Mockup)
-            var thumb = new Border
-            {
-                Width = 16, Height = 16,
-                CornerRadius = new CornerRadius(8),
-                Background = System.Windows.Media.Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(192, 0, 0, 0)
-            };
-
-            grid.Children.Add(track);
-            grid.Children.Add(fill);
-            grid.Children.Add(thumb);
-            return grid;
-        }
-
-        private string GetModsPath()
-        {
-            // For isolated versions, mods are in versions/{id}/mods
-            // Otherwise in .minecraft/mods
-            string versionModsPath = System.IO.Path.Combine(_version.GameDir, "mods");
-            if (System.IO.Directory.Exists(versionModsPath))
-                return versionModsPath;
-            
-            // Fallback to global mods folder
-            string globalModsPath = System.IO.Path.Combine(_version.RootPath, "mods");
-            return globalModsPath;
-        }
-
-        public void ShowModsTab()
-        {
-            ContentArea.Children.Clear();
-            var panel = new StackPanel();
-
-            string modsPath = GetModsPath();
-
-            // Header with actions
-            var headerGrid = new Grid { Margin = new Thickness(0, 0, 0, 15) };
-            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var titleStack = new StackPanel();
-            titleStack.Children.Add(new TextBlock
-            {
-                Text = "Mod ç®¡ç†",
-                FontSize = 20,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = System.Windows.Media.Brushes.White
-            });
-            titleStack.Children.Add(new TextBlock
-            {
-                Text = modsPath,
-                FontSize = 11,
-                Opacity = 0.5,
-                Foreground = System.Windows.Media.Brushes.White,
-                Margin = new Thickness(0, 2, 0, 0),
-                TextTrimming = TextTrimming.CharacterEllipsis
-            });
-            headerGrid.Children.Add(titleStack);
-
-            var actionPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(actionPanel, 1);
-
-            var refreshBtn = CreateActionButton("ğŸ”„ åˆ·æ–°", (s, e) => ShowModsTab());
-            var openFolderBtn = CreateActionButton("ğŸ“ æ‰“å¼€æ–‡ä»¶å¤¹", (s, e) =>
-            {
-                if (!System.IO.Directory.Exists(modsPath))
-                    System.IO.Directory.CreateDirectory(modsPath);
-                System.Diagnostics.Process.Start("explorer.exe", modsPath);
-            });
-            actionPanel.Children.Add(refreshBtn);
-            actionPanel.Children.Add(openFolderBtn);
-            headerGrid.Children.Add(actionPanel);
-            panel.Children.Add(headerGrid);
-
-            // Mod List
-            if (!System.IO.Directory.Exists(modsPath))
-            {
-                panel.Children.Add(CreateEmptyModsMessage());
-                ContentArea.Children.Add(panel);
-                return;
-            }
-
-            var modFiles = System.IO.Directory.GetFiles(modsPath)
-                .Where(f => f.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) || 
-                            f.EndsWith(".jar.disabled", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(f => System.IO.Path.GetFileName(f))
-                .ToArray();
-
-            if (modFiles.Length == 0)
-            {
-                panel.Children.Add(CreateEmptyModsMessage());
-                ContentArea.Children.Add(panel);
-                return;
-            }
-
-            // Stats
-            int enabledCount = modFiles.Count(f => f.EndsWith(".jar", StringComparison.OrdinalIgnoreCase));
-            int disabledCount = modFiles.Length - enabledCount;
-
-            var statsText = new TextBlock
-            {
-                Text = $"å…± {modFiles.Length} ä¸ª Mod Â· {enabledCount} å·²å¯ç”¨ Â· {disabledCount} å·²ç¦ç”¨",
-                FontSize = 13,
-                Opacity = 0.6,
-                Foreground = System.Windows.Media.Brushes.White,
-                Margin = new Thickness(0, 0, 0, 15)
-            };
-            panel.Children.Add(statsText);
-
-            // Batch actions
-            var batchPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 15) };
-            var enableAllBtn = CreateActionButton("âœ… å…¨éƒ¨å¯ç”¨", (s, e) => BatchToggleMods(modsPath, true));
-            var disableAllBtn = CreateActionButton("â›” å…¨éƒ¨ç¦ç”¨", (s, e) => BatchToggleMods(modsPath, false));
-            batchPanel.Children.Add(enableAllBtn);
-            batchPanel.Children.Add(disableAllBtn);
-            panel.Children.Add(batchPanel);
-
-            // Mod items
-            foreach (var modPath in modFiles)
-            {
-                panel.Children.Add(CreateModItem(modPath));
-            }
-
-            ContentArea.Children.Add(panel);
-        }
-
-        private UIElement CreateEmptyModsMessage()
-        {
-            var border = new Border
-            {
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(20, 255, 255, 255)),
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(30),
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-
-            var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-            stack.Children.Add(new TextBlock
-            {
-                Text = "ğŸ§©",
-                FontSize = 48,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 10)
-            });
-            stack.Children.Add(new TextBlock
-            {
-                Text = "æ²¡æœ‰æ‰¾åˆ° Mod",
-                FontSize = 18,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = System.Windows.Media.Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 5)
-            });
-            stack.Children.Add(new TextBlock
-            {
-                Text = "å°† .jar æ–‡ä»¶æ”¾å…¥ mods æ–‡ä»¶å¤¹ï¼Œç„¶åç‚¹å‡»åˆ·æ–°",
-                FontSize = 13,
-                Opacity = 0.6,
-                Foreground = System.Windows.Media.Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center
-            });
-
-            border.Child = stack;
-            return border;
-        }
-
-        private UIElement CreateModItem(string modPath)
-        {
-            string fileName = System.IO.Path.GetFileName(modPath);
-            bool isEnabled = modPath.EndsWith(".jar", StringComparison.OrdinalIgnoreCase);
-            long fileSize = new System.IO.FileInfo(modPath).Length;
-
-            var border = new Border
-            {
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(isEnabled ? (byte)20 : (byte)10, 255, 255, 255)),
-                CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(15, 12, 15, 12),
-                Margin = new Thickness(0, 0, 0, 6)
-            };
-
-            var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Toggle
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // Name
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Size
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Delete
-
-            // Toggle
-            var toggle = new CheckBox
-            {
-                IsChecked = isEnabled,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 12, 0)
-            };
-            string capturedPath = modPath; // Capture for closure
-            toggle.Checked += (s, e) => ToggleMod(capturedPath, true);
-            toggle.Unchecked += (s, e) => ToggleMod(capturedPath, false);
-            grid.Children.Add(toggle);
-
-            // Mod name
-            string displayName = isEnabled ? fileName : fileName.Replace(".disabled", "");
-            var nameStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            var nameText = new TextBlock
-            {
-                Text = displayName,
-                FontSize = 14,
-                Foreground = System.Windows.Media.Brushes.White,
-                Opacity = isEnabled ? 1.0 : 0.5,
-                TextTrimming = TextTrimming.CharacterEllipsis
-            };
-            nameStack.Children.Add(nameText);
-            
-            if (!isEnabled)
-            {
-                nameStack.Children.Add(new TextBlock
-                {
-                    Text = "å·²ç¦ç”¨",
-                    FontSize = 11,
-                    Foreground = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(255, 152, 0)),
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
-            }
-            Grid.SetColumn(nameStack, 1);
-            grid.Children.Add(nameStack);
-
-            // File size
-            var sizeText = new TextBlock
-            {
-                Text = FormatFileSize(fileSize),
-                FontSize = 12,
-                Opacity = 0.5,
-                Foreground = System.Windows.Media.Brushes.White,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(10, 0, 10, 0)
-            };
-            Grid.SetColumn(sizeText, 2);
-            grid.Children.Add(sizeText);
-
-            // Delete button
-            var deleteBtn = new Button
-            {
-                Content = "ğŸ—‘ï¸",
-                Background = System.Windows.Media.Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                FontSize = 14,
-                Cursor = System.Windows.Input.Cursors.Hand,
-                VerticalAlignment = VerticalAlignment.Center,
-                Padding = new Thickness(5),
-                Foreground = System.Windows.Media.Brushes.White,
-                Opacity = 0.5
-            };
-            deleteBtn.Click += (s, e) =>
-            {
-                var result = MessageBox.Show($"ç¡®å®šåˆ é™¤ {displayName} å—ï¼Ÿ", "ç¡®è®¤", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                if (result == MessageBoxResult.Yes)
-                {
-                    try
-                    {
-                        System.IO.File.Delete(capturedPath);
-                        ShowModsTab(); // Refresh
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"åˆ é™¤å¤±è´¥: {ex.Message}", "é”™è¯¯", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
-                }
-            };
-            Grid.SetColumn(deleteBtn, 3);
-            grid.Children.Add(deleteBtn);
-
-            border.Child = grid;
-            return border;
-        }
-
-        private void ToggleMod(string modPath, bool enable)
-        {
-            try
-            {
-                string newPath;
-                if (enable)
-                {
-                    // .jar.disabled -> .jar
-                    newPath = modPath.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase)
-                        ? modPath.Substring(0, modPath.Length - ".disabled".Length)
-                        : modPath;
-                }
-                else
-                {
-                    // .jar -> .jar.disabled
-                    newPath = modPath.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase)
-                        ? modPath
-                        : modPath + ".disabled";
-                }
-
-                if (newPath != modPath && System.IO.File.Exists(modPath))
-                {
-                    System.IO.File.Move(modPath, newPath);
-                    ShowModsTab(); // Refresh
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"æ“ä½œå¤±è´¥: {ex.Message}", "é”™è¯¯", MessageBoxButton.OK, MessageBoxImage.Error);
-                ShowModsTab(); // Refresh to reset state
-            }
-        }
-
-        private void BatchToggleMods(string modsPath, bool enable)
-        {
-            try
-            {
-                var files = System.IO.Directory.GetFiles(modsPath)
-                    .Where(f => f.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) || 
-                                f.EndsWith(".jar.disabled", StringComparison.OrdinalIgnoreCase));
-
-                foreach (var file in files)
-                {
-                    bool isCurrentEnabled = file.EndsWith(".jar", StringComparison.OrdinalIgnoreCase);
-                    if (enable && !isCurrentEnabled)
-                    {
-                        string newPath = file.Substring(0, file.Length - ".disabled".Length);
-                        if (!System.IO.File.Exists(newPath))
-                            System.IO.File.Move(file, newPath);
-                    }
-                    else if (!enable && isCurrentEnabled)
-                    {
-                        string newPath = file + ".disabled";
-                        if (!System.IO.File.Exists(newPath))
-                            System.IO.File.Move(file, newPath);
-                    }
-                }
-
-                ShowModsTab(); // Refresh
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"æ‰¹é‡æ“ä½œå¤±è´¥: {ex.Message}", "é”™è¯¯", MessageBoxButton.OK, MessageBoxImage.Error);
-                ShowModsTab();
-            }
-        }
-
-        private string FormatFileSize(long bytes)
-        {
-            if (bytes < 1024) return $"{bytes} B";
-            if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
-            return $"{bytes / (1024.0 * 1024.0):F1} MB";
-        }
-
-        private void ShowExportTab()
-        {
-            ContentArea.Children.Clear();
-
-            var panel = new StackPanel { Margin = new Thickness(10) };
-
-            // Header
-            panel.Children.Add(new TextBlock
-            {
-                Text = "ğŸ“¦ å¯¼å‡ºç‰ˆæœ¬",
-                FontSize = 22,
-                FontWeight = FontWeights.Bold,
-                Foreground = System.Windows.Media.Brushes.White,
-                Margin = new Thickness(0, 0, 0, 20)
-            });
-
-            panel.Children.Add(new TextBlock
-            {
-                Text = "å°†æ­¤ç‰ˆæœ¬çš„æ–‡ä»¶æ‰“åŒ…å¯¼å‡ºä¸º ZIP å‹ç¼©åŒ…ï¼ŒåŒ…å« Modã€é…ç½®æ–‡ä»¶å’Œå­˜æ¡£ã€‚",
-                FontSize = 14,
-                Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#90FFFFFF")!),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 25)
-            });
-
-            // Include options
-            var includeModsCheck = new CheckBox { Content = "åŒ…å« Mods æ–‡ä»¶å¤¹", IsChecked = true, Foreground = System.Windows.Media.Brushes.White, Margin = new Thickness(0, 0, 0, 8) };
-            var includeConfigCheck = new CheckBox { Content = "åŒ…å« Config é…ç½®", IsChecked = true, Foreground = System.Windows.Media.Brushes.White, Margin = new Thickness(0, 0, 0, 8) };
-            var includeSavesCheck = new CheckBox { Content = "åŒ…å« Saves å­˜æ¡£", IsChecked = false, Foreground = System.Windows.Media.Brushes.White, Margin = new Thickness(0, 0, 0, 8) };
-            var includeResourcePacksCheck = new CheckBox { Content = "åŒ…å«èµ„æºåŒ…", IsChecked = false, Foreground = System.Windows.Media.Brushes.White, Margin = new Thickness(0, 0, 0, 8) };
-            var includeShaderPacksCheck = new CheckBox { Content = "åŒ…å«å…‰å½±åŒ…", IsChecked = false, Foreground = System.Windows.Media.Brushes.White, Margin = new Thickness(0, 0, 0, 20) };
-
-            panel.Children.Add(new TextBlock
-            {
-                Text = "å¯¼å‡ºå†…å®¹",
-                FontSize = 14,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#80FFFFFF")!),
-                Margin = new Thickness(0, 0, 0, 10)
-            });
-
-            panel.Children.Add(includeModsCheck);
-            panel.Children.Add(includeConfigCheck);
-            panel.Children.Add(includeSavesCheck);
-            panel.Children.Add(includeResourcePacksCheck);
-            panel.Children.Add(includeShaderPacksCheck);
-
-            // Status text
-            var statusText = new TextBlock
-            {
-                Text = "",
-                FontSize = 13,
-                Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#00E676")!),
-                Margin = new Thickness(0, 0, 0, 10),
-                TextWrapping = TextWrapping.Wrap
-            };
-
-            // Export as ZIP button
-            var exportBtn = new Button
-            {
-                Content = "ğŸ“ å¯¼å‡ºä¸º ZIP",
-                Padding = new Thickness(20, 10, 20, 10),
-                FontSize = 14,
-                Foreground = System.Windows.Media.Brushes.White,
-                Background = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#00E676")!),
-                BorderThickness = new Thickness(0),
-                Cursor = System.Windows.Input.Cursors.Hand,
-                Margin = new Thickness(0, 0, 0, 15)
-            };
-
-            exportBtn.Click += async (s, args) =>
-            {
-                var saveDialog = new Microsoft.Win32.SaveFileDialog
-                {
-                    Filter = "ZIP Archive (*.zip)|*.zip",
-                    FileName = $"{_version.Id}.zip",
-                    Title = "é€‰æ‹©å¯¼å‡ºè·¯å¾„"
-                };
-
-                if (saveDialog.ShowDialog() == true)
-                {
-                    try
-                    {
-                        exportBtn.IsEnabled = false;
-                        statusText.Text = "æ­£åœ¨æ‰“åŒ…...";
-
-                        string versionPath = System.IO.Path.Combine(_version.GameDir, "versions", _version.Id);
-                        string gamePath = _version.GameDir;
-
-                        // Collect folders to include
-                        var foldersToInclude = new System.Collections.Generic.List<(string sourcePath, string entryPrefix)>();
-
-                        // Always include the version jar and json
-                        if (System.IO.Directory.Exists(versionPath))
-                            foldersToInclude.Add((versionPath, $"versions/{_version.Id}"));
-
-                        if (includeModsCheck.IsChecked == true)
-                        {
-                            string modsPath = System.IO.Path.Combine(gamePath, "mods");
-                            if (System.IO.Directory.Exists(modsPath))
-                                foldersToInclude.Add((modsPath, "mods"));
-                        }
-                        if (includeConfigCheck.IsChecked == true)
-                        {
-                            string configPath = System.IO.Path.Combine(gamePath, "config");
-                            if (System.IO.Directory.Exists(configPath))
-                                foldersToInclude.Add((configPath, "config"));
-                        }
-                        if (includeSavesCheck.IsChecked == true)
-                        {
-                            string savesPath = System.IO.Path.Combine(gamePath, "saves");
-                            if (System.IO.Directory.Exists(savesPath))
-                                foldersToInclude.Add((savesPath, "saves"));
-                        }
-                        if (includeResourcePacksCheck.IsChecked == true)
-                        {
-                            string rpPath = System.IO.Path.Combine(gamePath, "resourcepacks");
-                            if (System.IO.Directory.Exists(rpPath))
-                                foldersToInclude.Add((rpPath, "resourcepacks"));
-                        }
-                        if (includeShaderPacksCheck.IsChecked == true)
-                        {
-                            string spPath = System.IO.Path.Combine(gamePath, "shaderpacks");
-                            if (System.IO.Directory.Exists(spPath))
-                                foldersToInclude.Add((spPath, "shaderpacks"));
-                        }
-
-                        await System.Threading.Tasks.Task.Run(() =>
-                        {
-                            using var zip = System.IO.Compression.ZipFile.Open(saveDialog.FileName, System.IO.Compression.ZipArchiveMode.Create);
-                            foreach (var (sourcePath, prefix) in foldersToInclude)
-                            {
-                                foreach (var file in System.IO.Directory.GetFiles(sourcePath, "*", System.IO.SearchOption.AllDirectories))
-                                {
-                                    string relativePath = System.IO.Path.GetRelativePath(sourcePath, file);
-                                    string entryName = $"{prefix}/{relativePath}".Replace('\\', '/');
-                                    zip.CreateEntryFromFile(file, entryName);
-                                }
-                            }
-                        });
-
-                        statusText.Text = $"âœ… å¯¼å‡ºå®Œæˆ: {saveDialog.FileName}";
-                        statusText.Foreground = new System.Windows.Media.SolidColorBrush(
-                            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#00E676")!);
-                    }
-                    catch (System.Exception ex)
-                    {
-                        statusText.Text = $"âŒ å¯¼å‡ºå¤±è´¥: {ex.Message}";
-                        statusText.Foreground = new System.Windows.Media.SolidColorBrush(
-                            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FF5252")!);
-                    }
-                    finally
-                    {
-                        exportBtn.IsEnabled = true;
-                    }
-                }
-            };
-
-            panel.Children.Add(exportBtn);
-            panel.Children.Add(statusText);
-
-            // Open folder button
-            var openFolderBtn = new Button
-            {
-                Content = "ğŸ“‚ æ‰“å¼€ç‰ˆæœ¬æ–‡ä»¶å¤¹",
-                Padding = new Thickness(20, 10, 20, 10),
-                FontSize = 14,
-                Foreground = System.Windows.Media.Brushes.White,
-                Background = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#30FFFFFF")!),
-                BorderThickness = new Thickness(0),
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-            openFolderBtn.Click += (s, args) =>
-            {
-                string versionPath = System.IO.Path.Combine(_version.RootPath, "versions", _version.Id);
-                if (System.IO.Directory.Exists(versionPath))
-                    System.Diagnostics.Process.Start("explorer.exe", versionPath);
-            };
-            panel.Children.Add(openFolderBtn);
-
-            ContentArea.Children.Add(panel);
-        }
-
-        // Event handlers
-        private void OpenVersionFolder_Click(object sender, RoutedEventArgs e)
-        {
-            string versionPath = System.IO.Path.Combine(_version.RootPath, "versions", _version.Id);
-            if (System.IO.Directory.Exists(versionPath))
-            {
-                System.Diagnostics.Process.Start("explorer.exe", versionPath);
-            }
-        }
-
-        private void OpenSavesFolder_Click(object sender, RoutedEventArgs e)
-        {
-            string savesPath = System.IO.Path.Combine(_version.GameDir, "saves");
-            if (!System.IO.Directory.Exists(savesPath))
-            {
-                System.IO.Directory.CreateDirectory(savesPath);
-            }
-            System.Diagnostics.Process.Start("explorer.exe", savesPath);
-        }
-
-        private void OpenModsFolder_Click(object sender, RoutedEventArgs e)
-        {
-            string modsPath = GetModsPath();
-            if (!System.IO.Directory.Exists(modsPath))
-            {
-                System.IO.Directory.CreateDirectory(modsPath);
-            }
-            System.Diagnostics.Process.Start("explorer.exe", modsPath);
-        }
-
-        private void ExportScript_Click(object sender, RoutedEventArgs e)
-        {
-            MessageBox.Show("å¯¼å‡ºå¯åŠ¨è„šæœ¬åŠŸèƒ½å¼€å‘ä¸­", "æç¤º", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-
-        private void DeleteVersion_Click(object sender, RoutedEventArgs e)
-        {
-            var result = MessageBox.Show($"ç¡®å®šè¦åˆ é™¤ç‰ˆæœ¬ {_version.Id} å—ï¼Ÿ\næ­¤æ“ä½œä¸å¯æ’¤é”€ï¼",
-                "ç¡®è®¤åˆ é™¤", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            
-            if (result == MessageBoxResult.Yes)
-            {
-                // TODO: å®ç°åˆ é™¤é€»è¾‘
-                MessageBox.Show("åˆ é™¤åŠŸèƒ½å¼€å‘ä¸­", "æç¤º", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-        }
-
-        private void BackButton_Click(object sender, RoutedEventArgs e)
-        {
-            Close();
-        }
-
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
-        {
-            Close();
-        }
-        private void ShowMaintenanceTab()
-        {
-            ContentArea.Children.Clear();
-            var panel = new StackPanel { Margin = new Thickness(10) };
-
-            // Header
-            panel.Children.Add(new TextBlock
-            {
-                Text = "ğŸ› ï¸ ç»´æŠ¤ä¸ä¿®å¤",
-                FontSize = 22,
-                FontWeight = FontWeights.Bold,
-                Foreground = System.Windows.Media.Brushes.White,
-                Margin = new Thickness(0, 0, 0, 20)
-            });
-
-            // Clean Cache Section
-            panel.Children.Add(CreateSectionHeader("æ¸…ç†ç¼“å­˜"));
-            panel.Children.Add(new TextBlock
-            {
-                Text = "å¦‚æœæ¸¸æˆå¯åŠ¨å¤±è´¥æˆ–æç¤º JSON è§£æé”™è¯¯ï¼Œè¯·å°è¯•æ¸…ç†ç¼“å­˜ã€‚è¿™å°†åˆ é™¤ç‰ˆæœ¬ JSON æ–‡ä»¶å’Œèµ„æºç´¢å¼•æ–‡ä»¶ï¼Œå¼ºåˆ¶å¯åŠ¨å™¨é‡æ–°ä¸‹è½½ã€‚",
-                FontSize = 14,
-                Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#90FFFFFF")!),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 15)
-            });
-
-            var cleanJsonBtn = CreateActionButton("ğŸ—‘ï¸ æ¸…ç†ç‰ˆæœ¬ JSON", (s, e) => CleanVersionJson());
-            var cleanAssetsBtn = CreateActionButton("ğŸ—‘ï¸ æ¸…ç†èµ„æºç´¢å¼•", (s, e) => CleanAssetIndex());
-            
-            panel.Children.Add(cleanJsonBtn);
-            panel.Children.Add(cleanAssetsBtn);
-
-            // Repair Libraries Section
-            panel.Children.Add(CreateSectionHeader("åº“æ–‡ä»¶ä¿®å¤"));
-             panel.Children.Add(new TextBlock
-            {
-                Text = "å¦‚æœæç¤ºç¼ºåº“æˆ–åº“æ–‡ä»¶æŸåï¼Œå¯ä»¥å°è¯•åˆ é™¤åº“æ–‡ä»¶å¤¹ï¼Œè®©å¯åŠ¨å™¨é‡æ–°ä¸‹è½½æ‰€æœ‰ä¾èµ–ã€‚",
-                FontSize = 14,
-                Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#90FFFFFF")!),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 15)
-            });
-            var cleanLibsBtn = CreateActionButton("ğŸ—‘ï¸ æ¸…ç† Libraries æ–‡ä»¶å¤¹", (s, e) => CleanLibraries());
-            panel.Children.Add(cleanLibsBtn);
-
-            ContentArea.Children.Add(panel);
-        }
-
-        private void CleanVersionJson()
-        {
-            if (MessageBox.Show("ç¡®å®šè¦åˆ é™¤ç‰ˆæœ¬ JSON æ–‡ä»¶å—ï¼Ÿ\nåˆ é™¤åæ‚¨å¯èƒ½éœ€è¦é‡æ–°å®‰è£…è¯¥ç‰ˆæœ¬ï¼Œæˆ–è€…é‡å¯å¯åŠ¨å™¨è®©å…¶å°è¯•é‡æ–°ä¿®å¤ã€‚", "ç¡®è®¤", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
-            {
-                try
-                {
-                    // GameInstance.RootPath is .minecraft. 
-                    // Versions are always in .minecraft/versions/{id}/{id}.json
-                    string versionsDir = System.IO.Path.Combine(_version.RootPath, "versions");
-                    string jsonPath = System.IO.Path.Combine(versionsDir, _version.Id, $"{_version.Id}.json");
-                    if (System.IO.File.Exists(jsonPath))
-                    {
-                        System.IO.File.Delete(jsonPath);
-                        MessageBox.Show("å·²åˆ é™¤ç‰ˆæœ¬ JSON æ–‡ä»¶ã€‚", "æˆåŠŸ", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show("æœªæ‰¾åˆ°ç‰ˆæœ¬ JSON æ–‡ä»¶ã€‚", "æç¤º", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"æ¸…ç†å¤±è´¥: {ex.Message}", "é”™è¯¯", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
-
-        private void CleanAssetIndex()
-        {
-            if (MessageBox.Show("ç¡®å®šè¦åˆ é™¤èµ„æºç´¢å¼•æ–‡ä»¶å—ï¼Ÿ\nè¿™å°†å¼ºåˆ¶å¯åŠ¨å™¨é‡æ–°æ ¡éªŒå’Œä¸‹è½½èµ„æºæ–‡ä»¶ã€‚", "ç¡®è®¤", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
-            {
-                try
-                {
-                    if (string.IsNullOrEmpty(_version.AssetIndexId))
-                    {
-                         MessageBox.Show("è¯¥ç‰ˆæœ¬æ²¡æœ‰å…³è”çš„èµ„æºç´¢å¼• IDã€‚", "æç¤º", MessageBoxButton.OK, MessageBoxImage.Information);
-                         return;
-                    }
-
-                    // Assets/indexes are always in .minecraft/assets/indexes
-                    string assetsDir = System.IO.Path.Combine(_version.RootPath, "assets", "indexes");
-                    string indexPath = System.IO.Path.Combine(assetsDir, $"{_version.AssetIndexId}.json");
-                    if (System.IO.File.Exists(indexPath))
-                    {
-                        System.IO.File.Delete(indexPath);
-                        MessageBox.Show($"å·²åˆ é™¤èµ„æºç´¢å¼• ({_version.AssetIndexId}.json)ã€‚", "æˆåŠŸ", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show($"æœªæ‰¾åˆ°èµ„æºç´¢å¼•æ–‡ä»¶: {indexPath}", "æç¤º", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"æ¸…ç†å¤±è´¥: {ex.Message}", "é”™è¯¯", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
-        
-        private void CleanLibraries()
-        {
-             if (MessageBox.Show("ç¡®å®šè¦åˆ é™¤æ•´ä¸ª Libraries æ–‡ä»¶å¤¹å—ï¼Ÿ\nä¸‹æ¬¡å¯åŠ¨æ—¶å°†éœ€è¦é‡æ–°ä¸‹è½½æ‰€æœ‰ä¾èµ–åº“ï¼Œè€—æ—¶è¾ƒé•¿ã€‚", "é«˜é£é™©ç¡®è®¤", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
-            {
-                try
-                {
-                    // Libraries are usually shared, in .minecraft/libraries
-                    string libPath = System.IO.Path.Combine(_version.RootPath, "libraries");
-                    if (System.IO.Directory.Exists(libPath))
-                    {
-                        System.IO.Directory.Delete(libPath, true); // Recursive delete
-                         MessageBox.Show("å·²åˆ é™¤ Libraries æ–‡ä»¶å¤¹ã€‚", "æˆåŠŸ", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show("æœªæ‰¾åˆ° Libraries æ–‡ä»¶å¤¹ã€‚", "æç¤º", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"æ¸…ç†å¤±è´¥: {ex.Message}", "é”™è¯¯", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
-    }
-}
-= *cascade08=[*cascade08[ì *cascade08ìîîï *cascade08ïññò *cascade08òôô× *cascade08×ÙÙÚ *cascade08ÚÜÜİ *cascade08İßßÇ *cascade08ÇÉÉ° *cascade08°²²Ô *cascade08ÔİİŠ *cascade08Š¼¼Ã *cascade08Ã»»í *cascade08íùùú *cascade08ú€€· *cascade08·¹¹ı  *cascade08ı €!€!! *cascade08!!!‘! *cascade08‘!’!’!½8 *cascade08½8Û8*cascade08Û8Ü8 *cascade08Ü8ì8*cascade08ì8î8 *cascade08î8¿9*cascade08¿9À9 *cascade08À9÷9*cascade08÷9ù9 *cascade08ù9¶:*cascade08¶:·: *cascade08·:Æ:*cascade08Æ:Ç: *cascade08Ç:Õ:*cascade08Õ:Ö: *cascade08Ö:×:*cascade08×:Ø: *cascade08Ø:Ü:*cascade08Ü:İ: *cascade08İ:ı:*cascade08ı:ş: *cascade08ş:‚;*cascade08‚;ƒ; *cascade08ƒ;‡;*cascade08‡;ˆ; *cascade08ˆ;˜;*cascade08˜;™; *cascade08™;Æ;*cascade08Æ;Ç; *cascade08Ç;€<*cascade08€<< *cascade08<—<*cascade08—<˜< *cascade08˜<¼=*cascade08¼=ò= *cascade08ò=ÿ=*cascade08ÿ=…> *cascade08…>¾@ *cascade08¾@Ñ@Ñ@ß@ *cascade08ß@à@à@á@ *cascade08á@ï@ï@ñ@ *cascade08ñ@ù@ù@û@ *cascade08û@ı@ı@ÿ@ *cascade08ÿ@ƒAƒA„A *cascade08„A…A…A†A *cascade08†A‡A‡AˆA *cascade08ˆA‰A‰AŠA *cascade08ŠA‘A‘A’A *cascade08’A”A”A•A *cascade08•A–A–A™A *cascade08™AAAA *cascade08A°A°A²A *cascade08²A´A´AĞA *cascade08ĞAÒAÒAÓA *cascade08ÓA×A×AØA *cascade08ØAçAçAéA *cascade08éAõAõAöA *cascade08öAúAúAûA *cascade08ûAüAüAıA *cascade08ıAÿAÿA€B *cascade08€BBB‚B *cascade08‚B–B–B—B *cascade08—B©B©B¬B *cascade08¬B®B®B¯B *cascade08¯BµBµB¶B *cascade08¶BÄBÄBÆB *cascade08ÆBÈBÈBÉB *cascade08ÉBÌBÌBÍB *cascade08ÍBĞBĞBÑB *cascade08ÑBßBßBàB *cascade08àBóBóBõB *cascade08õBÿBÿB€C *cascade08€C…C…C†C *cascade08†CˆCˆC‰C *cascade08‰CŠCŠC‹C *cascade08‹CCCC *cascade08C•C•C£C *cascade08£C«C«C¬C *cascade08¬C®C®C¯C *cascade08¯C±C±C²C *cascade08²C³C³C´C *cascade08´C¼C¼C½C *cascade08½CÂCÂCÃC *cascade08ÃCÅCÅCÆC *cascade08ÆCÜCÜCàC *cascade08àCåCåCçC *cascade08çCèCèCéC *cascade08éCêCêCëC *cascade08ëCïC *cascade08ïCòCòC€D *cascade08€D¡D¡D¥D *cascade08¥D§D§D¨D *cascade08¨DªDªD«D *cascade08«D­D­D¯D *cascade08¯D±D±D²D *cascade08²D·D·D¸D *cascade08¸D¼D¼D¾D *cascade08¾DÌDÌDÍD *cascade08ÍDĞDĞDÑD *cascade08ÑDÔDÔDÕD *cascade08ÕDØDØDÙD *cascade08ÙDİDİDàD *cascade08àDáDáDïD *cascade08ïDòDòDóD *cascade08óDûDûDüD *cascade08üDıDıDşD *cascade08şDÿDÿD€E *cascade08€E‚E‚E„E *cascade08„E‹E‹EE *cascade08EEEE *cascade08E‘E‘E’E *cascade08’E›E›EœE *cascade08œE E E¡E *cascade08¡E°E°E±E *cascade08±E´E´E¶E *cascade08¶E¼E¼E½E *cascade08½EÁEÁEÂE *cascade08ÂEìEìEïE *cascade08ïEÿEÿEF *cascade08F‚F‚FƒF *cascade08ƒF„F„F…F *cascade08…F–F–F—F *cascade08—F¬F¬F­F *cascade08­F®F®F±F *cascade08±FºFºF»F *cascade08»FÂFÂFÅF *cascade08ÅFÖFÖFØF *cascade08ØFíFíFîF *cascade08îFöFöFúF *cascade08úFÿFÿF€G *cascade08€GGG‚G *cascade08‚G„G„G…G *cascade08…G‡G‡GˆG *cascade08ˆG—G—G¥G *cascade08¥GÖGÖGÚG *cascade08ÚGçGçGéG *cascade08éGíGíGüG *cascade08üG›H›HH *cascade08H¡H¡H²H *cascade08²HÊHÊHËH *cascade08ËHãHãHäH *cascade08äHéHéHêH *cascade08êHíHíHîH *cascade08îH˜I˜I™I *cascade08™IËIËIÍI *cascade08ÍIÓIÓIÔI *cascade08ÔI×I×IÚI *cascade08ÚIåIåIæI *cascade08æIçIçIèI *cascade08èIñIñIòI *cascade08òIJJ‚J *cascade08‚JƒJƒJ„J *cascade08„J†J†JˆJ *cascade08ˆJJJJ *cascade08J¢J¢J¤J *cascade08¤JÕJÕJäJ *cascade08äJìJìJíJ *cascade08íJşJşJÿJ *cascade08ÿJKK‚K *cascade08‚K„K„K…K *cascade08…K†K†K‡K *cascade08‡K‹K‹KŒK *cascade08ŒKKKK *cascade08KKK‘K *cascade08‘K–K–K—K *cascade08—K˜K˜KšK *cascade08šK¢K¢K®K *cascade08®K°K°K²K *cascade08²K¼K¼K½K *cascade08½KÁKÁKÂK *cascade08ÂKÓKÓKÔK *cascade08ÔKÕKÕK×K *cascade08×KãKãKåK *cascade08åK‚L‚L„L *cascade08„L’L’L•L *cascade08•L™L™LšL *cascade08šLİLİLŞL *cascade08ŞLéLéLêL *cascade08êLMM‚M *cascade08‚MˆMˆM‰M *cascade08‰MŠMŠM‹M *cascade08‹MŒMŒMM *cascade08MœMœMM *cascade08MŸMŸM M *cascade08 M®M®M¯M *cascade08¯M°M°M±M *cascade08±M¸M¸M¹M *cascade08¹MºMºM¼M *cascade08¼MÀMÀMÁM *cascade08ÁMæMæMèM *cascade08èMùMùMúM *cascade08úMÿMÿM€N *cascade08€NƒNƒN„N *cascade08„N…N…N†N *cascade08†N‹N‹NŒN *cascade08ŒNNNN *cascade08N™N™NšN *cascade08šNªNªN«N *cascade08«N»N»N¼N *cascade08¼NÀNÀNÎN *cascade08ÎN×N×NØN *cascade08ØNÚNÚNÛN *cascade08ÛNåNåNæN *cascade08æNèNèNéN *cascade08éNğNğNñN *cascade08ñNöNöN÷N *cascade08÷NúNúNûN *cascade08ûNıNıNşN *cascade08şNÿNÿN€O *cascade08€OŠOŠO‹O *cascade08‹O–O–O—O *cascade08—OOOO *cascade08O¡O¡O¢O *cascade08¢O¦O¦O§O *cascade08§O¬O¬O­O *cascade08­OÎOÎOÏO *cascade08ÏOØOØOÙO *cascade08ÙOŞOŞOßO *cascade08ßOàOàOáO *cascade08áOåOåOëO *cascade08ëO‚P‚PP *cascade08PPPŸP *cascade08ŸP¨P¨P©P *cascade08©P¯P¯P°P *cascade08°P·P·P¸P *cascade08¸P»P»P¼P *cascade08¼PÀPÀPÁP *cascade08ÁPÂPÂPÃP *cascade08ÃPÄPÄPÆP *cascade08ÆPéPéPêP *cascade08êPëPëPìP *cascade08ìPîPîPïP *cascade08ïPğPğPñP *cascade08ñPöPöP÷P *cascade08÷PùPùPúP *cascade08úPÿPÿP€Q *cascade08€Q’Q’Q”Q *cascade08”Q–Q–Q—Q *cascade08—Q£Q£Q¤Q *cascade08¤Q¨Q¨Q©Q *cascade08©Q°Q°Q±Q *cascade08±Q¹Q¹Q»Q *cascade08»QÀQÀQÁQ *cascade08ÁQÂQÂQÅQ *cascade08ÅQÏQÏQÛQ *cascade08ÛQŞQŞQßQ *cascade08ßQàQàQáQ *cascade08áQãQãQäQ *cascade08äQæQæQçQ *cascade08çQëQëQìQ *cascade08ìQñQñQóQ *cascade08óQôQôQõQ *cascade08õQ“R“R”R *cascade08”RRRŸR *cascade08ŸR¢R¢R¤R *cascade08¤R§R§R¨R *cascade08¨R¬R¬R­R *cascade08­R®R®R½R *cascade08½RÏRÏRĞR *cascade08ĞRÕRÕR×R *cascade08×RÙRÙRÚR *cascade08ÚRÛRÛRÜR *cascade08ÜR‰S‰S‹S *cascade08‹S˜S˜S™S *cascade08™S½S½S¾S *cascade08¾SÂSÂSÅS *cascade08ÅSÑSÑSÒS *cascade08ÒSÚSÚSÜS *cascade08ÜSTTT *cascade08TÍTÍTÎT *cascade08ÎTÕTÕTÖT *cascade08ÖTØTØTÙT *cascade08ÙT­U­U®U *cascade08®U¯U¯U°U *cascade08°U±U±U²U *cascade08²U¹U¹U»U *cascade08»UÊUÊUËU *cascade08ËUÓUÓUÕU *cascade08ÕUæUæUèU *cascade08èUëUëU÷U *cascade08÷UıUıU€V *cascade08€VŠVŠV‹V *cascade08‹V‘V‘V’V *cascade08’VVVŸV *cascade08ŸV«V«V­V *cascade08­V³V³V´V *cascade08´V»V»V¼V *cascade08¼V¾V¾V¿V *cascade08¿VÀVÀVÂV *cascade08ÂVÈVÈVÉV *cascade08ÉVÎVÎVÏV *cascade08ÏVëVëVìV *cascade08ìVñVñVòV *cascade08òVôVôVõV *cascade08õVøVøVùV *cascade08ùV€W€W‚W *cascade08‚W”W”W•W *cascade08•W£W£W¤W *cascade08¤W©W©WªW *cascade08ªW«W«W¬W *cascade08¬W¯W¯W°W *cascade08°WµWµW·W *cascade08·W½W½WÉW *cascade08ÉWæWæWèW *cascade08èWXX’X *cascade08’X—X—X˜X *cascade08˜XŸXŸX¡X *cascade08¡XËXËXÍX *cascade08ÍXĞXĞXÑX *cascade08ÑXÓXÓXÔX *cascade08ÔX×X×XØX *cascade08ØXÛXÛXİX *cascade08İXŞXŞXßX *cascade08ßXäXäXåX *cascade08åXèXèXéX *cascade08éXğXğXñX *cascade08ñXôXôXöX *cascade08öXşXşXÿX *cascade08ÿX€Y€YY *cascade08Y‚Y‚YƒY *cascade08ƒY…Y…Y†Y *cascade08†Y‡Y‡YˆY *cascade08ˆYŠYŠY‹Y *cascade08‹YŒYŒYY *cascade08YYY‘Y *cascade08‘Y¶Y¶Y·Y *cascade08·Y¹Y¹YºY *cascade08ºY¿Y¿YÀY *cascade08ÀYÇYÇYÈY *cascade08ÈYÍYÍYÎY *cascade08ÎYÑYÑYÓY *cascade08ÓY×Y×YãY *cascade08ãYïYïYğY *cascade08ğYòYòYóY *cascade08óYÿYÿYZ *cascade08ZšZšZ›Z *cascade08›Z¤Z¤Z¥Z *cascade08¥Z¦Z¦Z¨Z *cascade08¨Z¬Z¬Z­Z *cascade08­Z²Z²Z³Z *cascade08³ZµZµZ¶Z *cascade08¶Z»Z»Z¼Z *cascade08¼Z¾Z¾Z¿Z *cascade08¿ZÜZÜZİZ *cascade08İZçZçZèZ *cascade08èZ÷Z÷ZùZ *cascade08ùZ[[‚[ *cascade08‚[‡[‡[Š[ *cascade08Š[[[[ *cascade08[ò[ò[ô[ *cascade08ô[†\†\‡\ *cascade08‡\ˆ\ˆ\‰\ *cascade08‰\\\\ *cascade08\š\š\\ *cascade08\¦\¦\§\ *cascade08§\Á\Á\Â\ *cascade08Â\Í\Í\Î\ *cascade08Î\İ\İ\â\ *cascade08â\¨]¨]©] *cascade08©]ª]ª]«] *cascade08«]µ]µ]·] *cascade08·]è]è]é] *cascade08é]ê]ê]ë] *cascade08ë]ì]ì]í] *cascade08í]ú]ú]ü] *cascade08ü]“^“^£^ *cascade08£^©^©^ª^ *cascade08ª^ë^ë^ì^ *cascade08ì^ñ^ñ^ó^ *cascade08ó^ù^ù^û^ *cascade08û^š_š_›_ *cascade08›___ _ *cascade08 _§_§_ª_ *cascade08ª_®_®_¯_ *cascade08¯_À_À_Â_ *cascade08Â_á_á_â_ *cascade08â_ã_ã_ä_ *cascade08ä_è_è_é_ *cascade08é_í_í_î_ *cascade08î_ğ_ğ_ñ_ *cascade08ñ_ó_ó_ô_ *cascade08ô_ø_ø_ù_ *cascade08ù_š`š`›` *cascade08›`œ`œ`` *cascade08`Ÿ`Ÿ` ` *cascade08 `¥`¥`¦` *cascade08¦`¬`¬`­` *cascade08­`®`®`¯` *cascade08¯`±`±`²` *cascade08²`Ï`Ï`Ğ` *cascade08Ğ`â`â`ã` *cascade08ã`‚a‚a„a *cascade08„aŒaŒaa *cascade08a¤a¤a¥a *cascade08¥a´a´a¹a *cascade08¹aºaºa»a *cascade08»aÂaÂaÇa *cascade08ÇaÌaÌaÎa *cascade08ÎaÏaÏaĞa *cascade08ĞaÔaÔaÕa *cascade08ÕaÖaÖa×a *cascade08×aÙaÙaÚa *cascade08Úañañaóa *cascade08óa•b•b²b *cascade08²bÄbÄbÅb *cascade08ÅbÜbÜbİb *cascade08İbŞbŞbßb *cascade08ßbãbãbäb *cascade08äbèbèbêb *cascade08êbñbñbòb *cascade08òbšcšc›c *cascade08›cŸcŸc¡c *cascade08¡c¦c¦c¨c *cascade08¨c®c®c¯c *cascade08¯c³c³cµc *cascade08µcºcºc¼c *cascade08¼cÚcÚcÛc *cascade08ÛcÜcÜcİc *cascade08İcŞcŞcßc *cascade08ßcàcàcác *cascade08ácäcäcåc *cascade08åcícícîc *cascade08îcñcñcòc *cascade08òcôcôcöc *cascade08öc÷c÷cøc *cascade08øcücücŠd *cascade08Šd‹d‹dd *cascade08d‘d‘dd *cascade08ddd¡d *cascade08¡d¯d¯d°d *cascade08°dÇdÇdÉd *cascade08ÉdÙdÙdÚd *cascade08Údædædçd *cascade08çdêdêdëd *cascade08ëdìdìdíd *cascade08ídúdúd‰e *cascade08‰e‘e‘e’e *cascade08’ešeše›e *cascade08›e e e¡e *cascade08¡e£e£e¤e *cascade08¤e¦e¦e§e *cascade08§e©e©eªe *cascade08ªe­e­e®e *cascade08®e°e°e±e *cascade08±e²e²e³e *cascade08³e´e´eµe *cascade08µeÒeÒeÓe *cascade08ÓeØeØeÙe *cascade08Ùeßeßeàe *cascade08àeëeëeíe *cascade08íeòeòeóe *cascade08óeöeöe÷e *cascade08÷e‰f‰fŠf *cascade08Šffff *cascade08fœfœff *cascade08fŸfŸf f *cascade08 f¬f¬f­f *cascade08­f±f±f²f *cascade08²f³f³f´f *cascade08´fÂfÂfÃf *cascade08ÃfÈfÈfÊf *cascade08ÊfÏfÏfĞf *cascade08ĞfÒfÒfÔf *cascade08Ôfífífîf *cascade08îfôfôf‚g *cascade08‚g•g•g—g *cascade08—gšgšgg *cascade08ggg g *cascade08 g¢g¢g£g *cascade08£g¤g¤g¥g *cascade08¥g¬g¬g­g *cascade08­gâgâgäg *cascade08ägògògóg *cascade08ógøgøgüg *cascade08ügıgıgşg *cascade08şg˜h˜h™h *cascade08™hhhh *cascade08h¨h¨hªh *cascade08ªh¼h¼h½h *cascade08½h¿h¿hÀh *cascade08ÀhÅhÅhÆh *cascade08ÆhËhËhÌh *cascade08ÌhÍhÍhÏh *cascade08Ïhİhİhßh *cascade08ßhæhæhèh *cascade08èhîhîhïh *cascade08ïhƒiƒi„i *cascade08„iŠiŠiŒi *cascade08ŒiŸiŸi i *cascade08 i¡i¡i¢i *cascade08¢i¥i¥i¦i *cascade08¦i¨i¨i©i *cascade08©iÂiÂiÄi *cascade08ÄiÎiÎiÑi *cascade08ÑiÔiÔiÕi *cascade08ÕiİiİiŞi *cascade08Şiáiáiâi *cascade08âiãiãiäi *cascade08äiåiåiæi *cascade08æişişiÿi *cascade08ÿiŒjŒjj *cascade08jjj¢j *cascade08¢j¤j¤j°j *cascade08°jÑjÑj×j *cascade08×jÙjÙjÚj *cascade08ÚjÜjÜjãj *cascade08ãj‡k‡k‹k *cascade08‹kkkk *cascade08kkk‘k *cascade08‘k’k’k“k *cascade08“k¹k¹kºk *cascade08ºkÁkÁkÃk *cascade08ÃkÅkÅkÆk *cascade08ÆkÙkÙkÚk *cascade08ÚkÛkÛkÜk *cascade08Ükækækçk *cascade08çkëkëkìk *cascade08ìkíkíkîk *cascade08îkòkòkók *cascade08ókökökøk *cascade08økùkùkúk *cascade08úkşkşkÿk *cascade08ÿklll *cascade08l–l–l™l *cascade08™lšlšl›l *cascade08›llll *cascade08l²l²l´l *cascade08´lµlµl¶l *cascade08¶l¸l¸l¹l *cascade08¹lºlºl¼l *cascade08¼lñlñlòl *cascade08òlólólôl *cascade08ôl†m†m‡m *cascade08‡m•m•m–m *cascade08–mˆn*cascade08ˆn•n•n—n *cascade08—n˜n˜nšn *cascade08šnœnœn¤n *cascade08¤n¥n *cascade08¥nªn *cascade08ªn¸n¸nËn *cascade08ËnÍnÍnÎn *cascade08ÎnÏnÏnĞn *cascade08ĞnÑnÑnÙn *cascade08ÙnÜnÜnİn *cascade08İnìnìnïn *cascade08ïnùnùnûn *cascade08ûno *cascade08o‚o‚o†o *cascade08†oˆoˆo‹o *cascade08‹oooŸo *cascade08Ÿo£o£o¤o *cascade08¤o³o³o´o *cascade08´o¶o¶oºo *cascade08ºo»o»o¼o *cascade08¼o½o *cascade08½o¿o¿oÀo *cascade08ÀoÓoÓoÛo *cascade08Ûoßoßoõo *cascade08õoÿoÿo„p *cascade08„p…p…p“p *cascade08“p”p *cascade08”p•p *cascade08•p–p–p—p *cascade08—pŸpŸp p *cascade08 p§p§p¨p *cascade08¨p«p«p¬p *cascade08¬p²p²p´p *cascade08´pÑpÑp×p *cascade08×pÚp *cascade08Úpq *cascade08qqq‘q *cascade08‘q¡q¡q¤q *cascade08¤q¥q¥q¦q *cascade08¦q§q§q«q *cascade08«q­q­q®q *cascade08®q¿q¿qİq *cascade08İqŞqŞqàq *cascade08àqäqäqğq *cascade08ğq”r”r–r *cascade08–r—r—r£r *cascade08£r¨r¨r©r *cascade08©r·r·r¸r *cascade08¸r¹r¹rºr *cascade08ºr½r½r¾r *cascade08¾rÂrÂrÃr *cascade08ÃrÄrÄrÅr *cascade08ÅrÈrÈrÉr *cascade08Érçrçrèr *cascade08èrìrìrír *cascade08írğrğrñr *cascade08ñrúrúrûr *cascade08ûrırırÿr *cascade08ÿrŸsŸs s *cascade08 s¯s¯s±s *cascade08±sËsËsÚs *cascade08ÚsİsİsŞs *cascade08Şsßsßsãs *cascade08ãsäsäsås *cascade08åsësësís *cascade08ísïsïsñs *cascade08ñs„t„t’t *cascade08
-’t–t –tu*cascade08
-uœu œuu *cascade08u¢u¢u£u *cascade08£u¤u¤u¥u *cascade08¥u§u§u¨u *cascade08¨u©u©uªu *cascade08ªu¬u¬u­u *cascade08­u°u°u±u *cascade08±u²u²u³u *cascade08³u´u´uµu *cascade08µu¼u¼u¾u *cascade08¾u¿u¿uÏu*cascade08ÏuÓu *cascade08Óu×u*cascade08×uãu *cascade08ãu†v†vˆv *cascade08ˆvŒv*cascade08Œv˜v *cascade08˜v¢v¢v£v *cascade08£v¤v¤v¥v *cascade08¥v¦v¦v§v *cascade08§v¨v¨v©v *cascade08©vıvıvşv *cascade08şv‹w‹ww *cascade08wœwœww *cascade08wŸwŸw w *cascade08 w¦w¦w§w *cascade08§w¨w¨w©w *cascade08©w«w«w®w *cascade08®wÁw*cascade08ÁwÃw *cascade08ÃwÑwÑwòw *cascade08òwówówôw *cascade08ôwõwõwöw *cascade08öw÷w÷wñ„ *cascade08ñ„ò„ *cascade08ò„Ã…*cascade08Ã…Ø… *cascade08Ø…„†*cascade08„†…† *cascade08…†‰†*cascade08‰†Š† *cascade08Š†¬†*cascade08¬†®† *cascade08®†ê†*cascade08ê†ë† *cascade08ë†…‡*cascade08…‡†‡ *cascade08†‡‡‡*cascade08‡‡ˆ‡ *cascade08ˆ‡Œ‡*cascade08Œ‡‡ *cascade08‡¦ˆ*cascade08¦ˆ©ˆ *cascade08©ˆ®‰*cascade08®‰Ã‰ *cascade08Ã‰Í‰*cascade08Í‰Ò‰ *cascade08Ò‰í‰*cascade08í‰î‰ *cascade08î‰ö‰*cascade08ö‰ø‰ *cascade08ø‰ËŠ*cascade08ËŠÌŠ *cascade08ÌŠçŠ*cascade08çŠèŠ *cascade08èŠ‡‹*cascade08‡‹ˆ‹ *cascade08ˆ‹©Œ*cascade08©Œ«Œ *cascade08«ŒËŒ*cascade08ËŒÙŒ *cascade08ÙŒ–*cascade08–— *cascade08—í*cascade08íó *cascade08óı*cascade08ı… *cascade08…•*cascade08•– *cascade08–Ò*cascade08Òà *cascade08àÉ*cascade08ÉÑ *cascade08Ñ’‘*cascade08’‘”‘ *cascade08”‘·‘*cascade08·‘¸‘ *cascade08¸‘Ÿ“*cascade08Ÿ“ “ *cascade08 “Ç” *cascade08Ç”Â*cascade08ÂÇ *cascade08ÇÈ *cascade08È§Ÿ*cascade08§Ÿ¨Ÿ *cascade08¨Ÿ *cascade08 Ÿ  *cascade08Ÿ â *cascade08â ã  *cascade08ã ä *cascade08ä å  *cascade08å é *cascade08é ê  *cascade08ê Š¡*cascade08Š¡‹¡ *cascade08‹¡¡*cascade08¡¡ *cascade08¡”¡*cascade08”¡•¡ *cascade08•¡¥¡*cascade08¥¡¦¡ *cascade08¦¡Ø¡*cascade08Ø¡Ù¡ *cascade08Ù¡ë¡*cascade08ë¡ì¡ *cascade08ì¡ï¡*cascade08ï¡ğ¡ *cascade08ğ¡ë¢*cascade08ë¢ì¢ *cascade08ì¢ü¢*cascade08ü¢ı¢ *cascade08ı¢†£*cascade08†£ˆ£ *cascade08ˆ£¤*cascade08¤¤ *cascade08¤Á¥*cascade08Á¥Â¥ *cascade08Â¥Şª*cascade08Şªşª *cascade08şªÛ¬ *cascade08
-Û¬Ü¬Ü¬Ò® *cascade08
-Ò®Ö®Ö® ¯ *cascade08 ¯£¯*cascade08£¯¤¯ *cascade08¤¯¥¯*cascade08¥¯¦¯ *cascade08¦¯ü¯ *cascade08ü¯Ø±*cascade08Ø±Ú± *cascade08Ú±İ±*cascade08İ±Ş± *cascade08Ş±ä±*cascade08ä±å± *cascade08å±ï±*cascade08ï±ğ± *cascade08ğ±÷±*cascade08÷±ø± *cascade08ø±ş±*cascade08ş±ÿ± *cascade08ÿ±à²*cascade08à²á² *cascade08á²„³*cascade08„³…³ *cascade08…³ˆ³*cascade08ˆ³‰³ *cascade08‰³§³*cascade08§³¨³ *cascade08¨³à³*cascade08à³§´ *cascade08§´¨´*cascade08¨´®´ *cascade08®´ıº*cascade08ıº€» *cascade08€»‡»*cascade08‡»ˆ» *cascade08ˆ»‹»*cascade08‹»Œ» *cascade08Œ»Â»*cascade08Â»Å» *cascade08Å»¥È*cascade08¥ÈÅÈ *cascade08ÅÈ²Õ*cascade08²ÕÆÕ *cascade08ÆÕŒØ*cascade08ŒØ»Ø *cascade08»Ø³Ù*cascade08³ÙÃÙ *cascade08ÃÙì˜*cascade08ì˜Ø™ *cascade08Ø™Ú™*cascade08Ú™æ™ *cascade08æ™Íš*cascade08ÍšÎš *cascade08Îš¶›*cascade08¶›¹› *cascade08¹›¼›*cascade08¼›½› *cascade08½›×›*cascade08×›Ù› *cascade08Ù›š*cascade08š› *cascade08›ä*cascade08äæ *cascade08æ†Ÿ*cascade08†ŸˆŸ *cascade08ˆŸƒ©*cascade08ƒ©Ì© *cascade08Ì©†¬*cascade08†¬‡¬ *cascade08‡¬¾¬*cascade08¾¬¿¬ *cascade08¿¬¬²*cascade08¬²­² *cascade08­²î¶*cascade08î¶ï¶ *cascade08ï¶®¹ *cascade08
-®¹°¹°¹Á¼ *cascade08
-Á¼Ä¼Ä¼˜½ *cascade08
-˜½›½›½õÎ *cascade08õÎöÎ *cascade08öÎÉŞ*cascade08ÉŞÌŞ *cascade08ÌŞÛŞ*cascade08ÛŞïŞ *cascade08ïŞ©ß*cascade08©ßµß *cascade08µß¶ß*cascade08¶ßøß *cascade08øß©â*cascade08©â¸â *cascade08¸âÀã *cascade08
-ÀãÄãÄããå *cascade08ãå«ç *cascade08
-«ç¯ç¯ç¡ê *cascade08
-¡ê¤ê¤êÁê *cascade08
-ÁêÂêÂêë *cascade08
-ëÜëÜë–í *cascade08
-–í—í—í™í *cascade08
-™íšíší›í *cascade08
-›íœíœí¡í *cascade08
-¡í¢í¢í–ò *cascade08
-–ò˜ò˜òÿö *cascade08
-ÿö¤­¤­»­ *cascade082Tfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Views/VersionSettingsDialog.xaml.cs

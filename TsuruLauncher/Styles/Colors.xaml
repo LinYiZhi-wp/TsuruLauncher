@@ -1,0 +1,85 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
+                    mc:Ignorable="po">
+
+    <!-- ============================================================
+         Launcher theme tokens.
+         All brushes are declared with po:Freeze="False" so ThemeService
+         can re-colour them at runtime (settings > theme picker).
+         ============================================================ -->
+
+    <!-- Accent (Color resources kept for legacy gradient/text references) -->
+    <Color x:Key="AccentColor">#55C244</Color>
+    <Color x:Key="AccentHoverColor">#6FD35C</Color>
+    <Color x:Key="AccentDimColor">#3F9B32</Color>
+    <Color x:Key="AccentLightColor">#8BE07A</Color>
+
+    <SolidColorBrush x:Key="AccentBrush" Color="#55C244" po:Freeze="False"/>
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#6FD35C" po:Freeze="False"/>
+    <SolidColorBrush x:Key="AccentDimBrush" Color="#3F9B32" po:Freeze="False"/>
+    <SolidColorBrush x:Key="AccentLightBrush" Color="#8BE07A" po:Freeze="False"/>
+    <SolidColorBrush x:Key="AccentForegroundBrush" Color="#061306" po:Freeze="False"/>
+
+    <!-- System Accent (WPF-UI compatibility) -->
+    <SolidColorBrush x:Key="SystemAccentColorBrush" Color="#55C244" po:Freeze="False"/>
+    <SolidColorBrush x:Key="SystemAccentColorPrimaryBrush" Color="#55C244" po:Freeze="False"/>
+    <SolidColorBrush x:Key="SystemAccentColorSecondaryBrush" Color="#3F9B32" po:Freeze="False"/>
+    <SolidColorBrush x:Key="SystemAccentColorTertiaryBrush" Color="#8BE07A" po:Freeze="False"/>
+
+    <!-- Base surfaces -->
+    <SolidColorBrush x:Key="BackgroundBrush" Color="#0C110F" po:Freeze="False"/>
+    <SolidColorBrush x:Key="CardBrush" Color="#141B18" po:Freeze="False"/>
+    <SolidColorBrush x:Key="PopoverBrush" Color="#1A221E" po:Freeze="False"/>
+    <SolidColorBrush x:Key="TopBarBrush" Color="#CC0C110F" po:Freeze="False"/>
+    <SolidColorBrush x:Key="TileBrush" Color="#990C110F" po:Freeze="False"/>
+
+    <!-- 5-step surface ramp (1 = deepest, 5 = lightest) -->
+    <SolidColorBrush x:Key="Surface1Brush" Color="#0C110F" po:Freeze="False"/>
+    <SolidColorBrush x:Key="Surface2Brush" Color="#151A18" po:Freeze="False"/>
+    <SolidColorBrush x:Key="Surface3Brush" Color="#1C221F" po:Freeze="False"/>
+    <SolidColorBrush x:Key="Surface4Brush" Color="#252B28" po:Freeze="False"/>
+    <SolidColorBrush x:Key="Surface5Brush" Color="#303633" po:Freeze="False"/>
+
+    <!-- Text Hierarchy -->
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E7F2EA" po:Freeze="False"/>
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#C6D6CB" po:Freeze="False"/>
+    <SolidColorBrush x:Key="TextTertiaryBrush" Color="#A0B3A6" po:Freeze="False"/>
+    <SolidColorBrush x:Key="TextDimBrush" Color="#6E8376" po:Freeze="False"/>
+
+    <!-- Surface Hierarchy (cards; slight translucency keeps background image visible) -->
+    <SolidColorBrush x:Key="GlassLightBrush" Color="#D0141B18" po:Freeze="False"/>
+    <SolidColorBrush x:Key="GlassMediumBrush" Color="#E6141B18" po:Freeze="False"/>
+    <SolidColorBrush x:Key="GlassStrongBrush" Color="#F01A221E" po:Freeze="False"/>
+    <SolidColorBrush x:Key="GlassHeavyBrush" Color="#F5202823" po:Freeze="False"/>
+    <SolidColorBrush x:Key="GlassBorderBrush" Color="#1AE7F2EA" po:Freeze="False"/>
+    <SolidColorBrush x:Key="GlassBorderHoverBrush" Color="#2EE7F2EA" po:Freeze="False"/>
+
+    <!-- Surface Layers -->
+    <SolidColorBrush x:Key="SurfaceContentBrush" Color="#F00C110F" po:Freeze="False"/>
+    <SolidColorBrush x:Key="SurfaceFloatingBrush" Color="#F0161E1A" po:Freeze="False"/>
+    <SolidColorBrush x:Key="SurfaceInputBrush" Color="#1AE7F2EA" po:Freeze="False"/>
+    <SolidColorBrush x:Key="SurfaceDropdownBrush" Color="#FA1A221E" po:Freeze="False"/>
+
+    <!-- Accent Tinted Surfaces -->
+    <SolidColorBrush x:Key="AccentGlassLightBrush" Color="#1455C244" po:Freeze="False"/>
+    <SolidColorBrush x:Key="AccentGlassMediumBrush" Color="#1F55C244" po:Freeze="False"/>
+    <SolidColorBrush x:Key="AccentGlassStrongBrush" Color="#2E55C244" po:Freeze="False"/>
+    <SolidColorBrush x:Key="AccentBorderBrush" Color="#4D55C244" po:Freeze="False"/>
+
+    <!-- Semantic Colors -->
+    <SolidColorBrush x:Key="WarningBrush" Color="#FACC15" po:Freeze="False"/>
+    <SolidColorBrush x:Key="DangerBrush" Color="#F87171" po:Freeze="False"/>
+    <SolidColorBrush x:Key="SuccessBrush" Color="#4ADE80" po:Freeze="False"/>
+    <SolidColorBrush x:Key="InfoBrush" Color="#38BDF8" po:Freeze="False"/>
+
+    <!-- ========== CORNER RADII ========== -->
+    <CornerRadius x:Key="RadiusXLarge">16</CornerRadius>
+    <CornerRadius x:Key="RadiusLarge">12</CornerRadius>
+    <CornerRadius x:Key="RadiusMedium">8</CornerRadius>
+    <CornerRadius x:Key="RadiusSmall">6</CornerRadius>
+    <CornerRadius x:Key="RadiusPill">12</CornerRadius>
+    <CornerRadius x:Key="RadiusCard">16</CornerRadius>
+
+</ResourceDictionary>

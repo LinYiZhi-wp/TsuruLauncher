@@ -1,84 +1,0 @@
-µusing System;
-using System.IO;
-using Newtonsoft.Json;
-using GeminiLauncher.Models;
-
-namespace GeminiLauncher.Services
-{
-    public class AppConfig
-    {
-        public string JavaPath { get; set; } = string.Empty;
-        public string GamePath { get; set; } = string.Empty; // .minecraft path
-        public int MaxRam { get; set; } = 4096;
-        public string DownloadSource { get; set; } = "Official"; // Official, BMCLAPI, MCBBS
-        public Account? SelectedAccount { get; set; }
-        public bool VersionIsolation { get; set; } = true;
-        public string Language { get; set; } = "en-US";
-        public string? LastSelectedVersionId { get; set; }
-
-        // Personalization
-        public string? BackgroundImagePath { get; set; }
-        public double BackgroundOpacity { get; set; } = 0.6; // Default 60% opacity for overlay (40% visibility for image)
-        public double BlurEffectRadius { get; set; } = 0; // Default no blur
-
-        // Launch Settings
-        public int LauncherVisibility { get; set; } = 0; // 0: Keep Open, 1: Hide, 2: Close
-        public int ProcessPriority { get; set; } = 0; // 0: Normal, 1: High
-
-        // Download Settings
-        public int MaxDownloadThreads { get; set; } = 64;
-
-        // Advanced Launch Settings
-        public string GlobalJvmArguments { get; set; } = string.Empty;
-        public string GlobalGameArguments { get; set; } = string.Empty;
-        public string CustomWindowTitle { get; set; } = string.Empty;
-
-        // UI Customization
-        public List<string> HiddenPageKeys { get; set; } = new List<string>();
-    }
-
-    public class ConfigService
-    {
-        private const string ConfigFileName = "config.json";
-        private readonly string _configPath;
-        public AppConfig Settings { get; private set; }
-
-        public ConfigService()
-        {
-            _configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFileName);
-            Settings = LoadConfig();
-        }
-
-        private AppConfig LoadConfig()
-        {
-            if (!File.Exists(_configPath))
-            {
-                return new AppConfig();
-            }
-
-            try
-            {
-                string json = File.ReadAllText(_configPath);
-                return JsonConvert.DeserializeObject<AppConfig>(json) ?? new AppConfig();
-            }
-            catch
-            {
-                return new AppConfig();
-            }
-        }
-
-        public void SaveConfig()
-        {
-            try
-            {
-                string json = JsonConvert.SerializeObject(Settings, Formatting.Indented);
-                File.WriteAllText(_configPath, json);
-            }
-            catch (Exception)
-            {
-                // Handle logging here later
-            }
-        }
-    }
-}
-ï *cascade08ïÀ*cascade08Àû *cascade08û¬ *cascade08¬¯¯¨ *cascade08¨’	*cascade08’	ë	 *cascade08ë	ï	*cascade08ï	ð	 *cascade08ð	ê*cascade08êì *cascade08ìÛ*cascade08Ûß *cascade08ßµ *cascade082Jfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Services/ConfigService.cs

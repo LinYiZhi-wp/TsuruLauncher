@@ -1,2 +1,0 @@
-C:\Users\Linyizhi\.gemini\GeminiLauncher\Views\VersionSelectorPage.xaml(93,67): error MC3000: “Name cannot begin with the '4' character, hexadecimal value 0x34. Line 93, position 67.”XML 无效。 [C:\Users\Linyizhi\.gemini\GeminiLauncher\GeminiLauncher.csproj]
-C:\Users\Linyizhi\.gemini\GeminiLauncher\Views\VersionSelectorPage.xaml(93,67): error MC3000: “Name cannot begin with the '4' character, hexadecimal value 0x34. Line 93, position 67.”XML 无效。 [C:\Users\Linyizhi\.gemini\GeminiLauncher\GeminiLauncher.csproj]

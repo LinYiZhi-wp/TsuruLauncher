@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "Plan to restore the correct navigation for the 'Download' sidebar item. Reverts the mapping from DownloadManagerPage back to DownloadPage (Version selection). Ensures that the Download Manager is only accessed as an activity view.",
-  "updatedAt": "2026-02-11T17:05:59.711223500Z"
-}

@@ -1,26 +1,0 @@
-É
-<UserControl x:Class="GeminiLauncher.Views.DownloadManagerPanel"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-             mc:Ignorable="d" 
-             d:DesignHeight="450" d:DesignWidth="350">
-    <UserControl.Resources>
-        <Storyboard x:Key="PulsateAnimation" RepeatBehavior="Forever" AutoReverse="True">
-            <DoubleAnimation Storyboard.TargetName="FabButton" 
-                              Storyboard.TargetProperty="(UIElement.Effect).(DropShadowEffect.BlurRadius)"
-                              From="15" To="35" Duration="0:0:1"/>
-            <DoubleAnimation Storyboard.TargetName="FabButton" 
-                              Storyboard.TargetProperty="Opacity"
-                              From="1.0" To="0.8" Duration="0:0:1"/>
-        </Storyboard>
-    </UserControl.Resources>
-
-    <Grid>
-        <!-- Logic removed: Floating button is now handled by Main Window TitleBar button -->
-    </Grid>
-</UserControl>
-ñ *cascade08ñô*cascade08ôö *cascade08ö´*cascade08´∑ *cascade08∑¡*cascade08¡¬ *cascade08¬À*cascade08ÀÃ *cascade08Ã‘*cascade08‘◊ *cascade08◊ÿ*cascade08ÿŸ *cascade08Ÿ⁄*cascade08⁄€ *cascade08€Î*cascade08ÎÏ *cascade08ÏÙ*cascade08Ùı *cascade08ı¿*cascade08¿¡ *cascade08¡Â*cascade08ÂÊ *cascade08ÊÁ *cascade08ÁË*cascade08ËÉ *cascade08ÉÑ *cascade08Ñ∂ *cascade08∂∑*cascade08∑‘ *cascade08‘’ *cascade08’ﬂ*cascade08ﬂ‡ *cascade08‡È*cascade08ÈÏ *cascade08ÏÌ*cascade08ÌÓ *cascade08ÓÖ*cascade08ÖÜ *cascade08Üç*cascade08çé *cascade08éí*cascade08íó *cascade08ó±*cascade08±∑ *cascade08∑ÿ *cascade08ÿŸ*cascade08Ÿ˛ *cascade08˛ˇ*cascade08ˇî	 *cascade08î	ï	*cascade08ï	ó	 *cascade08ó	û	 *cascade08û	ü	*cascade08ü	°	 *cascade08°	¢	*cascade08¢	£	 *cascade08£	§	*cascade08§	•	 *cascade08•	¶	 *cascade08¶	ß	 *cascade08ß	¨	 *cascade08¨	¥	 *cascade08¥	µ	*cascade08µ	∏	 *cascade08∏	π	*cascade08π	º	 *cascade08º	Ω	*cascade08Ω	æ	 *cascade08æ	ø	*cascade08ø	¡	 *cascade08¡	¬	 *cascade08¬	√	*cascade08√	ƒ	 *cascade08ƒ	≈	 *cascade08≈	∆	*cascade08∆	 	 *cascade08 	À	*cascade08À	Õ	 *cascade08Õ	Œ	*cascade08Œ	œ	 *cascade08œ	–	*cascade08–	‘	 *cascade08‘	’	*cascade08’	·	 *cascade08·	„	*cascade08„	‰	 *cascade08‰	É
- *cascade082Pfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Views/DownloadManagerPanel.xaml

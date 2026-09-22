@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "Critical fix plan for resource categorization UI, background download manager visibility, game download failures, and launch errors. Includes logic for modern asset indices and improved mirror URL replacement.",
-  "updatedAt": "2026-02-11T16:47:17.951221100Z"
-}

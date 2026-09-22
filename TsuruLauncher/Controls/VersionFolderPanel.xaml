@@ -1,0 +1,59 @@
+<UserControl x:Class="TsuruLauncher.Controls.VersionFolderPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:anim="clr-namespace:TsuruLauncher.Services.Animation"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             Background="Transparent">
+
+    <!-- 「版本选择」页的文件夹列表 —— 原来它挤在版本列表**左边**一列，观感很别扭；
+         现在整块搬到右侧信息栏（外壳的 InfoPanelFolderListHost 里承载），
+         标题行那个 📂 切换按钮也一并删掉了（没有可切换的东西了）。
+         进出 / 列表项都有过渡动画。 -->
+    <Grid Margin="0,2,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock Text="文件夹列表" FontSize="15" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock x:Name="CountText" FontSize="11" Margin="0,3,0,0"
+                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Template="{DynamicResource GlassScrollViewer}">
+            <ItemsControl x:Name="FolderList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <!-- 每一项：名字 + 路径，选中态用 accent 描边（和版本卡同一套语言） -->
+                        <Border x:Name="Row" Background="{DynamicResource Surface2Brush}"
+                                BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"
+                                CornerRadius="12" Padding="11,9" Margin="0,0,0,7"
+                                Cursor="Hand" Tag="{Binding}"
+                                MouseLeftButtonUp="Row_MouseLeftButtonUp"
+                                Loaded="Row_Loaded"
+                                Opacity="0">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Path}" FontSize="10.5" Margin="0,3,0,0"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <Button Grid.Row="2" x:Name="AddFolderBtn" Content="＋ 添加文件夹"
+                Height="34" Margin="0,10,0,0" Cursor="Hand"
+                Style="{StaticResource iOS26.SecondaryButton}"
+                Click="AddFolder_Click"/>
+    </Grid>
+</UserControl>

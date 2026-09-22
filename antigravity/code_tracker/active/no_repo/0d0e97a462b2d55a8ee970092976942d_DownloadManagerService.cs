@@ -1,364 +1,0 @@
-Ğ~using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
-using System.Windows;
-using GeminiLauncher.Models;
-using GeminiLauncher.Models.Ecosystem;
-using GeminiLauncher.Services.Network;
-using Newtonsoft.Json.Linq;
-using CommunityToolkit.Mvvm.ComponentModel;
-
-namespace GeminiLauncher.Services.Network
-{
-    public partial class DownloadManagerService : ObservableObject
-    {
-        private static DownloadManagerService? _instance;
-        public static DownloadManagerService Instance => _instance ??= new DownloadManagerService();
-
-        public ObservableCollection<DownloadTask> ActiveTasks { get; } = new ObservableCollection<DownloadTask>();
-
-        [ObservableProperty] private string _totalProgressText = "0.00 %";
-        [ObservableProperty] private string _globalSpeedText = "0 KB/s";
-        [ObservableProperty] private int _totalRemainingFiles;
-        [ObservableProperty] private bool _anyActiveTasks;
-
-        private readonly VersionManifestService _manifestService = new();
-        private readonly DownloadService _downloadService = new();
-        private readonly HttpClient _httpClient = new();
-        private readonly System.Windows.Threading.DispatcherTimer _speedTimer;
-
-        private DownloadManagerService() 
-        {
-            _speedTimer = new System.Windows.Threading.DispatcherTimer();
-            _speedTimer.Interval = TimeSpan.FromSeconds(1);
-            _speedTimer.Tick += SpeedTimer_Tick;
-            _speedTimer.Start();
-        }
-
-        private void SpeedTimer_Tick(object? sender, EventArgs e)
-        {
-            long totalDelta = 0;
-            double weightedProgress = 0;
-            int totalFiles = 0;
-            int activeTaskCount = 0;
-
-            foreach (var task in ActiveTasks)
-            {
-                if (task.IsCompleted || task.IsFailed)
-                {
-                    task.SpeedText = "0 KB/s";
-                    continue;
-                }
-
-                activeTaskCount++;
-                long delta = task.DownloadedBytes - task.LastDownloadedBytes;
-                task.LastDownloadedBytes = task.DownloadedBytes;
-                totalDelta += delta;
-
-                if (delta < 1024) task.SpeedText = $"{delta} B/s";
-                else if (delta < 1024 * 1024) task.SpeedText = $"{(delta / 1024.0):F1} KB/s";
-                else task.SpeedText = $"{(delta / (1024.0 * 1024.0)):F1} MB/s";
-
-                weightedProgress += task.Progress;
-                totalFiles += task.RemainingFiles;
-            }
-
-            // Update Global Stats
-            if (activeTaskCount > 0)
-            {
-                TotalProgressText = $"{(weightedProgress / activeTaskCount * 100):F2} %";
-                TotalRemainingFiles = totalFiles;
-                
-                if (totalDelta < 1024) GlobalSpeedText = $"{totalDelta} B/s";
-                else if (totalDelta < 1024 * 1024) GlobalSpeedText = $"{(totalDelta / 1024.0):F1} KB/s";
-                else GlobalSpeedText = $"{(totalDelta / (1024.0 * 1024.0)):F1} MB/s";
-            }
-            else
-            {
-                TotalProgressText = "0.00 %";
-                GlobalSpeedText = "0 KB/s";
-                TotalRemainingFiles = 0;
-            }
-
-            AnyActiveTasks = ActiveTasks.Any(t => !t.IsCompleted && !t.IsFailed);
-        }
-
-        public async Task EnqueueGenericDownload(string name, string url, string destination)
-        {
-            var task = new DownloadTask { Name = name, Status = "Pending..." };
-            ActiveTasks.Add(task);
-            
-            try
-            {
-                task.Status = "Downloading...";
-                await _downloadService.DownloadFileAsync(url, destination, null, new Progress<long>(bytes => task.IncrementBytes(bytes)), task.Cts.Token);
-                task.Status = "Completed";
-                task.IsCompleted = true;
-                task.Progress = 1.0;
-            }
-            catch (Exception ex)
-            {
-                task.Status = "Failed";
-                task.IsFailed = true;
-                task.ErrorMessage = ex.Message;
-            }
-        }
-
-        public async Task EnqueueGameDownload(DownloadableVersion version, string loaderChoice, string source)
-        {
-            var task = new DownloadTask { Name = version.Id, Status = "Preparing..." };
-            ActiveTasks.Add(task);
-
-            await AttemptDownloadAsync(task, version, loaderChoice, source);
-        }
-
-        private async Task AttemptDownloadAsync(DownloadTask task, DownloadableVersion version, string loaderChoice, string source)
-        {
-            try
-            {
-                // If retrying, reset failure state
-                task.IsFailed = false;
-                task.ErrorMessage = string.Empty;
-
-                await DownloadGameFullAsync(task, version, loaderChoice, source);
-                
-                task.Status = "Completed";
-                task.IsCompleted = true;
-                task.Progress = 1.0;
-            }
-            catch (OperationCanceledException)
-            {
-                task.Status = "Canceled";
-                task.IsFailed = true;
-            }
-            catch (Exception ex)
-            {
-                // Auto-Fallback Logic for Network/Server Errors
-                // If we are using a mirror (not Official) and encounter an error, try switching to Official source.
-                if (source != "Official")
-                {
-                    task.Status = $"é•œåƒæºå¼‚å¸¸ ({ex.Message})ï¼Œæ­£åœ¨åˆ‡æ¢è‡³å®˜æ–¹æºé‡è¯•...";
-                    await Task.Delay(2000); // Give user time to read status
-                    
-                    // Recursive retry with Official source
-                    await AttemptDownloadAsync(task, version, loaderChoice, "Official");
-                    return;
-                }
-
-                task.Status = "Failed";
-                task.IsFailed = true;
-                task.ErrorMessage = ex.Message;
-                // Only show message box on final failure
-                MessageBox.Show($"Download failed permanently: {ex.Message}");
-            }
-        }
-
-        private async Task DownloadGameFullAsync(DownloadTask task, DownloadableVersion version, string loaderChoice, string source)
-        {
-            var mainVM = ((App)Application.Current).MainWindow.DataContext as GeminiLauncher.ViewModels.MainViewModel;
-            string gamePath = mainVM?.ConfigService.Settings.GamePath ?? ".minecraft";
-            string versionDir = Path.Combine(gamePath, "versions", version.Id);
-            Directory.CreateDirectory(versionDir);
-
-            // 1. Download version.json
-            task.Status = "æ­£åœ¨è·å–ç‰ˆæœ¬ä¿¡æ¯...";
-            task.JsonStatus = "ä¸‹è½½ä¸­...";
-            task.JsonStatusText = "version.json";
-            string jsonUrl = ReplaceSource(version.Url, source);
-            string jsonPath = Path.Combine(versionDir, $"{version.Id}.json");
-            await _downloadService.DownloadFileAsync(jsonUrl, jsonPath, null, null, task.Cts.Token);
-            task.JsonProgress = 1.0;
-            task.JsonStatus = "å·²å®Œæˆ";
-            task.JsonStatusText = "å·²å®Œæˆ";
-
-            string jsonContent = File.ReadAllText(jsonPath);
-            var json = JObject.Parse(jsonContent);
-
-            var downloadRequests = new List<DownloadRequest>();
-
-            // 2. Client.jar
-            var clientDownloads = json["downloads"]?["client"];
-            if (clientDownloads != null)
-            {
-                string clientUrl = ReplaceSource(clientDownloads["url"]?.ToString() ?? "", source);
-                string clientPath = Path.Combine(versionDir, $"{version.Id}.jar");
-                downloadRequests.Add(new DownloadRequest(clientUrl, clientPath, clientDownloads["sha1"]?.ToString()));
-            }
-
-            // 3. Libraries
-            task.Status = "æ­£åœ¨ç´¢å¼•ä¾èµ–åº“...";
-            task.LibrariesStatus = "ä¸‹è½½ä¸­...";
-            task.LibrariesStatusText = "å‡†å¤‡ä¸­...";
-            var libs = json["libraries"];
-            if (libs != null)
-            {
-                foreach (var lib in libs)
-                {
-                    var artifact = lib["downloads"]?["artifact"];
-                    if (artifact != null)
-                    {
-                        string libUrl = ReplaceSource(artifact["url"]?.ToString() ?? "", source);
-                        string relativePath = artifact["path"]?.ToString() ?? "";
-                        if (string.IsNullOrEmpty(relativePath)) continue;
-
-                        string libPath = Path.Combine(gamePath, "libraries", relativePath);
-                        downloadRequests.Add(new DownloadRequest(libUrl, libPath, artifact["sha1"]?.ToString()));
-                    }
-                }
-            }
-
-            // 4. Assets
-            task.Status = "æ­£åœ¨ç´¢å¼•èµ„æºæ–‡ä»¶...";
-            task.AssetsStatus = "ä¸‹è½½ä¸­...";
-            task.AssetsStatusText = "å‡†å¤‡ä¸­...";
-            var assetIndex = json["assetIndex"];
-            if (assetIndex != null)
-            {
-                string indexUrl = ReplaceSource(assetIndex["url"]?.ToString() ?? "", source);
-                string indexId = assetIndex["id"]?.ToString() ?? "legacy";
-                string indexPath = Path.Combine(gamePath, "assets", "indexes", $"{indexId}.json");
-                
-                await _downloadService.DownloadFileAsync(indexUrl, indexPath, assetIndex["sha1"]?.ToString(), null, task.Cts.Token);
-                
-                var indexJson = JObject.Parse(File.ReadAllText(indexPath));
-                var objects = indexJson["objects"];
-                if (objects != null)
-                {
-                    foreach (var obj in (JObject)objects)
-                    {
-                        string hash = obj.Value?["hash"]?.ToString() ?? "";
-                        if (string.IsNullOrEmpty(hash)) continue;
-
-                        string assetUrl = ReplaceSource(
-                            $"https://resources.download.minecraft.net/{hash[..2]}/{hash}", 
-                            source);
-                        
-                        string assetPath = Path.Combine(gamePath, "assets", "objects", hash[..2], hash);
-                        downloadRequests.Add(new DownloadRequest(assetUrl, assetPath, hash));
-                    }
-                }
-            }
-
-            // 5. Start Batch Download
-            task.Status = "æ­£åœ¨ä¸‹è½½ç»„ä»¶...";
-            var pendingRequests = downloadRequests.Where(r => !File.Exists(r.DestinationPath)).ToList();
-            task.RemainingFiles = pendingRequests.Count;
-
-            long completedCount = 0;
-            long lastUpdateTick = 0;
-
-            var progress = new Progress<double>(p => {
-                try
-                {
-                    completedCount++;
-                    
-                    long currentTick = Environment.TickCount64;
-                    // Throttle UI updates to ~20fps (50ms) to avoid flooding the UI thread
-                    if (currentTick - lastUpdateTick < 50 && completedCount < pendingRequests.Count) return;
-                    lastUpdateTick = currentTick;
-
-                    task.RemainingFiles = (int)(pendingRequests.Count - completedCount);
-                    task.Progress = pendingRequests.Count > 0 ? (double)completedCount / pendingRequests.Count : 1.0;
-                    task.SizeText = $"{completedCount} / {pendingRequests.Count} ä¸ªæ–‡ä»¶";
-
-                    // Map to sub-progresses for UI (Heuristic)
-                    if (task.Progress < 0.3) {
-                        task.LibrariesProgress = task.Progress / 0.3;
-                        task.LibrariesStatusText = $"{completedCount} æ–‡ä»¶";
-                    } else {
-                        task.LibrariesProgress = 1.0;
-                        task.LibrariesStatus = "å·²å®Œæˆ";
-                        task.LibrariesStatusText = "å·²å®Œæˆ";
-                        task.AssetsProgress = Math.Min(1.0, (task.Progress - 0.3) / 0.7);
-                        task.AssetsStatusText = $"{completedCount} æ–‡ä»¶";
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Log but don't crash
-                    System.Diagnostics.Debug.WriteLine($"Progress Error: {ex}");
-                }
-            });
-
-            // Use SynchronousProgress to avoid marshalling every byte update to the UI thread (performance)
-            var byteProgress = new SynchronousProgress<long>(bytes => task.IncrementBytes(bytes));
-
-            if (pendingRequests.Any())
-            {
-                await _downloadService.DownloadBatchAsync(pendingRequests, progress, byteProgress, task.Cts.Token);
-            }
-
-            task.LibrariesProgress = 1.0;
-            task.LibrariesStatus = "å·²å®Œæˆ";
-            task.LibrariesStatusText = "å·²å®Œæˆ";
-            task.AssetsProgress = 1.0;
-            task.AssetsStatus = "å·²å®Œæˆ";
-            task.AssetsStatusText = "å·²å®Œæˆ";
-
-            // 6. Loader installation
-            if (loaderChoice != "Vanilla")
-            {
-                task.Status = $"æ­£åœ¨å®‰è£… {loaderChoice}...";
-                task.ComponentsStatus = "æ­£åœ¨å®‰è£…";
-                task.ComponentsStatusText = $"{loaderChoice}";
-                // ... (Assume installation logic here)
-                task.ComponentsProgress = 1.0;
-                task.ComponentsStatus = "å·²å®Œæˆ";
-                task.ComponentsStatusText = "å·²å®Œæˆ";
-            }
-            else {
-                task.ComponentsProgress = 1.0;
-                task.ComponentsStatus = "å·²å®Œæˆ";
-                task.ComponentsStatusText = "æ— éœ€å®‰è£…";
-            }
-        }
-
-        public string ReplaceSource(string originalUrl, string source)
-        {
-            if (string.IsNullOrEmpty(originalUrl) || source == "Official") return originalUrl;
-
-            // Mapping rules for different mirrors
-            return source switch
-            {
-                "BMCLAPI" => originalUrl
-                    .Replace("piston-meta.mojang.com", "bmclapi2.bangbang93.com")
-                    .Replace("launchermeta.mojang.com", "bmclapi2.bangbang93.com")
-                    .Replace("launcher.mojang.com", "bmclapi2.bangbang93.com")
-                    .Replace("libraries.minecraft.net", "bmclapi2.bangbang93.com/maven")
-                    .Replace("resources.download.minecraft.net", "bmclapi2.bangbang93.com/assets")
-                    .Replace("files.minecraftforge.net/maven", "bmclapi2.bangbang93.com/maven")
-                    .Replace("maven.minecraftforge.net", "bmclapi2.bangbang93.com/maven")
-                    .Replace("maven.fabricmc.net", "bmclapi2.bangbang93.com/maven"),
-
-                "FastMirror" => originalUrl
-                    .Replace("piston-meta.mojang.com", "download.fastmirror.net")
-                    .Replace("launchermeta.mojang.com", "download.fastmirror.net")
-                    .Replace("launcher.mojang.com", "download.fastmirror.net")
-                    .Replace("libraries.minecraft.net", "download.fastmirror.net/maven")
-                    .Replace("resources.download.minecraft.net", "download.fastmirror.net/assets"),
-
-                "MCMirror" => originalUrl
-                    .Replace("piston-meta.mojang.com", "mirrors.mcfx.net")
-                    .Replace("launchermeta.mojang.com", "mirrors.mcfx.net")
-                    .Replace("launcher.mojang.com", "mirrors.mcfx.net")
-                    .Replace("libraries.minecraft.net", "mirrors.mcfx.net/maven")
-                    .Replace("resources.download.minecraft.net", "mirrors.mcfx.net/assets"),
-
-                _ => originalUrl
-            };
-        }
-    }
-}
-À *cascade08ÀÈ*cascade08È¡ *cascade08¡ï *cascade08ï«*cascade08«µ *cascade08µö	 *cascade08ö	Æ
-*cascade08Æ
-ñ
- *cascade08ñ
-û
-*cascade08û
-ü
- *cascade08ü
-µ *cascade08µÊ*cascade08Ê· *cascade08·Û*cascade08Ûì *cascade08ìò*cascade08òó *cascade08óô*cascade08ôõ *cascade08õø*cascade08øù *cascade08ùú*cascade08úû *cascade08û…*cascade08…‡ *cascade08‡Œ*cascade08Œ *cascade08‘*cascade08‘’ *cascade08’›*cascade08› *cascade08*cascade08Ÿ *cascade08Ÿ¤*cascade08¤¦ *cascade08¦¨*cascade08¨½ *cascade08½Á*cascade08ÁÂ *cascade08ÂÃ*cascade08ÃÌ *cascade08ÌĞ*cascade08ĞÒ *cascade08ÒÔ*cascade08Ô× *cascade08×Û*cascade08Ûä *cascade08äå*cascade08åé *cascade08éì*cascade08ì’*cascade08’¤ *cascade08¤¦*cascade08¦§ *cascade08§©*cascade08©ª *cascade08ª¬*cascade08¬® *cascade08®¯*cascade08¯° *cascade08°µ*cascade08µ¸ *cascade08¸¹*cascade08¹º *cascade08º¼*cascade08¼¾ *cascade08¾Ä*cascade08ÄÅ *cascade08ÅË*cascade08ËÌ *cascade08ÌÖ*cascade08Öè *cascade08èì*cascade08ìî *cascade08îï*cascade08ïğ *cascade08ğó*cascade08óô *cascade08ôõ*cascade08õö *cascade08ö‡*cascade08‡ˆ *cascade08ˆ‹*cascade08‹Œ *cascade08Œ*cascade08 *cascade08‘*cascade08‘’ *cascade08’”*cascade08”• *cascade08•–*cascade08–— *cascade08—œ*cascade08œ *cascade08Ä *cascade08ÄÅ *cascade08ÅÇ*cascade08ÇÉ *cascade08ÉË*cascade08ËÌ *cascade08ÌÒ*cascade08ÒÕ *cascade08ÕÙ*cascade08ÙÛ *cascade08ÛÜ*cascade08Üİ *cascade08İá*cascade08áç *cascade08çò*cascade08òó *cascade08óÿ*cascade08ÿ€ *cascade08€ƒ*cascade08ƒ„ *cascade08„… *cascade08…¿*cascade08¿À *cascade08ÀÏ *cascade08Ï¤*cascade08¤­ *cascade08­Õ *cascade08Õˆ"*cascade08ˆ"ì# *cascade08ì#×%×%é% *cascade08é%û&û&Ğ' *cascade08Ğ'â'â'¾* *cascade08¾*Ë/Ë/Ü0 *cascade08Ü0—1—1¸1 *cascade08¸1Ä1Ä1Ÿ6 *cascade08Ÿ6Ä6*cascade08Ä6Å6 *cascade08Å6Ì6*cascade08Ì6Í6 *cascade08Í6Ñ6*cascade08Ñ6Ó6 *cascade08Ó6Ù6*cascade08Ù6Ú6 *cascade08Ú6æ6*cascade08æ6ù6 *cascade08ù6ˆ7 *cascade08ˆ7Œ7*cascade08Œ77 *cascade087•7*cascade08•7—7 *cascade08—7š7*cascade08š7¬7 *cascade08¬7—9 *cascade08—9Ü9 *cascade08Ü9ü9*cascade08ü9ı9 *cascade08ı9ÿ9*cascade08ÿ9€: *cascade08€:…:*cascade08…:†: *cascade08†:•:*cascade08•:™: *cascade08™:ä? *cascade08ä?„@*cascade08„@…@ *cascade08…@’@*cascade08’@š@ *cascade08š@­@*cascade08­@´@ *cascade08´@Ô@ *cascade08Ô@Ø@*cascade08Ø@Ü@ *cascade08Ü@å@*cascade08å@ì@ *cascade08ì@ËG *cascade08ËGõG*cascade08õGöG *cascade08öG÷G*cascade08÷GøG *cascade08øGüG*cascade08üGH *cascade08H”H*cascade08”H›H *cascade08›H¸H *cascade08¸H¼H*cascade08¼HÀH *cascade08ÀHÉH*cascade08ÉHĞH *cascade08ĞH¸P *cascade08¸PÀP*cascade08ÀPÅP *cascade08ÅPÆP*cascade08ÆPîP *cascade08îPôP*cascade08ôPõP *cascade08õPüP*cascade08üPıP *cascade08ıPşP*cascade08şPÿP *cascade08ÿP€Q*cascade08€QQ *cascade08QƒQ*cascade08ƒQ„Q *cascade08„Q‡Q*cascade08‡QˆQ *cascade08ˆQŠQ*cascade08ŠQ‹Q *cascade08‹QŒQ*cascade08ŒQ¢Q *cascade08¢Q¤Q*cascade08¤QÈQ *cascade08ÈQÉQ*cascade08ÉQ­T *cascade08­T¿T*cascade08¿TÒT *cascade08ÒTÓT*cascade08ÓTÔT *cascade08ÔTÚT*cascade08ÚTÛT *cascade08ÛTŞT*cascade08ŞTßT *cascade08ßTåT*cascade08åTùT *cascade08ùT€U*cascade08€UU *cascade08UƒU*cascade08ƒU„U *cascade08„U†U*cascade08†U‰U *cascade08‰U˜U*cascade08˜U™U *cascade08™UšU*cascade08šU›U *cascade08›UœU*cascade08œUU *cascade08U¦U*cascade08¦U§U *cascade08§U°U*cascade08°U³U *cascade08³U¼U*cascade08¼U¿U *cascade08¿UÅU*cascade08ÅUÆU *cascade08ÆUÍU*cascade08ÍUĞU *cascade08ĞUÑU*cascade08ÑUÒU *cascade08ÒUÖU*cascade08ÖU×U *cascade08×UÚU*cascade08ÚUÛU *cascade08ÛUêU*cascade08êU’V *cascade08’VºV*cascade08ºV‚W *cascade08‚W®W®W¿W *cascade08¿WÑW *cascade08ÑWÕWÕW×W *cascade08×WÛWÛW˜X *cascade08˜XšXšXªX *cascade08ªX¬X¬XõX *cascade08õXùXùXãY *cascade08ãYæYæYöY *cascade08öY÷Y÷Y–Z *cascade08–Z˜Z *cascade08˜ZœZœZ±Z *cascade08±ZòZ *cascade08òZõZõZ…[ *cascade08…[†[†[‹[ *cascade08‹[–[ *cascade08–[²[*cascade08²[Ë[ *cascade08Ë[Î[*cascade08Î[Ï[ *cascade08Ï[Ğ[*cascade08Ğ[Ñ[ *cascade08Ñ[Ò[*cascade08Ò[à[ *cascade08à[æ[*cascade08æ[ù[ *cascade08ù[ı[ı[£\ *cascade08£\¦\*cascade08¦\§\ *cascade08§\¨\*cascade08¨\©\ *cascade08©\ª\*cascade08ª\º\ *cascade08º\Ã\*cascade08Ã\Ç\ *cascade08Ç\É\*cascade08É\Í\Í\à\ *cascade08à\ä\*cascade08ä\å\ *cascade08å\ì\*cascade08ì\í\ *cascade08í\õ\*cascade08õ\ö\ *cascade08ö\÷\*cascade08÷\ø\ *cascade08ø\ù\*cascade08ù\ú\ *cascade08ú\ÿ\*cascade08ÿ\€] *cascade08€]‚]*cascade08‚]†] *cascade08†]‡] *cascade08‡]š] *cascade08š]]]Ÿ] *cascade08Ÿ] ]*cascade08 ]¡] *cascade08¡]©]*cascade08©]ª] *cascade08ª]«]*cascade08«]­] *cascade08­]¸]*cascade08¸]º] *cascade08º]¾]¾]Â]*cascade08Â]Î] *cascade08Î]Ó]*cascade08Ó]Ô] *cascade08Ô]Ú]*cascade08Ú]Û] *cascade08Û]İ]*cascade08İ]Ş] *cascade08Ş]ã]*cascade08ã]ä] *cascade08ä]å]*cascade08å]æ] *cascade08æ]õ]*cascade08õ]÷] *cascade08÷]^ *cascade08^‚^‚^–^ *cascade08–^™^™^š^ *cascade08š^¬^*cascade08¬^­^ *cascade08­^±^*cascade08±^´^ *cascade08´^µ^*cascade08µ^¶^ *cascade08¶^¸^*cascade08¸^¹^ *cascade08¹^»^*cascade08»^¼^ *cascade08¼^¿^*cascade08¿^À^ *cascade08À^Ã^*cascade08Ã^Ä^ *cascade08Ä^Í^*cascade08Í^á^ *cascade08á^å^å^ç^ *cascade08ç^è^ *cascade08è^é^*cascade08é^ê^ *cascade08ê^ï^ *cascade08ï^ñ^ñ^…_ *cascade08…_‡_‡_ˆ_ *cascade08ˆ_‰_*cascade08‰_Š_ *cascade08Š_‹_*cascade08‹_Œ_ *cascade08Œ_‘_*cascade08‘_’_ *cascade08’_“_*cascade08“_”_ *cascade08”_–_*cascade08–_—_ *cascade08—__*cascade08_Ÿ_ *cascade08Ÿ_¦_ *cascade08¦_ª_ª_´_ *cascade08´_µ_ *cascade08µ_Ä_*cascade08Ä_Å_ *cascade08Å_Ö_ *cascade08Ö_ã_ *cascade08ã_æ_æ_ú_ *cascade08ú_û_û_‡` *cascade08‡`ˆ` *cascade08ˆ`Š`*cascade08Š`‹` *cascade08‹``*cascade08`‘` *cascade08‘` `*cascade08 `¤` *cascade08¤`¨`¨`À` *cascade08À`Á` *cascade08Á`Ã`*cascade08Ã`Ä` *cascade08Ä`Å`*cascade08Å`Ç` *cascade08Ç`Ò`*cascade08Ò`à`*cascade08à`á` *cascade08á`ç`*cascade08ç`è` *cascade08è`ò`*cascade08ò`ó` *cascade08ó`û` *cascade08û`ü`*cascade08ü`ÿ` *cascade08ÿ`ƒaƒaŸa *cascade08Ÿa a *cascade08 a¡a*cascade08¡a¢a *cascade08¢a£a*cascade08£a¦a *cascade08¦a¨a *cascade08¨a¬a*cascade08¬a¯a *cascade08¯a°a*cascade08°a±a *cascade08±a³a*cascade08³a´a *cascade08´a¶a*cascade08¶a·a *cascade08·aºa*cascade08ºa»a *cascade08»a¾a*cascade08¾a¿a *cascade08¿aÈa*cascade08ÈaÜa *cascade08Üaàaàaïa *cascade08ïaóaóaôa *cascade08ôa¡e¡e£e *cascade08£e¥e*cascade08¥eªf *cascade08ªf¸f¸fğf *cascade08ğf³g *cascade08³gØg*cascade08ØgÙg *cascade08ÙgÛg*cascade08ÛgÜg *cascade08Ügág*cascade08ágâg *cascade08âgñg*cascade08ñg¾h *cascade08¾hßh*cascade08ßháh *cascade08áhéh*cascade08éhêh *cascade08êhùh*cascade08ùh‹i *cascade08‹ij *cascade08jj*cascade08j³j *cascade08³jºj*cascade08ºj¼j *cascade08¼j¾j*cascade08¾jÁj *cascade08ÁjÄj*cascade08ÄjÆj *cascade08ÆjÌj *cascade08Ìjöj*cascade08öj÷j *cascade08÷jøj*cascade08øjùj *cascade08ùj”k*cascade08”k•k *cascade08•k˜k*cascade08˜k£k *cascade08£k¤k *cascade08¤k¹k*cascade08¹k¼k *cascade08¼k½k*cascade08½k¾k *cascade08¾kÂk*cascade08ÂkÄk *cascade08ÄkÇk*cascade08ÇkÉk *cascade08ÉkËk*cascade08ËkÌk *cascade08ÌkÑk*cascade08ÑkÒk *cascade08Òkàk*cascade08àkâk *cascade08âkëk*cascade08ëkìk *cascade08ìkîk*cascade08îkïk *cascade08ïkğk*cascade08ğkñk *cascade08ñkõk*cascade08õkök *cascade08ökøk*cascade08økúk *cascade08úkƒl*cascade08ƒl•l *cascade08•l›l*cascade08›lœl *cascade08œl¬l*cascade08¬l­l *cascade08­l®l *cascade08®lĞl*cascade08ĞlÒl *cascade08ÒlÔl *cascade08ÔlÖl*cascade08Öl×l*cascade08×lÛl*cascade08ÛlÜl *cascade08Ülál*cascade08álâl *cascade08âlñl*cascade08ñlŒm *cascade08Œm’m *cascade08’m”m*cascade08”m•m *cascade08•m©m*cascade08©m«m *cascade08«m¯m*cascade08¯m°m *cascade08°m³m*cascade08³m´m *cascade08´mµm*cascade08µm¶m *cascade08¶m¾m*cascade08¾mÀm *cascade08ÀmĞm*cascade08ĞmÒm *cascade08Òm×m*cascade08×mØm *cascade08ØmÙm*cascade08ÙmÚm *cascade08Úmàm*cascade08àmám *cascade08ámåm*cascade08åmæm *cascade08æmím*cascade08ímîm *cascade08îmñm *cascade08ñm“n*cascade08“n—n *cascade08—n™n*cascade08™nšn*cascade08šn›n*cascade08›nœn *cascade08œn¤n*cascade08¤n¥n *cascade08¥n·n*cascade08·n¹n *cascade08¹nàn *cascade08ànãn*cascade08ãnän *cascade08änån*cascade08ånÜo *cascade08ÜoŞo*cascade08Şoœp *cascade08œp¢p*cascade08¢p¤p *cascade08¤p¥p*cascade08¥p§p *cascade08§p³p*cascade08³p¶p *cascade08¶p½p*cascade08½pÌp *cascade08ÌpÒp*cascade08ÒpÚp *cascade08Úpàp*cascade08àpq *cascade08qq*cascade08qìs *cascade08ìsós*cascade08ósÿs *cascade08ÿsÌt *cascade08Ìtİv*cascade08İvàv *cascade08àvñv *cascade08ñvøv*cascade08øvùv *cascade08ùvúv*cascade08úvÿv *cascade08ÿv€w*cascade08€ww *cascade08w„w*cascade08„w…w *cascade08…w‹w*cascade08‹wŒw *cascade08Œww*cascade08ww *cascade08wŸw*cascade08Ÿw w *cascade08 wªw*cascade08ªw«w *cascade08«wÇw*cascade08ÇwÈw *cascade08ÈwÔw*cascade08ÔwÕw *cascade08ÕwÖw*cascade08ÖwØw *cascade08ØwÛw*cascade08ÛwÜw *cascade08Üwîw*cascade08îwïw *cascade08ïwûw*cascade08ûwüw *cascade08üwıw*cascade08ıwşw *cascade08şwˆx*cascade08ˆxŠx *cascade08Šx“x*cascade08“x”x *cascade08”x›x*cascade08›xœx *cascade08œx§x*cascade08§xªx *cascade08ªx«x*cascade08«x°x *cascade08°xêx*cascade08êxìx *cascade08ìxûx*cascade08ûx€y *cascade08€y…y*cascade08…y”y *cascade08”y™y*cascade08™yšy *cascade08šy¸y*cascade08¸y¹y *cascade08¹y»y*cascade08»y¼y *cascade08¼y¿y*cascade08¿yÀy *cascade08ÀyÄy*cascade08ÄyÅy *cascade08ÅyËy*cascade08ËyÌy *cascade08ÌyĞy*cascade08ĞyÑy *cascade08ÑyÖy*cascade08Öy×y *cascade08×yÚy*cascade08ÚyÛy *cascade08Ûyæy*cascade08æyçy *cascade08çyùy*cascade08ùyûy *cascade08ûyıy*cascade08ıyşy *cascade08şy“z*cascade08“z”z *cascade08”z–z*cascade08–z—z *cascade08—zz*cascade08zz *cascade08zŸz*cascade08Ÿz z *cascade08 zªz*cascade08ªz«z *cascade08«z°z*cascade08°z±z *cascade08±z²z*cascade08²z³z *cascade08³zµz*cascade08µz¶z *cascade08¶z¸z*cascade08¸z¹z *cascade08¹zºz*cascade08ºz»z *cascade08»z¿z*cascade08¿zÀz *cascade08ÀzÁz*cascade08ÁzÂz *cascade08Âzãz*cascade08ãzäz *cascade08äzíz*cascade08ízîz *cascade08îz‹{*cascade08‹{Œ{ *cascade08Œ{’{*cascade08’{”{ *cascade08”{¢{*cascade08¢{¤{ *cascade08¤{ª{*cascade08ª{«{ *cascade08«{®{*cascade08®{¯{ *cascade08¯{à{*cascade08à{á{ *cascade08á{ä{*cascade08ä{å{ *cascade08å{ÿ{*cascade08ÿ{€| *cascade08€| |*cascade08 |¡| *cascade08¡|­|*cascade08­|®| *cascade08®|±|*cascade08±|²| *cascade08²|À|*cascade08À|Á| *cascade08Á|Â|*cascade08Â|Ã| *cascade08Ã|Æ|*cascade08Æ|È| *cascade08È|Ğ|*cascade08Ğ|Ñ| *cascade08Ñ|ß|*cascade08ß|à| *cascade08à|í|*cascade08í|î| *cascade08î|÷|*cascade08÷|ø| *cascade08ø|}*cascade08}ƒ} *cascade08ƒ}}*cascade08}‘} *cascade08‘}•}*cascade08•}–} *cascade08–}}*cascade08}} *cascade08}§}*cascade08§}µ} *cascade08µ}Ç}*cascade08Ç}É} *cascade08É}Ë}*cascade08Ë}Í} *cascade08Í}Ô}*cascade08Ô}Õ} *cascade08Õ}~*cascade08~©~ *cascade08©~«~*cascade08«~¬~ *cascade08¬~¹~*cascade08¹~Ğ~ *cascade082[file:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Services/Network/DownloadManagerService.cs

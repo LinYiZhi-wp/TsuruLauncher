@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "下载页面的详细设计文档，包括UI布局（多Tab设计）、功能模块（版本列表、筛选、下载管理）以及技术实现方案（BMCLAPI集成、MVVM架构）。",
-  "updatedAt": "2026-02-11T13:29:39.956349700Z"
-}

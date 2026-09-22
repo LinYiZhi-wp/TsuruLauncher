@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "Comprehensive plan to fix download manager failures. Includes high-fidelity glassmorphism UI redesign for the download manager, hardening of the mirror URL replacement logic, and stability improvements in the download engine to prevent hangs at 99%.",
-  "updatedAt": "2026-02-11T16:56:12.022720200Z"
-}

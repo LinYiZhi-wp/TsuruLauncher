@@ -1,0 +1,888 @@
+<Page x:Class="TsuruLauncher.Views.DownloadPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:vm="clr-namespace:TsuruLauncher.ViewModels"
+      xmlns:conv="clr-namespace:TsuruLauncher.Converters"
+      xmlns:anim="clr-namespace:TsuruLauncher.Services.Animation"
+      xmlns:seg="clr-namespace:TsuruLauncher.Controls"
+      mc:Ignorable="d"
+      d:DesignHeight="760" d:DesignWidth="1180"
+      Title="实例库"
+      PreviewKeyDown="OnWizardPreviewKeyDown"
+      Background="Transparent">
+
+    <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
+        <conv:StringMatchToBoolConverter x:Key="StringMatchToBool"/>
+        <conv:StepDotBrushConverter x:Key="StepDotBrush"/>
+
+        <!-- ══════════ 卡片：圆角 12 + 1px 描边 + 无阴影 ══════════ -->
+        <!-- hover 颜色 250ms：见 iOS26.HoverCardTint 说明（AdornerLayer 色块动画 Opacity） -->
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+        </Style>
+
+        <Style x:Key="SectionLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <Style x:Key="HintText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
+        <!-- 标签：8px 圆角小灰胶囊 -->
+        <Style x:Key="TagPill" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+        </Style>
+        <Style x:Key="TagText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+        </Style>
+
+        <!-- ══════════ 主按钮：强调色实心胶囊 ══════════ -->
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="20,0"/>
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="20" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════ 次按钮：透明 / 浅底 ══════════ -->
+        <Style x:Key="ToolButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="10" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface5Brush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ToolButtonSmall" TargetType="Button" BasedOn="{StaticResource ToolButton}">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="12,0"/>
+        </Style>
+
+        <!-- ══════════ 分段胶囊（容器浅底 + 滑动指示块承担选中底色） ══════════
+             改前：IsChecked 触发器里直接把 Bd.Background 换成 AccentBrush ——
+             主题画刷是 DynamicResource 共享画刷（冻结的 SolidColorBrush），
+             WPF 不允许对它做 Color 动画，所以选中态只能瞬时硬切。
+             改后：选中底色交给容器里的滑动指示块（seg:SegmentedIndicator，
+             150ms cubic-bezier(0.4,0,0.2,1) 的单段 TranslateX + Width）；
+             分段项自己只做 150ms 的「双层文字交叉淡入」（沿用 NavItem 的既有做法）。
+             两层的字重都按 SemiBold 占位（同一格叠放，取较宽者），
+             所以选中时项宽不变 —— 分段条不会因为加粗而重排。 -->
+        <Style x:Key="SegmentButton" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" CornerRadius="14" Padding="15,7" Background="Transparent">
+                            <Grid>
+                                <ContentPresenter x:Name="TextNormal" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  TextElement.FontWeight="SemiBold"/>
+                                <ContentPresenter x:Name="TextAccent" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Opacity="0" IsHitTestVisible="False"
+                                                  TextElement.Foreground="{DynamicResource AccentForegroundBrush}"
+                                                  TextElement.FontWeight="SemiBold"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <!-- hover 底色只给「未选中」的项，选中的那项要让下面的滑动胶囊露出来 -->
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                    <Condition Property="IsChecked" Value="False"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                            </MultiTrigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.55"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SegmentBar" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="Padding" Value="3"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
+
+        <!-- ══════════ 游戏目录：三选一行卡片（RadioButton） ══════════ -->
+        <Style x:Key="DirectoryOption" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" CornerRadius="10" Padding="14,12"
+                                Background="{DynamicResource Surface2Brush}"
+                                BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Ellipse x:Name="Dot" Width="16" Height="16" VerticalAlignment="Center"
+                                         Stroke="{DynamicResource TextDimBrush}" StrokeThickness="2" Fill="Transparent"/>
+                                <ContentPresenter Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentGlassLightBrush}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}"/>
+                                <Setter TargetName="Dot" Property="Stroke" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════ 实例行卡片 ══════════ -->
+        <Style x:Key="InstanceRow" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="16,14"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="IconTile" TargetType="Border">
+            <Setter Property="Width" Value="52"/>
+            <Setter Property="Height" Value="52"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Background" Value="{DynamicResource AccentGlassMediumBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+    </Page.Resources>
+
+    <Page.DataContext>
+        <vm:DownloadViewModel/>
+    </Page.DataContext>
+
+    <Grid>
+        <!-- ══════════════════════ 实例库 ══════════════════════ -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- 标题栏：内容区统一内边距（顶 20 / 左右 20 / 底 16）由本行承担 -->
+            <Grid Grid.Row="0" Margin="20,20,20,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="实例库" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Text="管理已安装的游戏版本，或创建一个新的实例" FontSize="12.5" Margin="0,4,0,0"
+                               Foreground="{DynamicResource TextTertiaryBrush}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button Style="{StaticResource ToolButton}" Margin="0,0,8,0" Command="{Binding RefreshInstancesCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="14" VerticalAlignment="Center"/>
+                            <TextBlock Text="刷新" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource ToolButton}" Margin="0,0,8,0" Click="OpenDownloadManager_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="14" VerticalAlignment="Center"/>
+                            <TextBlock Text="下载进度" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource PrimaryButton}"
+                            IsEnabled="{Binding CanOpenWizard}"
+                            Command="{Binding OpenWizardCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="+" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <TextBlock Text="创建实例" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- 分段胶囊 + 搜索 -->
+            <Grid Grid.Row="1" Margin="20,0,20,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Style="{StaticResource SegmentBar}">
+                    <!-- 实例库顶部分段（全部实例 / 整合包 / 服务器 / 自定义）：选中底色 = 滑动指示块
+                         （Axolotl NavRail.vue:104-115 的形态）。指示块放在 Canvas 里 ——
+                         Canvas 的 MeasureOverride 恒为 (0,0)，所以它自己的 Width 动画
+                         永远不会改变分组条的 desired size。 -->
+                    <Grid x:Name="InstanceFilterGroup"
+                          seg:SegmentedIndicator.Host="True"
+                          seg:SegmentedIndicator.Indicator="{Binding ElementName=InstanceFilterPill}">
+                        <Canvas IsHitTestVisible="False">
+                            <Border x:Name="InstanceFilterPill" CornerRadius="14" Opacity="0"
+                                    Background="{DynamicResource AccentBrush}"/>
+                        </Canvas>
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Content="全部实例" Style="{StaticResource SegmentButton}" GroupName="InstanceFilter"
+                                         IsChecked="{Binding InstanceFilter, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=All}"
+                                         Command="{Binding SetInstanceFilterCommand}" CommandParameter="All"/>
+                            <RadioButton Content="整合包" Style="{StaticResource SegmentButton}" GroupName="InstanceFilter"
+                                         IsChecked="{Binding InstanceFilter, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Modpack}"
+                                         Command="{Binding SetInstanceFilterCommand}" CommandParameter="Modpack"/>
+                            <RadioButton Content="服务器" Style="{StaticResource SegmentButton}" GroupName="InstanceFilter"
+                                         IsChecked="{Binding InstanceFilter, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Server}"
+                                         Command="{Binding SetInstanceFilterCommand}" CommandParameter="Server"/>
+                            <RadioButton Content="自定义" Style="{StaticResource SegmentButton}" GroupName="InstanceFilter"
+                                         IsChecked="{Binding InstanceFilter, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Custom}"
+                                         Command="{Binding SetInstanceFilterCommand}" CommandParameter="Custom"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <TextBlock Grid.Column="1" Margin="14,0" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource TextTertiaryBrush}" Text="{Binding InstanceCountText}"/>
+
+                <Border Grid.Column="2" Width="230" Background="{DynamicResource Surface3Brush}"
+                        BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="12,2">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <ui:SymbolIcon Symbol="Search24" FontSize="15" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+                        <TextBox Grid.Column="1" Margin="8,0,0,0" FontSize="13" Padding="0,8"
+                                 Text="{Binding InstanceSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Background="Transparent" BorderThickness="0"
+                                 Foreground="{DynamicResource TextPrimaryBrush}" CaretBrush="{DynamicResource AccentBrush}"/>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- 实例列表 / 空状态 -->
+            <Grid Grid.Row="2">
+                <!-- 内容区统一内边距：左右各 20（与标题对齐），滚动条在模板右侧列、不跟着缩进 -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,0,20,16"
+                              Visibility="{Binding HasVisibleInstances, Converter={StaticResource BoolToVis}}">
+                    <ItemsControl ItemsSource="{Binding InstancesView}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource InstanceRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- 图标 -->
+                                        <Border Grid.Column="0" Style="{StaticResource IconTile}" Margin="0,0,14,0">
+                                            <Grid>
+                                                <ui:SymbolIcon Symbol="Cube24" FontSize="24" Foreground="{DynamicResource AccentBrush}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                               Visibility="{Binding HasIcon, Converter={StaticResource InverseBoolToVis}}"/>
+                                                <Border CornerRadius="12"
+                                                        Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}">
+                                                    <Border.Background>
+                                                        <ImageBrush ImageSource="{Binding Icon}" Stretch="UniformToFill"/>
+                                                    </Border.Background>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- 名称 + 标签 -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                                <Border Style="{StaticResource TagPill}">
+                                                    <TextBlock Text="{Binding Loader}" Style="{StaticResource TagText}"/>
+                                                </Border>
+                                                <Border Style="{StaticResource TagPill}">
+                                                    <TextBlock Text="{Binding VersionId}" Style="{StaticResource TagText}"
+                                                               FontFamily="Consolas, Microsoft YaHei UI"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding GameDir}" Style="{StaticResource TagText}"
+                                                           VerticalAlignment="Center" MaxWidth="320"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding GameDir}"/>
+                                            </StackPanel>
+
+                                            <!-- 安装中的细进度条 -->
+                                            <StackPanel Margin="0,10,0,0"
+                                                        Visibility="{Binding IsInstalling, Converter={StaticResource BoolToVis}}">
+                                                <ProgressBar Maximum="1" Value="{Binding Progress}" Height="3"/>
+                                                <TextBlock Text="{Binding StatusText}" Style="{StaticResource TagText}" Margin="0,5,0,0"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- 最近游玩 -->
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="16,0,16,0"
+                                                    Visibility="{Binding IsInstalling, Converter={StaticResource InverseBoolToVis}}">
+                                            <TextBlock Text="最近游玩" FontSize="11" HorizontalAlignment="Right"
+                                                       Foreground="{DynamicResource TextDimBrush}"/>
+                                            <TextBlock Text="{Binding LastPlayedText}" FontSize="12.5" Margin="0,3,0,0"
+                                                       HorizontalAlignment="Right"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        </StackPanel>
+
+                                        <!-- 操作 -->
+                                        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="安装" Style="{StaticResource ToolButtonSmall}" Margin="0,0,8,0"
+                                                    Command="{Binding DataContext.InstallInstanceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Style="{StaticResource PrimaryButton}" Height="34" Padding="16,0" FontSize="12.5"
+                                                    Command="{Binding DataContext.PlayInstanceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                    CommandParameter="{Binding}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <ui:SymbolIcon Symbol="Play24" FontSize="14" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="开始游戏" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- 空状态 -->
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Visibility="{Binding HasVisibleInstances, Converter={StaticResource InverseBoolToVis}}">
+                    <Border Width="96" Height="96" CornerRadius="24" HorizontalAlignment="Center"
+                            Background="{DynamicResource Surface3Brush}"
+                            BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1">
+                        <ui:SymbolIcon Symbol="Games24" FontSize="42" Foreground="{DynamicResource TextDimBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="未找到实例" FontSize="17" FontWeight="SemiBold" Margin="0,20,0,0"
+                               HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Text="在这里创建你的第一个实例，选好版本和加载器就能开玩" FontSize="12.5" Margin="0,8,0,0"
+                               HorizontalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    <Button Style="{StaticResource PrimaryButton}" Margin="0,20,0,0" HorizontalAlignment="Center"
+                            Command="{Binding OpenWizardCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="+" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <TextBlock Text="创建新实例" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <!-- ══════════════════════ 创建实例向导（页面内嵌面板） ══════════════════════ -->
+        <Grid x:Name="WizardOverlay" Panel.ZIndex="20" Visibility="Collapsed"
+              Focusable="True" FocusVisualStyle="{x:Null}" KeyboardNavigation.TabNavigation="Cycle">
+            <!-- 遮罩：opacity 0 -> 0.72，150ms ease-out 淡入；关闭反向 150ms ease-in
+                 点背景 = 关闭（刚打开 420ms 内的点击是「连点的第二下」，走连点保护不关闭） -->
+            <Border x:Name="WizardMask" Background="{DynamicResource Surface1Brush}" Opacity="0"
+                    MouseLeftButtonDown="OnWizardMaskMouseDown"/>
+
+            <!-- 面板：250ms cubic-bezier(0.15, 1.4, 0.64, 0.96)（真过冲），
+                 起点 scale(0.96) + translateY(12px) + opacity 0；关闭反向 150ms ease -->
+            <Border x:Name="WizardPanel" Style="{StaticResource Card}" MaxWidth="680" Margin="16,8"
+                    HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                    RenderTransformOrigin="0.5,0.5"
+                    Background="{DynamicResource SurfaceFloatingBrush}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 向导头部 -->
+                    <Grid Grid.Row="0" Margin="20,18,16,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="创建实例" FontSize="17" FontWeight="Bold"
+                                       Visibility="{Binding IsInstallStage, Converter={StaticResource InverseBoolToVis}}"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <TextBlock Text="正在安装" FontSize="17" FontWeight="Bold"
+                                       Visibility="{Binding IsInstallStage, Converter={StaticResource BoolToVis}}"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <TextBlock Text="图标、名称、游戏目录、版本与加载器" FontSize="11.5" Margin="0,4,0,0"
+                                       Visibility="{Binding IsInstallStage, Converter={StaticResource InverseBoolToVis}}"
+                                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="✕" Width="32" Height="32" FontSize="14"
+                                Style="{StaticResource ToolButtonSmall}" Padding="0"
+                                VerticalAlignment="Top" Command="{Binding CloseWizardCommand}"/>
+                    </Grid>
+
+                    <!-- 向导内容 -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="20,0,16,0">
+                        <StackPanel>
+                            <!-- ───────── 表单 ───────── -->
+                            <StackPanel Visibility="{Binding IsInstallStage, Converter={StaticResource InverseBoolToVis}}">
+
+                                <!-- 创建失败：向导已经回滚到这一步，原因是非模态横幅（不再弹模态框/不再让面板停在半路） -->
+                                <Border Margin="0,0,0,14" CornerRadius="12" Padding="14,12"
+                                        Background="{DynamicResource Surface3Brush}"
+                                        BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1"
+                                        Visibility="{Binding CreateFailed, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="ErrorCircle24" FontSize="18" VerticalAlignment="Top"
+                                                       Foreground="{DynamicResource DangerBrush}"/>
+                                        <StackPanel Margin="10,0,0,0">
+                                            <TextBlock Text="创建失败" FontSize="13.5" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource DangerBrush}"/>
+                                            <TextBlock Text="{Binding CreateResultText}" Margin="0,4,0,0"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                            <TextBlock Text="已回到填写步骤，名称与版本都还在，修正后可以直接再点一次「创建实例」"
+                                                       Margin="0,4,0,0" Style="{StaticResource HintText}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 图标 -->
+                                <TextBlock Text="实例图标" Style="{StaticResource SectionLabel}"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Width="64" Height="64" CornerRadius="14"
+                                            Background="{DynamicResource AccentGlassMediumBrush}"
+                                            BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1">
+                                        <Grid>
+                                            <ui:SymbolIcon Symbol="Cube24" FontSize="28" Foreground="{DynamicResource AccentBrush}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Visibility="{Binding HasInstanceIcon, Converter={StaticResource InverseBoolToVis}}"/>
+                                            <Border CornerRadius="14"
+                                                    Visibility="{Binding HasInstanceIcon, Converter={StaticResource BoolToVis}}">
+                                                <Border.Background>
+                                                    <ImageBrush ImageSource="{Binding InstanceIcon}" Stretch="UniformToFill"/>
+                                                </Border.Background>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                    <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="选择图标" Style="{StaticResource ToolButtonSmall}"
+                                                    Command="{Binding PickIconCommand}"/>
+                                            <Button Content="移除图标" Style="{StaticResource ToolButtonSmall}" Margin="8,0,0,0"
+                                                    IsEnabled="{Binding HasInstanceIcon}"
+                                                    Command="{Binding RemoveIconCommand}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="支持 PNG / JPG / BMP，建议使用正方形图片" Style="{StaticResource HintText}"
+                                                   Margin="0,7,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- 名称 -->
+                                <TextBlock Text="实例名称" Style="{StaticResource SectionLabel}" Margin="0,20,0,8"/>
+                                <TextBox MaxLength="48" FontSize="13.5"
+                                         Text="{Binding InstanceName, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBlock Text="名称同时用作版本隔离时的文件夹名（.minecraft/versions/实例名/）"
+                                           Style="{StaticResource HintText}" Margin="0,7,0,0"/>
+
+                                <!-- 游戏目录三选一 -->
+                                <TextBlock Text="游戏目录" Style="{StaticResource SectionLabel}" Margin="0,20,0,8"/>
+                                <RadioButton Style="{StaticResource DirectoryOption}" GroupName="GameDirMode"
+                                             IsChecked="{Binding DirectoryMode, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Default}"
+                                             Command="{Binding SetDirectoryModeCommand}" CommandParameter="Default">
+                                    <StackPanel>
+                                        <TextBlock Text="默认目录" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="{Binding DefaultDirectoryPreview}" Style="{StaticResource HintText}"
+                                                   Margin="0,4,0,0" FontFamily="Consolas, Microsoft YaHei UI"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton Style="{StaticResource DirectoryOption}" GroupName="GameDirMode"
+                                             IsChecked="{Binding DirectoryMode, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Isolated}"
+                                             Command="{Binding SetDirectoryModeCommand}" CommandParameter="Isolated">
+                                    <StackPanel>
+                                        <TextBlock Text="自定义 · 版本隔离" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="{Binding IsolatedDirectoryPreview}" Style="{StaticResource HintText}"
+                                                   Margin="0,4,0,0" FontFamily="Consolas, Microsoft YaHei UI"/>
+                                        <TextBlock Text="模组 / 存档 / 配置独立存放，互不影响" Style="{StaticResource HintText}"
+                                                   Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton Style="{StaticResource DirectoryOption}" GroupName="GameDirMode"
+                                             IsChecked="{Binding DirectoryMode, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Shared}"
+                                             Command="{Binding SetDirectoryModeCommand}" CommandParameter="Shared">
+                                    <StackPanel>
+                                        <TextBlock Text="自定义 · 版本共享" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="{Binding SharedDirectoryPreview}" Style="{StaticResource HintText}"
+                                                   Margin="0,4,0,0" FontFamily="Consolas, Microsoft YaHei UI"/>
+                                        <TextBlock Text="多个版本共用同一个 .minecraft（模组互通）" Style="{StaticResource HintText}"
+                                                   Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                </RadioButton>
+
+                                <!-- 游戏版本 -->
+                                <TextBlock Text="游戏版本" Style="{StaticResource SectionLabel}" Margin="0,20,0,8"/>
+                                <Border Style="{StaticResource SegmentBar}">
+                                    <!-- 创建实例向导 · 游戏版本类型分段：选中底色 = 滑动指示块（Axolotl NavRail.vue:104-115 的形态）。
+                                        指示块放在 Canvas 里 —— Canvas 的 MeasureOverride 恒为 (0,0)，
+                                        所以它自己的 Width 动画永远不会改变分组条的 desired size。 -->
+                                    <Grid x:Name="VersionTypeGroup"
+                                          seg:SegmentedIndicator.Host="True"
+                                          seg:SegmentedIndicator.Indicator="{Binding ElementName=VersionTypePill}">
+                                        <Canvas IsHitTestVisible="False">
+                                            <Border x:Name="VersionTypePill" CornerRadius="14" Opacity="0"
+                                                    Background="{DynamicResource AccentBrush}"/>
+                                        </Canvas>
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton Content="正式版" Style="{StaticResource SegmentButton}" GroupName="VersionType"
+                                                         IsChecked="{Binding SelectedFilter, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Release}"
+                                                         Command="{Binding SwitchFilterCommand}" CommandParameter="Release"/>
+                                            <RadioButton Content="快照" Style="{StaticResource SegmentButton}" GroupName="VersionType"
+                                                         IsChecked="{Binding SelectedFilter, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Snapshot}"
+                                                         Command="{Binding SwitchFilterCommand}" CommandParameter="Snapshot"/>
+                                            <RadioButton Content="愚人节版" Style="{StaticResource SegmentButton}" GroupName="VersionType"
+                                                         IsChecked="{Binding SelectedFilter, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=AprilFools}"
+                                                         Command="{Binding SwitchFilterCommand}" CommandParameter="AprilFools"/>
+                                            <RadioButton Content="远古版" Style="{StaticResource SegmentButton}" GroupName="VersionType"
+                                                         IsChecked="{Binding SelectedFilter, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Old}"
+                                                         Command="{Binding SwitchFilterCommand}" CommandParameter="Old"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox Grid.Column="0" Height="40" FontSize="13"
+                                              ItemsSource="{Binding VersionsView}"
+                                              SelectedItem="{Binding WizardVersion}"
+                                              DisplayMemberPath="Id" MaxDropDownHeight="280"/>
+                                    <ComboBox Grid.Column="1" Width="126" Height="40" FontSize="12.5" Margin="8,0,0,0"
+                                              ItemsSource="{Binding DownloadSources}"
+                                              SelectedItem="{Binding SelectedSource}"
+                                              ToolTip="版本清单下载源"/>
+                                    <Button Grid.Column="2" Style="{StaticResource ToolButtonSmall}" Height="40" Margin="8,0,0,0"
+                                            Content="刷新列表" Command="{Binding LoadVersionsCommand}"/>
+                                </Grid>
+                                <ProgressBar IsIndeterminate="True" Height="2" Margin="0,8,0,0" Maximum="1"
+                                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}"/>
+                                <TextBlock Text="列表可按上方类型切换，正式版外的版本也可安装" Style="{StaticResource HintText}"
+                                           Margin="0,7,0,0"/>
+
+                                <!-- 加载器 -->
+                                <TextBlock Text="加载器" Style="{StaticResource SectionLabel}" Margin="0,20,0,8"/>
+                                <Border Style="{StaticResource SegmentBar}">
+                                    <!-- 创建实例向导 · 加载器分段：选中底色 = 滑动指示块（Axolotl NavRail.vue:104-115 的形态）。
+                                        指示块放在 Canvas 里 —— Canvas 的 MeasureOverride 恒为 (0,0)，
+                                        所以它自己的 Width 动画永远不会改变分组条的 desired size。 -->
+                                    <Grid x:Name="WizardLoaderGroup"
+                                          seg:SegmentedIndicator.Host="True"
+                                          seg:SegmentedIndicator.Indicator="{Binding ElementName=WizardLoaderPill}">
+                                        <Canvas IsHitTestVisible="False">
+                                            <Border x:Name="WizardLoaderPill" CornerRadius="14" Opacity="0"
+                                                    Background="{DynamicResource AccentBrush}"/>
+                                        </Canvas>
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton Content="None" Style="{StaticResource SegmentButton}" GroupName="WizardLoader"
+                                                         IsChecked="{Binding WizardLoader, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=None}"
+                                                         Command="{Binding SelectLoaderCommand}" CommandParameter="None"
+                                                         ToolTip="原版游戏，不安装任何加载器"/>
+                                            <RadioButton Content="Fabric" Style="{StaticResource SegmentButton}" GroupName="WizardLoader"
+                                                         IsChecked="{Binding WizardLoader, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Fabric}"
+                                                         Command="{Binding SelectLoaderCommand}" CommandParameter="Fabric"
+                                                         IsEnabled="{Binding IsFabricLoaderEnabled}"
+                                                         ToolTipService.ShowOnDisabled="True" ToolTip="{Binding FabricLoaderTip}"/>
+                                            <RadioButton Content="NeoForge" Style="{StaticResource SegmentButton}" GroupName="WizardLoader"
+                                                         IsChecked="{Binding WizardLoader, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=NeoForge}"
+                                                         Command="{Binding SelectLoaderCommand}" CommandParameter="NeoForge"
+                                                         IsEnabled="{Binding IsNeoForgeLoaderEnabled}"
+                                                         ToolTipService.ShowOnDisabled="True" ToolTip="{Binding NeoForgeLoaderTip}"/>
+                                            <RadioButton Content="Forge" Style="{StaticResource SegmentButton}" GroupName="WizardLoader"
+                                                         IsChecked="{Binding WizardLoader, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Forge}"
+                                                         Command="{Binding SelectLoaderCommand}" CommandParameter="Forge"
+                                                         IsEnabled="{Binding IsForgeLoaderEnabled}"
+                                                         ToolTipService.ShowOnDisabled="True" ToolTip="{Binding ForgeLoaderTip}"/>
+                                            <RadioButton Content="Quilt" Style="{StaticResource SegmentButton}" GroupName="WizardLoader"
+                                                         IsChecked="{Binding WizardLoader, Mode=OneWay, Converter={StaticResource StringMatchToBool}, ConverterParameter=Quilt}"
+                                                         Command="{Binding SelectLoaderCommand}" CommandParameter="Quilt"
+                                                         IsEnabled="{Binding IsQuiltLoaderEnabled}"
+                                                         ToolTipService.ShowOnDisabled="True" ToolTip="{Binding QuiltLoaderTip}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <TextBlock Text="{Binding NeoForgeLoaderTip}" Style="{StaticResource HintText}" Margin="0,7,0,0"/>
+                            </StackPanel>
+
+                            <!-- ───────── 安装步骤条 ───────── -->
+                            <StackPanel Margin="0,4,0,8" Visibility="{Binding IsInstallStage, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Style="{StaticResource IconTile}">
+                                        <Grid>
+                                            <ui:SymbolIcon Symbol="Cube24" FontSize="24" Foreground="{DynamicResource AccentBrush}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Visibility="{Binding HasInstanceIcon, Converter={StaticResource InverseBoolToVis}}"/>
+                                            <Border CornerRadius="12"
+                                                    Visibility="{Binding HasInstanceIcon, Converter={StaticResource BoolToVis}}">
+                                                <Border.Background>
+                                                    <ImageBrush ImageSource="{Binding InstanceIcon}" Stretch="UniformToFill"/>
+                                                </Border.Background>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                    <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding InstanceName}" FontSize="15" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                            <Border Style="{StaticResource TagPill}">
+                                                <TextBlock Text="{Binding WizardVersion.Id}" Style="{StaticResource TagText}"
+                                                           FontFamily="Consolas, Microsoft YaHei UI"/>
+                                            </Border>
+                                            <Border Style="{StaticResource TagPill}">
+                                                <TextBlock Text="{Binding WizardLoader}" Style="{StaticResource TagText}"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- 五个圆点随进度点亮 -->
+                                <Grid Margin="0,22,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                        <Ellipse Width="14" Height="14" HorizontalAlignment="Center"
+                                                 Fill="{Binding DownloadProgress, Converter={StaticResource StepDotBrush}, ConverterParameter=0.05}"/>
+                                        <TextBlock Text="准备" FontSize="11.5" Margin="0,7,0,0" HorizontalAlignment="Center"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                        <Ellipse Width="14" Height="14" HorizontalAlignment="Center"
+                                                 Fill="{Binding DownloadProgress, Converter={StaticResource StepDotBrush}, ConverterParameter=0.2}"/>
+                                        <TextBlock Text="版本 JSON" FontSize="11.5" Margin="0,7,0,0" HorizontalAlignment="Center"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                        <Ellipse Width="14" Height="14" HorizontalAlignment="Center"
+                                                 Fill="{Binding DownloadProgress, Converter={StaticResource StepDotBrush}, ConverterParameter=0.4}"/>
+                                        <TextBlock Text="运行库" FontSize="11.5" Margin="0,7,0,0" HorizontalAlignment="Center"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                        <Ellipse Width="14" Height="14" HorizontalAlignment="Center"
+                                                 Fill="{Binding DownloadProgress, Converter={StaticResource StepDotBrush}, ConverterParameter=0.65}"/>
+                                        <TextBlock Text="资源文件" FontSize="11.5" Margin="0,7,0,0" HorizontalAlignment="Center"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="4" HorizontalAlignment="Center">
+                                        <Ellipse Width="14" Height="14" HorizontalAlignment="Center"
+                                                 Fill="{Binding DownloadProgress, Converter={StaticResource StepDotBrush}, ConverterParameter=0.9}"/>
+                                        <TextBlock Text="加载器" FontSize="11.5" Margin="0,7,0,0" HorizontalAlignment="Center"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 细进度条 + 百分比 -->
+                                <Grid Margin="0,20,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ProgressBar Grid.Column="0" Maximum="1" Value="{Binding DownloadProgress}"
+                                                 Height="4" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Margin="12,0,0,0" FontSize="13" FontWeight="SemiBold"
+                                               FontFamily="Consolas, Microsoft YaHei UI"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               Text="{Binding InstallPercentText}"/>
+                                </Grid>
+
+                                <Grid Margin="0,12,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding InstallStatusText}" Style="{StaticResource HintText}"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1" Margin="10,0,0,0" FontSize="11.5"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Text="{Binding InstallStageText, StringFormat='当前阶段：{0}'}"/>
+                                </Grid>
+                                <!-- 创建成功：明确的终态反馈（非模态横幅 + 「完成」按钮），不再只靠一行状态文字 -->
+                                <Border Margin="0,16,0,0" CornerRadius="12" Padding="14,12"
+                                        Background="{DynamicResource Surface3Brush}"
+                                        BorderBrush="{DynamicResource SuccessBrush}" BorderThickness="1"
+                                        Visibility="{Binding CreateSucceeded, Converter={StaticResource BoolToVis}}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="18" VerticalAlignment="Top"
+                                                           Foreground="{DynamicResource SuccessBrush}"/>
+                                            <StackPanel Margin="10,0,0,0">
+                                                <TextBlock Text="创建成功" FontSize="13.5" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource SuccessBrush}"/>
+                                                <TextBlock Text="{Binding CreateResultText}" Margin="0,4,0,0"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                <TextBlock Text="实例已经出现在左侧实例库里，可以直接开始游戏" Margin="0,4,0,0"
+                                                           Style="{StaticResource HintText}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="完成" MinWidth="88" VerticalAlignment="Center"
+                                                Margin="12,0,0,0" Style="{StaticResource PrimaryButton}"
+                                                Command="{Binding CloseWizardCommand}"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- 向导底部 -->
+                    <Grid Grid.Row="2" Margin="20,12,16,18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="14" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource SuccessBrush}"
+                                           Visibility="{Binding IsInstallStage, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Text="安装会显示在「下载进度」里，可随时关闭本面板"
+                                       Style="{StaticResource HintText}" Margin="7,0,0,0" VerticalAlignment="Center"
+                                       Visibility="{Binding IsInstallStage, Converter={StaticResource BoolToVis}}"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Content="返回" Style="{StaticResource ToolButton}" MinWidth="88"
+                                    Margin="0,0,10,0" Command="{Binding CloseWizardCommand}"/>
+                            <Button Style="{StaticResource PrimaryButton}" MinWidth="120"
+                                    Visibility="{Binding IsInstallStage, Converter={StaticResource InverseBoolToVis}}"
+                                    IsEnabled="{Binding CanCreateInstance}"
+                                    Command="{Binding CreateInstanceCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="+" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Text="创建实例" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Page>

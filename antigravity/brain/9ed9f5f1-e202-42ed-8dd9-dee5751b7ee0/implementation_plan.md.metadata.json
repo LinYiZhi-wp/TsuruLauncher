@@ -1,7 +1,0 @@
-{
-  "artifactType":  "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary":  "Plan to implement CDKey payment system and Multi-Page App (MPA) separation for Linux Nginx deployment.",
-  "updatedAt":  "2026-04-02T07:58:37.571465500Z",
-  "version":  "2",
-  "requestFeedback":  true
-}

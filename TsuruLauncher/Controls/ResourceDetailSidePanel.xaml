@@ -1,0 +1,177 @@
+<UserControl x:Class="TsuruLauncher.Controls.ResourceDetailSidePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:TsuruLauncher.Converters"
+             Background="Transparent">
+
+    <!-- 资源详情的**右侧信息栏内容** —— 对齐 Axolotl：兼容性 / 相关链接 / 标签 / 作者 / 信息
+         全部放在**外壳最右边那条信息栏**里（InfoPanelResourceDetailHost 承载），
+         不是塞在页面自己的列里（之前就是这么错的，观感完全不同）。
+         DataContext 由 MainWindow 指向该页的 ResourceDetailViewModel。 -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                  Template="{DynamicResource GlassScrollViewer}">
+        <StackPanel Margin="0,2,2,2">
+
+            <!-- ══ 兼容性 ══ -->
+            <TextBlock Text="兼容性" FontSize="14" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock Text="Minecraft：Java 版" FontSize="11.5" Margin="0,6,0,6"
+                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+
+            <ItemsControl ItemsSource="{Binding Resource.GameVersionChips}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{DynamicResource Surface4Brush}" CornerRadius="7"
+                                Padding="8,3" Margin="0,0,5,5">
+                            <TextBlock Text="{Binding}" FontSize="11"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="平台" FontSize="11.5" Margin="0,8,0,6"
+                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+            <ItemsControl ItemsSource="{Binding Resource.Loaders}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{DynamicResource AccentGlassLightBrush}" CornerRadius="7"
+                                Padding="8,3" Margin="0,0,5,5">
+                            <TextBlock Text="{Binding}" FontSize="11"
+                                       Foreground="{DynamicResource AccentBrush}"/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="支持的环境" FontSize="11.5" Margin="0,8,0,6"
+                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+            <StackPanel Orientation="Horizontal">
+                <Border Background="{DynamicResource Surface4Brush}" CornerRadius="7" Padding="8,3"
+                        Margin="0,0,5,0"
+                        Visibility="{Binding Resource.IsClientSideOnly, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="🖥 客户端" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </Border>
+                <Border Background="{DynamicResource Surface4Brush}" CornerRadius="7" Padding="8,3"
+                        Visibility="{Binding Resource.IsServerSideOnly, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="🗄 服务端" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </Border>
+            </StackPanel>
+
+            <!-- ══ 相关链接 ══ -->
+            <StackPanel Visibility="{Binding Resource.HasAnyLink, Converter={StaticResource BoolToVis}}">
+                <Separator Background="{DynamicResource GlassLightBrush}" Margin="0,14,0,12"/>
+                <TextBlock Text="相关链接" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <Button Click="OpenLink_Click" Tag="{Binding Resource.IssuesUrl}" HorizontalContentAlignment="Left"
+                        Visibility="{Binding Resource.HasIssues, Converter={StaticResource BoolToVis}}"
+                        Style="{StaticResource iOS26.SecondaryButton}" Height="32" Margin="0,0,0,5"
+                        Content="⚠  报告问题"/>
+                <Button Click="OpenLink_Click" Tag="{Binding Resource.SourceUrl}" HorizontalContentAlignment="Left"
+                        Visibility="{Binding Resource.HasSource, Converter={StaticResource BoolToVis}}"
+                        Style="{StaticResource iOS26.SecondaryButton}" Height="32" Margin="0,0,0,5"
+                        Content="&lt;/&gt;  查看源代码"/>
+                <Button Click="OpenLink_Click" Tag="{Binding Resource.WikiUrl}" HorizontalContentAlignment="Left"
+                        Visibility="{Binding Resource.HasWiki, Converter={StaticResource BoolToVis}}"
+                        Style="{StaticResource iOS26.SecondaryButton}" Height="32" Margin="0,0,0,5"
+                        Content="📖  前往 Wiki"/>
+                <Button Click="OpenLink_Click" Tag="{Binding Resource.DiscordUrl}" HorizontalContentAlignment="Left"
+                        Visibility="{Binding Resource.HasDiscord, Converter={StaticResource BoolToVis}}"
+                        Style="{StaticResource iOS26.SecondaryButton}" Height="32" Margin="0,0,0,5"
+                        Content="💬  加入 Discord 服务器"/>
+                <Button Click="OpenLink_Click" Tag="{Binding Resource.DonationUrl}" HorizontalContentAlignment="Left"
+                        Visibility="{Binding Resource.HasDonation, Converter={StaticResource BoolToVis}}"
+                        Style="{StaticResource iOS26.SecondaryButton}" Height="32"
+                        Content="☕  Ko-fi 赞助"/>
+            </StackPanel>
+
+            <!-- ══ 标签 ══ -->
+            <StackPanel>
+                <Separator Background="{DynamicResource GlassLightBrush}" Margin="0,14,0,12"/>
+                <TextBlock Text="标签" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <ItemsControl ItemsSource="{Binding Resource.Categories}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{DynamicResource Surface4Brush}" CornerRadius="8"
+                                    Padding="9,4" Margin="0,0,6,6">
+                                <TextBlock Text="{Binding}" FontSize="11.5"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- ══ 作者（头像 + 名字 + 角色）══ -->
+            <StackPanel Visibility="{Binding Resource.HasAuthors, Converter={StaticResource BoolToVis}}">
+                <Separator Background="{DynamicResource GlassLightBrush}" Margin="0,14,0,12"/>
+                <TextBlock Text="作者" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <ItemsControl ItemsSource="{Binding Resource.Authors}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid Width="34" Height="34" VerticalAlignment="Center">
+                                    <Border CornerRadius="17" Background="{DynamicResource AccentGlassMediumBrush}">
+                                        <TextBlock Text="{Binding Initial}" FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <Border CornerRadius="17" ClipToBounds="True"
+                                            Visibility="{Binding HasAvatar, Converter={StaticResource BoolToVis}}">
+                                        <Image Source="{Binding AvatarImage}" Stretch="UniformToFill"/>
+                                    </Border>
+                                </Grid>
+                                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium"
+                                               Foreground="{DynamicResource TextPrimaryBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Role}" FontSize="11" Margin="0,2,0,0"
+                                               Foreground="{DynamicResource TextTertiaryBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- ══ 信息 ══ -->
+            <Separator Background="{DynamicResource GlassLightBrush}" Margin="0,14,0,12"/>
+            <TextBlock Text="信息" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+            <TextBlock Text="许可证" FontSize="11.5" Foreground="{DynamicResource TextTertiaryBrush}"/>
+            <TextBlock Text="{Binding Resource.License}" FontSize="12.5" Margin="0,3,0,0" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+            <TextBlock Text="发布时间" FontSize="11.5" Margin="0,10,0,0"
+                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+            <TextBlock Text="{Binding Resource.DateCreated, StringFormat='yyyy-MM-dd'}" FontSize="12.5"
+                       Margin="0,3,0,0" Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+            <TextBlock Text="更新时间" FontSize="11.5" Margin="0,10,0,0"
+                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+            <TextBlock Text="{Binding Resource.DateModified, StringFormat='yyyy-MM-dd'}" FontSize="12.5"
+                       Margin="0,3,0,0" Foreground="{DynamicResource TextPrimaryBrush}"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

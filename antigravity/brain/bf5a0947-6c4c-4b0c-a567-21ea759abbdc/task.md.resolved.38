@@ -1,9 +1,0 @@
-# 任务清单
-
-## 完善多语言 + 品牌修改
-- [x] 修改启动器名称为LinLauncher
-- [x] 应用多语言到SettingsPage
-- [x] 应用多语言到DownloadPage
-- [x] 应用多语言到ResourcesPage
-- [x] 应用多语言到HomePage
-- [/] 测试所有页面语言切换

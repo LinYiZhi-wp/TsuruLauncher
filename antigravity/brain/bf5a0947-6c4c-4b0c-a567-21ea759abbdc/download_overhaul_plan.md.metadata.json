@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "Phase 10 implementation plan: 4 batches covering resource page sidebar categories (Mod/整合包/数据包/资源包/光影包), download source expansion (BMCLAPI/Official/FastMirror/MCMirror with caching+fallback), download manager service with speed/progress/percentage tracking, and real Minecraft game resource downloading (libraries+assets+client.jar with mirror URL replacement).",
-  "updatedAt": "2026-02-11T16:11:33.339196600Z"
-}

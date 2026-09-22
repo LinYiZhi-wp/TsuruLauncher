@@ -1,32 +1,0 @@
-íusing System;
-
-namespace GeminiLauncher.Models
-{
-    public class DownloadableVersion
-    {
-        public string Id { get; set; } = string.Empty;
-        public string Type { get; set; } = "release";
-        public string Url { get; set; } = string.Empty;
-        public DateTime ReleaseTime { get; set; }
-        public DateTime Time { get; set; }
-        
-        // Helper property for UI display
-        public string DisplayType => Type switch
-        {
-            "release" => "æ­£å¼ç‰ˆ",
-            "snapshot" => "å¿«ç…§ç‰ˆ",
-            "old_beta" => "è¿œå¤æµ‹è¯•ç‰ˆ",
-            "old_alpha" => "è¿œå¤Alpha",
-            _ => Type
-        };
-
-        public bool IsRelease => Type == "release";
-    }
-
-    public class VersionManifest
-    {
-        public DownloadableVersion? Latest { get; set; }
-        public System.Collections.Generic.List<DownloadableVersion> Versions { get; set; } = new System.Collections.Generic.List<DownloadableVersion>();
-    }
-}
-± *cascade08±²*cascade08²£ *cascade08£á*cascade08áí *cascade082Nfile:///c:/Users/Linyizhi/.gemini/GeminiLauncher/Models/DownloadableVersion.cs

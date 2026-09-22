@@ -1,40 +1,0 @@
-â	using System.Windows;
-using System.Windows.Controls;
-using GeminiLauncher.Services.Network;
-
-namespace GeminiLauncher.Views
-{
-    public partial class DownloadManagerPage : Page
-    {
-        public DownloadManagerService ViewModel => DownloadManagerService.Instance;
-
-        public DownloadManagerPage()
-        {
-            this.DataContext = ViewModel;
-            InitializeComponent();
-        }
-
-        private void Back_Click(object sender, RoutedEventArgs e)
-        {
-            if (this.NavigationService.CanGoBack)
-            {
-                this.NavigationService.GoBack();
-            }
-            else
-            {
-                // Fallback to home if no history
-                var mainWindow = (MainWindow)Application.Current.MainWindow;
-                mainWindow.RootFrame.Navigate(new HomePage());
-            }
-        }
-
-        private void NewDownload_Click(object sender, RoutedEventArgs e)
-        {
-            if (Application.Current.MainWindow is MainWindow mainWindow)
-            {
-                mainWindow.RootFrame.Navigate(new DownloadPage());
-            }
-        }
-    }
-}
-‘ *cascade08‘÷*cascade08÷◊ *cascade08◊€*cascade08€‡ *cascade08‡·*cascade08·‚ *cascade08‚„*cascade08„‰ *cascade08‰*cascade08ˇ *cascade08ˇÇ*cascade08ÇÖ *cascade08Öâ*cascade08âã *cascade08ãé*cascade08éê *cascade08êë*cascade08ëí *cascade08íî*cascade08îÒ *cascade08Òˇ*cascade08ˇâ	 *cascade082Rfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Views/DownloadManagerPage.xaml.cs

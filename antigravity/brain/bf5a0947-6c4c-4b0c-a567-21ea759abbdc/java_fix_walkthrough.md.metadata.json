@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_WALKTHROUGH",
-  "summary": "修复了\"Launch Failed\"错误。implemented JavaService for auto-detection and updated SettingsPage to allow manual selection.",
-  "updatedAt": "2026-02-11T13:49:42.643627300Z"
-}

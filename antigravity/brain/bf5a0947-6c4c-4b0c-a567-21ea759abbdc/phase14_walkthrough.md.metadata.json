@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_WALKTHROUGH",
-  "summary": "Walkthrough of Phase 14: Debugging Download Manager Crash. Details the fixes for the navigation crash by synchronizing sidebar tags and repairing broken XAML resource references.",
-  "updatedAt": "2026-02-11T17:04:07.906348700Z"
-}

@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "Plan to fix the crash on navigation to the Download Manager. Includes correcting Sidebar navigation tags, fixing missing XAML resources (`iOS26.Layer0`), and hardening the code-behind against null references during navigation.",
-  "updatedAt": "2026-02-11T17:03:14.421149600Z"
-}

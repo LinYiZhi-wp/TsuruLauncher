@@ -1,29 +1,0 @@
-ë	using System.Windows;
-using System.Windows.Controls;
-
-namespace GeminiLauncher.Views
-{
-    public partial class ResourcesPage : Page
-    {
-        public ResourcesPage()
-        {
-            InitializeComponent();
-        }
-
-        private void ScrollViewer_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
-        {
-            // If Shift is pressed, we assume horizontal scrolling is intended, so we let the ScrollViewer handle it.
-            if (System.Windows.Input.Keyboard.Modifiers.HasFlag(System.Windows.Input.ModifierKeys.Shift)) return;
-
-            // Otherwise, we bubble the event to the parent (the main page scrollviewer)
-            // This fixes the issue where hovering over a horizontal list prevents vertical page scrolling.
-            e.Handled = true;
-            var eventArg = new System.Windows.Input.MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta);
-            eventArg.RoutedEvent = UIElement.MouseWheelEvent;
-            eventArg.Source = sender;
-            var parent = ((Control)sender).Parent as UIElement;
-            parent?.RaiseEvent(eventArg);
-        }
-    }
-}
-*cascade08ı *cascade08ı˝*cascade08˝ˇ *cascade08ˇÄ*cascade08ÄÅ *cascade08Åà*cascade08àã *cascade08ãé*cascade08éê *cascade08êí*cascade08íì *cascade08ìñ*cascade08ñó *cascade08óô*cascade08ôö *cascade08öú*cascade08úù *cascade08ù†*cascade08†§ *cascade08§ß*cascade08ß© *cascade08©´*cascade08´Æ *cascade08ÆØ*cascade08Ø∞ *cascade08∞±*cascade08±≤ *cascade08≤∏*cascade08∏π *cascade08π∫*cascade08∫º *cascade08ºæ*cascade08æ¿ *cascade08¿¡*cascade08¡« *cascade08«…*cascade08…À *cascade08À—*cascade08—” *cascade08”‹*cascade08‹› *cascade08›ﬁ*cascade08ﬁÏ *cascade08Ï *cascade08ˇ*cascade08ˇÉ*cascade08ÉÑ *cascade08Ñá*cascade08áà *cascade08àç*cascade08çé *cascade08éë*cascade08ëí *cascade08íì*cascade08ìï *cascade08ïñ*cascade08ñò *cascade08òô*cascade08ôö *cascade08öú*cascade08úû *cascade08û†*cascade08†Ø*cascade08Ø∏*cascade08∏π *cascade08π∫*cascade08∫ª *cascade08ªø*cascade08ø¿ *cascade08¿¡*cascade08¡¬ *cascade08¬ƒ*cascade08ƒ≈ *cascade08≈À*cascade08ÀÃ *cascade08Ã—*cascade08—‰ *cascade08‰Â*cascade08ÂÁ *cascade08ÁË*cascade08ËÈ *cascade08ÈÍ*cascade08ÍÌ *cascade08ÌÔ*cascade08ÔÚ *cascade08Úˆ*cascade08ˆå *cascade08åç*cascade08çë *cascade08ëí*cascade08íó *cascade08óò*cascade08òô *cascade08ôö*cascade08öõ *cascade08õú*cascade08úù *cascade08ùü*cascade08ü¶ *cascade08¶ß*cascade08ß´ *cascade08´≠*cascade08≠æ *cascade08æø*cascade08ø¡ *cascade08¡√*cascade08√ƒ *cascade08ƒ…*cascade08…Œ *cascade08Œ—*cascade08—” *cascade08”‘*cascade08‘÷ *cascade08÷◊*cascade08◊Ÿ *cascade08Ÿ‹*cascade08‹ﬂ *cascade08ﬂ·*cascade08·„ *cascade08„‰*cascade08‰Û *cascade08ÛÙ*cascade08Ùˆ *cascade08ˆ˜*cascade08˜˘ *cascade08˘˙*cascade08˙¸ *cascade08¸˝*cascade08˝Ç *cascade08ÇÉ*cascade08ÉÜ *cascade08Üá*cascade08áà *cascade08àâ*cascade08âå *cascade08åé*cascade08éñ *cascade08ñó*cascade08óò *cascade08òô*cascade08ôë	 *cascade082Lfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Views/ResourcesPage.xaml.cs

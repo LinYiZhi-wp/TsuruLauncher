@@ -1,388 +1,0 @@
-¯Tusing CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using GeminiLauncher.Models;
-using GeminiLauncher.Services;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows;
-
-namespace GeminiLauncher.ViewModels
-{
-    public partial class MainViewModel : ObservableObject
-    {
-        private readonly GameService _gameService;
-        private readonly LaunchService _launchService;
-        private readonly ConfigService _configService;
-
-        public ConfigService ConfigService => _configService;
-        public NotificationService NotificationService { get; }
-
-        [ObservableProperty]
-        private string _title = "LinLaunch";
-
-        [ObservableProperty]
-        private AccountManager _accountManager;
-
-        public ObservableCollection<GameInstance> GameVersions { get; } = new ObservableCollection<GameInstance>();
-
-        [ObservableProperty]
-        private GameInstance? _selectedVersion;
-
-        [ObservableProperty]
-        private string _statusMessage = "Ready to Launch";
-
-        [ObservableProperty]
-        private bool _isLaunching = false;
-
-        private readonly JavaService _javaService;
-
-        public MainViewModel()
-        {
-            _accountManager = new AccountManager();
-            _gameService = new GameService();
-            NotificationService = new NotificationService();
-            _launchService = new LaunchService(NotificationService);
-            _configService = new ConfigService();
-            NotificationService = new NotificationService();
-            _javaService = new JavaService();
-
-            // Load Versions
-            LoadVersions();
-        }
-        
-        public void LoadVersions()
-        {
-            string dotMinecraft = _configService.Settings.GamePath;
-            if (string.IsNullOrEmpty(dotMinecraft) || !System.IO.Directory.Exists(dotMinecraft))
-            {
-                 dotMinecraft = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), ".minecraft");
-            }
-            
-            _configService.Settings.GamePath = dotMinecraft; // Update config if empty
-            _configService.SaveConfig();
-
-            if (!System.IO.Directory.Exists(dotMinecraft))
-            {
-                // Create it if it doesn't exist? Or just warn.
-                try { System.IO.Directory.CreateDirectory(dotMinecraft); } catch {}
-            }
-            
-            var versions = _gameService.ScanVersions(dotMinecraft, _configService.Settings.VersionIsolation);
-            GameVersions.Clear();
-            foreach(var v in versions) GameVersions.Add(v);
-            
-            if (GameVersions.Any() && SelectedVersion == null) SelectedVersion = GameVersions.First();
-        }
-
-        [RelayCommand]
-        private async Task LaunchGame()
-        {
-            if (SelectedVersion == null) { MessageBox.Show("No version selected!"); return; }
-            if (AccountManager.CurrentAccount == null) { MessageBox.Show("No account selected! Go to Settings."); return; }
-            
-            // Resolve Java Path
-            // Resolve Java Path
-            string javaPath = SelectedVersion.CustomJavaPath;
-
-            // 1. Smart Selection: If no custom path, try to find the best matching Java version automatically
-            if (string.IsNullOrWhiteSpace(javaPath))
-            {
-                // Pass the required version (e.g. 8 or 17) to find a specific match
-                var bestMatch = _javaService.AutoDetectBestJava(SelectedVersion.RequiredJavaVersion);
-                if (!string.IsNullOrEmpty(bestMatch))
-                {
-                   javaPath = bestMatch;
-                }
-            }
-
-            // 2. Fallback to Global if auto-detect didn't find a specific match
-            if (string.IsNullOrWhiteSpace(javaPath))
-            {
-                javaPath = _configService.Settings.JavaPath;
-            }
-
-            // 3. Final Check: If still missing or invalid, try to find ANY Java (last resort)
-            if (string.IsNullOrWhiteSpace(javaPath) || !System.IO.File.Exists(javaPath))
-            {
-                var detected = _javaService.AutoDetectBestJava(0); 
-                if (detected != null)
-                {
-                    javaPath = detected;
-                    // Only save to Global if Global was empty
-                    if (string.IsNullOrWhiteSpace(_configService.Settings.JavaPath))
-                    {
-                        _configService.Settings.JavaPath = javaPath;
-                        _configService.SaveConfig();
-                    }
-                }
-                else
-                {
-                    MessageBox.Show($"Could not find a valid Java installation for version {SelectedVersion.RequiredJavaVersion}.\nPlease install Java {SelectedVersion.RequiredJavaVersion} or set the path in Settings.", "Java Missing");
-                    return;
-                }
-            }
-            
-            try 
-            {
-               IsLaunching = true;
-               StatusMessage = "Checking Resources...";
-
-               // Pre-launch checks
-               var analyzer = new CrashAnalyzerService();
-               string? conflictWarning = await analyzer.CheckForConflictsAsync(SelectedVersion.GameDir);
-               if (conflictWarning != null)
-               {
-                   if (MessageBox.Show($"Potential Mod Conflict:\n{conflictWarning}\n\nContinue anyway?", "Warning", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.No)
-                   {
-                       IsLaunching = false;
-                       StatusMessage = "Ready to Launch";
-                       return;
-                   }
-               }
-
-               var process = await _launchService.LaunchGameAsync(SelectedVersion, AccountManager.CurrentAccount, _configService.Settings.MaxRam, javaPath, (status) => 
-               {
-                   // Update status from LaunchService
-                   Application.Current.Dispatcher.Invoke(() => StatusMessage = status);
-               });
-
-               if (process != null)
-               {
-                   StatusMessage = "Game Running...";
-                   await process.WaitForExitAsync();
-                   IsLaunching = false;
-                   StatusMessage = "Ready to Launch";
-
-                   if (process.ExitCode != 0)
-                   {
-                       var crashAnalyzer = new CrashAnalyzerService();
-                       var result = await crashAnalyzer.AnalyzeAsync(SelectedVersion.GameDir);
-                       
-                       if (result.IsCrashDetected)
-                       {
-                           MessageBox.Show($"Game Crashed!\n\nCause: {result.Cause}\nSolution: {result.Solution}", "Crash Analyzer", MessageBoxButton.OK, MessageBoxImage.Error);
-                       }
-                       else
-                       {
-                            MessageBox.Show($"Game exited with code {process.ExitCode}. Check logs for details.", "Game Exited", MessageBoxButton.OK, MessageBoxImage.Warning);
-                       }
-                   }
-               }
-            }
-            catch (System.Exception ex)
-            {
-                IsLaunching = false;
-                StatusMessage = "Launch Failed";
-                MessageBox.Show($"Launch Failed: {ex.Message}");
-            }
-        }
-        [RelayCommand]
-        private async Task CheckUpdate()
-        {
-            var updateService = new UpdateService();
-            await updateService.CheckForUpdatesAsync();
-        }
-        [RelayCommand]
-        private async Task ExportModpack()
-        {
-            if (SelectedVersion == null) return;
-
-            var dialog = new Microsoft.Win32.SaveFileDialog
-            {
-                Filter = "Modrinth Modpack (*.mrpack)|*.mrpack",
-                FileName = $"{SelectedVersion.Id}.mrpack",
-                Title = "Export Modpack"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                try
-                {
-                    var modpackService = new GeminiLauncher.Services.Ecosystem.ModpackService();
-                    await modpackService.ExportMrPackAsync(SelectedVersion, dialog.FileName);
-                    MessageBox.Show("Modpack exported successfully!", "Export Complete");
-                }
-                catch (System.Exception ex)
-                {
-                    MessageBox.Show($"Export failed: {ex.Message}");
-                }
-            }
-        }
-        [RelayCommand]
-        private async Task UploadLog()
-        {
-            if (SelectedVersion == null) return;
-            string logPath = System.IO.Path.Combine(SelectedVersion.GameDir, "logs", "latest.log");
-
-            if (!System.IO.File.Exists(logPath))
-            {
-                MessageBox.Show("No log file found.");
-                return;
-            }
-
-            try
-            {
-                string logContent = await System.IO.File.ReadAllTextAsync(logPath);
-                
-                // Simulate Upload
-                // In production: POST to https://paste.ubuntu.com/ or a custom service
-                await Task.Delay(1000); 
-                string mockUrl = "https://hastebin.com/raw/mock" + System.Guid.NewGuid().ToString().Substring(0, 6);
-                
-                Clipboard.SetText(mockUrl);
-                MessageBox.Show($"Log uploaded successfully!\nURL copied to clipboard: {mockUrl}", "Upload Complete");
-            }
-            catch (System.Exception ex)
-            {
-                MessageBox.Show($"Upload failed: {ex.Message}");
-            }
-        }
-        public event System.Action<object>? RequestNavigation;
-        public event System.Action? RequestGoBack;
-
-        [RelayCommand]
-        private void OpenLaunchSettings()
-        {
-            if (SelectedVersion == null) return;
-            // Triggers navigation in MainWindow
-            RequestNavigation?.Invoke(new GeminiLauncher.Views.VersionSettingsPage { DataContext = this });
-        }
-
-        [RelayCommand]
-        private void SaveVersionSettings()
-        {
-            if (SelectedVersion != null)
-            {
-                _gameService.SaveVersionConfig(SelectedVersion);
-            }
-            RequestGoBack?.Invoke();
-        }
-
-        [RelayCommand]
-        private void NavigateBack()
-        {
-            RequestGoBack?.Invoke();
-        }
-    }
-}
-Ñ Ñ’*cascade08
-’Ó ÓÔ
-Ôû 
-ûƒ ƒ«	*cascade08
-«	Ù	 
-Ù	ô
- ô
-²*cascade08
-²Õ Õè*cascade08
-è“ “Ñ
-Ñİ İŒ
-ŒÔ ÔÜ
-Üç çê*cascade08
-êë ëì*cascade08
-ì¾ ¾è*cascade08
-èü ü—*cascade08
-—” ”£
-£¤ ¤¹
-¹º ºî
-îï ïğ
-ğñ ñú
-úû û¥
-¥¨ ¨İ
-İã ã‰
-‰Š ŠŸ
-Ÿ£ £«
-«¬ ¬é
-éê ê×
-×Ø ØÜ
-Üİ İŞ
-Şà àø
-øù ù’
-’£ £ö
-öü ü
-˜ ˜§
-§¨ ¨¶
-¶· ·»
-»¿ ¿Ó
-ÓÔ ÔÖ
-Ö× ×æ
-æç ç… 
-… ‰  ‰ ª 
-ª «  « ÿ 
-ÿ €! €!‚!
-‚!ƒ! ƒ!!
-!! !!
-!! !¥!
-¥!¦! ¦!û!
-û!ü! ü!—"
-—"™" ™"¨"
-¨"©" ©"±"
-±"²" ²"Ú"
-Ú"Û" Û"ê"
-ê"ì" ì"ò"
-ò"ş" ş"€#
-€#ƒ# ƒ#‹#
-‹#Œ# Œ##
-## #¥#
-¥#¦# ¦#ª#
-ª#¹# ¹#Ä#
-Ä#Ê# Ê# $
- $¡$ ¡$Ê$
-Ê$Ô$ Ô$Ø$
-Ø$Ù$ Ù$€%
-€%% %‹%
-‹%Œ% Œ%%
-%% %€&
-€&& &©&
-©&«& «&¯&
-¯&°& °&¼&
-¼&½& ½&¾&
-¾&¿& ¿&Ü&
-Ü&à& à&é&
-é&ê& ê&ò&
-ò&ô& ô&û&
-û&ş& ş&'
-'' '‘'
-‘'’' ’'¹'
-¹'º' º'Á'
-Á'Â' Â'Ó'
-Ó'Ô' Ô'Ò(
-Ò(Ó( Ó(²)*cascade08
-²)µ) µ)Ø)
-Ø)Ú) Ú)š*
-š*œ* œ*Ù*
-Ù*Ú* Ú*å*
-å*æ* æ*á+
-á+ã+ ã+æ+
-æ+ç+ ç+ğ+
-ğ+ñ+ ñ+ù+
-ù+ú+ ú+‹,
-‹,Œ, Œ,­,
-­,®, ®,³,
-³,µ, µ,ä,
-ä,å, å,é,
-é,ë, ë,ğ,
-ğ,ü, ü,ÿ,
-ÿ,- -Š-
-Š-–- 
-–-˜- ˜-€.*cascade08
-€.‚. 
-‚.ƒ. ƒ.„.
-„.…. ….˜.
-˜.™. ™..
-.Ÿ. Ÿ.¢.
-¢.®. ®.±.
-±.Á. Á.Ï.
-Ï.¥/ ¥/Ã/
-Ã/Í/ Í/ü0*cascade08
-ü0Œ1 
-Œ11 1¥1*cascade08
-¥1à1 à1—2*cascade08
-—2¸2 ¸2š3*cascade08
-š3ó9 
-ó9¬: ¬:„;*cascade08
-„;Õ; 
-Õ;¨N ¨N©N*cascade08
-©NàN àNáN*cascade08
-áN˜T 
-˜T¯T 2Lfile:///c:/Users/Linyizhi/.gemini/GeminiLauncher/ViewModels/MainViewModel.cs

@@ -1,346 +1,0 @@
-ğKusing System.Windows;
-using System.Windows.Controls;
-using GeminiLauncher.ViewModels;
-using System.Diagnostics;
-using System.IO;
-using GeminiLauncher.Models;
-
-namespace GeminiLauncher.Views
-{
-    public partial class HomePage : Page
-    {
-        public HomePage()
-        {
-            InitializeComponent();
-            this.DataContext = ((App)System.Windows.Application.Current).MainWindow.DataContext;
-            
-            // Auto login as offline player by default
-            AutoLoginOffline();
-        }
-
-        private void AutoLoginOffline()
-        {
-            if (DataContext is MainViewModel vm)
-            {
-                // Default offline player name
-                string defaultPlayer = "Player";
-                vm.AccountManager.LoginOffline(defaultPlayer);
-                
-                // Update account capsule
-                PlayerNameText.Text = defaultPlayer;
-                
-                // Enable launch button
-                LaunchButton.IsEnabled = true;
-            }
-        }
-
-        private void AccountCapsule_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            var border = sender as System.Windows.FrameworkElement;
-            if (border == null) return;
-
-            var menu = new ContextMenu
-            {
-                Style = null,
-                Background = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#F0202020")!),
-                BorderBrush = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#40FFFFFF")!),
-                BorderThickness = new Thickness(1),
-                Foreground = System.Windows.Media.Brushes.White
-            };
-
-            // Switch Account (offline)
-            var switchItem = new MenuItem { Header = "ğŸ”„ åˆ‡æ¢ç¦»çº¿è´¦å·", Foreground = System.Windows.Media.Brushes.White };
-            switchItem.Click += (s, args) =>
-            {
-                // Simple WPF input dialog
-                var dlg = new Window
-                {
-                    Title = "åˆ‡æ¢ç¦»çº¿è´¦å·",
-                    Width = 340, Height = 160,
-                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                    Owner = Window.GetWindow(this),
-                    Background = new System.Windows.Media.SolidColorBrush(
-                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1A1A1A")!),
-                    ResizeMode = ResizeMode.NoResize
-                };
-                var sp = new StackPanel { Margin = new Thickness(20) };
-                sp.Children.Add(new TextBlock { Text = "è¾“å…¥ç©å®¶å:", Foreground = System.Windows.Media.Brushes.White, Margin = new Thickness(0,0,0,8) });
-                var tb = new TextBox { Text = "Player", FontSize = 14, Padding = new Thickness(6,4,6,4) };
-                sp.Children.Add(tb);
-                var okBtn = new Button { Content = "ç¡®å®š", Margin = new Thickness(0,12,0,0), Padding = new Thickness(20,6,20,6), HorizontalAlignment = HorizontalAlignment.Right };
-                okBtn.Click += (_, __) => { dlg.DialogResult = true; };
-                sp.Children.Add(okBtn);
-                dlg.Content = sp;
-
-                if (dlg.ShowDialog() == true && !string.IsNullOrWhiteSpace(tb.Text))
-                {
-                    var vm = DataContext as MainViewModel;
-                    vm?.AccountManager.LoginOffline(tb.Text.Trim());
-                    PlayerNameText.Text = tb.Text.Trim();
-                }
-            };
-            menu.Items.Add(switchItem);
-
-            // Microsoft Login
-            var msItem = new MenuItem { Header = "ğŸŸ¢ å¾®è½¯è´¦å·ç™»å½•", Foreground = System.Windows.Media.Brushes.White };
-            msItem.Click += async (s, args) =>
-            {
-                try
-                {
-                    var vm = DataContext as MainViewModel;
-                    if (vm != null)
-                    {
-                        await vm.AccountManager.LoginMicrosoft();
-                        var acc = vm.AccountManager.ActiveAccount;
-                        if (acc != null)
-                            PlayerNameText.Text = acc.Username;
-                    }
-                }
-                catch (System.Exception ex)
-                {
-                    MessageBox.Show($"ç™»å½•å¤±è´¥: {ex.Message}", "é”™è¯¯");
-                }
-            };
-            menu.Items.Add(msItem);
-
-            menu.Items.Add(new Separator());
-
-            // Logout
-            var logoutItem = new MenuItem { Header = "ğŸšª æ³¨é”€", Foreground = System.Windows.Media.Brushes.White };
-            logoutItem.Click += (s, args) =>
-            {
-                var vm = DataContext as MainViewModel;
-                vm?.AccountManager.Logout();
-                PlayerNameText.Text = "Player";
-            };
-            menu.Items.Add(logoutItem);
-
-            menu.PlacementTarget = border;
-            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-            menu.IsOpen = true;
-        }
-
-        private Models.GameInstance? _currentSelectedVersion;
-
-        private void OpenVersionSelector_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new VersionSelectorDialog
-            {
-                Owner = Window.GetWindow(this)
-            };
-
-            if (dialog.ShowDialog() == true && dialog.SelectedVersion != null)
-            {
-                var selectedGv = dialog.SelectedVersion;
-                
-                // Sync with MainViewModel
-                if (DataContext is MainViewModel vm)
-                {
-                    var match = vm.GameVersions.FirstOrDefault(v => v.Id == selectedGv.Id);
-                    if (match != null)
-                    {
-                        vm.SelectedVersion = match;
-                        _currentSelectedVersion = match; // Keep local ref in sync
-                        
-                        // Update UI
-                        VersionHeroText.Text = match.Id;
-                        CurrentVersionSubtitle.Text = $"{match.Type} ({match.Id})";
-                    }
-                    else
-                    {
-                        // If not in ScanVersions, we might need to Rescan
-                        vm.LoadVersions();
-                        match = vm.GameVersions.FirstOrDefault(v => v.Id == selectedGv.Id);
-                        if (match != null)
-                        {
-                            vm.SelectedVersion = match;
-                            _currentSelectedVersion = match;
-                            VersionHeroText.Text = match.Id;
-                            CurrentVersionSubtitle.Text = $"{match.Type} ({match.Id})";
-                        }
-                    }
-                }
-            }
-        }
-
-        private void OpenVersionSettings_Click(object sender, RoutedEventArgs e)
-        {
-            if (_currentSelectedVersion == null)
-            {
-                MessageBox.Show("è¯·å…ˆé€‰æ‹©ä¸€ä¸ªæ¸¸æˆç‰ˆæœ¬", "æç¤º", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            var settingsDialog = new VersionSettingsDialog(_currentSelectedVersion)
-            {
-                Owner = Window.GetWindow(this)
-            };
-            settingsDialog.ShowDialog();
-        }
-
-        private void OpenModManager_Click(object sender, RoutedEventArgs e)
-        {
-            if (DataContext is not MainViewModel vm || vm.SelectedVersion == null)
-            {
-                MessageBox.Show("è¯·å…ˆé€‰æ‹©ä¸€ä¸ªæ¸¸æˆç‰ˆæœ¬", "æç¤º", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            var btn = sender as Button;
-            if (btn == null) return;
-
-            var menu = new ContextMenu();
-            
-            // 1. Open Mods Folder
-            var openFolderItem = new MenuItem { Header = "ğŸ“‚ æ‰“å¼€ Mods æ–‡ä»¶å¤¹" };
-            openFolderItem.Click += (s, args) => 
-            {
-                try 
-                {
-                    string modPath = Path.Combine(vm.SelectedVersion.GameDir, "mods");
-                    Directory.CreateDirectory(modPath);
-                    Process.Start("explorer.exe", modPath);
-                }
-                catch (System.Exception ex)
-                {
-                    MessageBox.Show($"æ— æ³•æ‰“å¼€æ–‡ä»¶å¤¹: {ex.Message}");
-                }
-            };
-            menu.Items.Add(openFolderItem);
-
-            // 2. Manage Mods (UI)
-            var manageItem = new MenuItem { Header = "âš™ï¸ ç®¡ç†æ¨¡ç»„" };
-            manageItem.Click += (s, args) => 
-            {
-                if (_currentSelectedVersion != null)
-                {
-                    var settingsDialog = new VersionSettingsDialog(_currentSelectedVersion)
-                    {
-                        Owner = Window.GetWindow(this)
-                    };
-                    settingsDialog.ShowModsTab();
-                    settingsDialog.ShowDialog();
-                }
-            };
-            menu.Items.Add(manageItem);
-
-            menu.PlacementTarget = btn;
-            menu.IsOpen = true;
-        }
-
-        // LaunchButton_Click removed as we use MVVM Command binding now
-
-        // SimulateLaunchProgress removed
-    }
-}
-Y Y†*cascade08†¤*cascade08
-¤ü) ü)ş)*cascade08
-ş)ÿ) ÿ)**cascade08
-*‚* ‚*„**cascade08
-„*ó, ó,õ,*cascade08
-õ,ö, ö,ø,*cascade08
-ø,ÿ, ÿ,-*cascade08
--­- ­-¿-*cascade08
-¿-Â- Â-Ä-*cascade08Ä-Å- *cascade08Å-Æ-*cascade08
-Æ-Ç- Ç-É-*cascade08
-É-Ê- Ê-Ë-*cascade08
-Ë-Ì- Ì-Í-*cascade08Í-Î- *cascade08Î-Ò-*cascade08
-Ò-Ó- Ó-×-*cascade08
-×-Ø- Ø-Ù-*cascade08
-Ù-ë- ë-õ-*cascade08
-õ-ø- ø-ù-*cascade08
-ù-ú- ú-ü-*cascade08
-ü-ı- ı-ş- *cascade08ş-.*cascade08.‚. *cascade08‚.„.*cascade08„.†. *cascade08†.‹.*cascade08‹.Œ. *cascade08Œ..*cascade08
-.. ..*cascade08
-.¡. ¡.¢.*cascade08
-¢.µ. µ.¸. *cascade08¸.ê.*cascade08ê.ë. *cascade08
-ë.ì. ì.í. *cascade08í.î.*cascade08î.ï. *cascade08
-ï.ñ. ñ.ò.*cascade08
-ò.ô. ô.õ.*cascade08
-õ.÷. ÷.ı. *cascade08ı.ÿ.*cascade08
-ÿ.’/ ’/•/ *cascade08•/š/*cascade08
-š/œ/ œ//*cascade08//*cascade08
-/Ÿ/ Ÿ/ /*cascade08
- /¢/ ¢/¤/*cascade08
-¤/¥/ ¥/¾/*cascade08
-¾/Ğ/ Ğ/Ô/ *cascade08Ô/Ö/*cascade08Ö/Ø/ *cascade08Ø/Ü/*cascade08
-Ü/ã/ ã/í/*cascade08í/î/ *cascade08
-î/ğ/ ğ/ñ/*cascade08ñ/ò/ *cascade08ò/ó/*cascade08
-ó/‰0 ‰0Š0*cascade08Š0Œ0 *cascade08Œ0–0*cascade08
-–00 00*cascade08
-0 0  0¡0*cascade08
-¡0¢0 ¢0£0 *cascade08£0³0*cascade08
-³0´0 ´0¼0*cascade08
-¼0½0 ½0Ç0*cascade08Ç0Ù0 *cascade08
-Ù0á0 á0ã0*cascade08
-ã0ë0 ë0ı0 *cascade08
-ı0ş0 ş0‚1
-‚1„1 „1…1 *cascade08…11*cascade0811 *cascade08
-11 
-1¡1 ¡1¤1*cascade08
-¤1¦1 ¦1©1*cascade08
-©1«1 «1¯1*cascade08
-¯1±1 ±1¸1*cascade08¸1º1*cascade08
-º1¼1 ¼1½1*cascade08
-½1¾1 ¾1¿1*cascade08
-¿1ù1 ù1ü1 *cascade08ü1ş1*cascade08
-ş1ÿ1 ÿ1€2 *cascade08€22*cascade082‡2*cascade08
-‡2ˆ2 ˆ2Š2 *cascade08Š2Œ2*cascade08
-Œ22 22 *cascade0822*cascade082“2 *cascade08
-“2”2 ”2•2*cascade08
-•2˜2 ˜2›2*cascade08
-›2«2 «2­2*cascade08
-­2À2 À2Â2 *cascade08Â2Ã2*cascade08Ã2Ä2 *cascade08Ä2Æ2*cascade08Æ2É2 *cascade08É2Ì2*cascade08Ì2Ü2 *cascade08Ü2ü2*cascade08ü2ş2 *cascade08ş2ÿ2*cascade08ÿ2ƒ3 *cascade08ƒ3„3*cascade08„3…3 *cascade08…3‡3*cascade08‡3Š3 *cascade08Š33*cascade0833 *cascade083“3*cascade08“3—3 *cascade08—3ª3*cascade08ª3¼3 *cascade08¼3Ö3*cascade08Ö3ì3 *cascade08ì3ï3*cascade08ï34 *cascade08
-44 44*cascade08
-44 4£4*cascade08
-£4¤4 ¤4¥4*cascade08¥4¬4 *cascade08¬4®4*cascade08®4µ4 *cascade08µ4¹4*cascade08¹4á4 *cascade08á4å4*cascade08å4”5 *cascade08”5˜5*cascade08˜5³5 *cascade08³5£7*cascade08£7Í7 *cascade08
-Í7ö< ö<ş<*cascade08
-ş<ÿ< ÿ<…=*cascade08
-…=†= †=‡=*cascade08
-‡=ˆ= ˆ= =*cascade08
- =ÿ> ÿ>‰@*cascade08
-‰@Œ@ Œ@@*cascade08
-@”@ ”@¹@*cascade08
-¹@»@ »@ê@*cascade08
-ê@ë@ ë@‡A*cascade08
-‡AˆA ˆAŠA*cascade08
-ŠA‹A ‹AA*cascade08
-AA A’A*cascade08
-’A“A “AÍA*cascade08
-ÍAÎA ÎAıA*cascade08
-ıAB BƒB*cascade08
-ƒB„B „B…B*cascade08
-…B†B †BB*cascade08
-BB B¨B*cascade08
-¨B©B ©B³B*cascade08
-³B´B ´B·B*cascade08
-·B¸B ¸BÓB*cascade08
-ÓBØB ØBC*cascade08
-CC CßC*cascade08
-ßCàC àCõC*cascade08
-õCöC öC£D*cascade08
-£D¤D ¤D†E*cascade08
-†E‡E ‡E¿E*cascade08
-¿EÅE ÅEâE*cascade08
-âEãE ãEùE*cascade08
-ùEúE úE˜F*cascade08
-˜FšF šF©G*cascade08
-©GşG şG†H*cascade08
-†H¥H ¥H­H*cascade08
-­HÙH ÙHáH*cascade08
-áHåH åHèH*cascade08
-èHôH ôHùH*cascade08
-ùH˜I ˜IœI*cascade08
-œI¨I ¨I¬I*cascade08
-¬IÇI ÇIßJ*cascade08
-ßJ÷J ÷JùJ*cascade08
-ùJ‘K ‘K’K*cascade08
-’K˜K ˜K™K*cascade08
-™KŸK ŸK K*cascade08
- K¢K ¢K£K*cascade08
-£K¤K ¤K¥K*cascade08
-¥K®K ®K¯K *cascade08¯K°K*cascade08°K·K *cascade08
-·KáK áKâK*cascade08
-âKğK 2Gfile:///c:/Users/Linyizhi/.gemini/GeminiLauncher/Views/HomePage.xaml.cs

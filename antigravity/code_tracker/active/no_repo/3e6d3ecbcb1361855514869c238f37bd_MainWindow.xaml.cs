@@ -1,254 +1,0 @@
-ÊPusing System.Windows;
-using Wpf.Ui.Controls;
-using System.Windows.Controls; // For Frame logic if needed
-using GeminiLauncher.Views;
-using GeminiLauncher.Controls;
-using System.Windows.Threading;
-
-namespace GeminiLauncher
-{
-    public partial class MainWindow : FluentWindow
-    {
-        public MainWindow()
-        {
-            InitializeComponent();
-            this.KeyDown += Window_KeyDown;
-            
-            // Add page transition animation
-            
-            // Add page transition animation
-            RootFrame.Navigating += RootFrame_Navigating;
-            
-            // Hook into NavigationView's internal Frame navigation if possible or just the event
-            // WPF-UI NavView has a 'Navigated' event? Or we find the frame?
-            // Let's try to find the frame and attach animation.
-            this.Loaded += MainWindow_Loaded;
-            
-            var vm = this.DataContext as ViewModels.MainViewModel;
-            if (vm != null)
-            {
-                vm.RequestNavigation += (page) => RootFrame.Navigate(page);
-                vm.RequestGoBack += () => 
-                {
-                    if (RootFrame.CanGoBack) RootFrame.GoBack();
-                };
-
-                // Subscribe to notifications
-                vm.NotificationService.OnShowNotification += (msg) => 
-                {
-                    Dispatcher.Invoke(() => 
-                    {
-                        var toast = new NotificationToast(msg, () => 
-                        {
-                            // Remove from container when closed
-                             // We need a reference to remove it, or passed callback
-                        });
-                        
-                        // We need to modify NotificationToast constructor to accept the remove callback or handle it here
-                        // Actually, I defined OnClose in toast constructor.
-                        // Let's re-read NotificationToast constructor
-                        
-                        toast = new NotificationToast(msg, () => 
-                        {
-                            if (NotificationContainer.Children.Contains(toast))
-                                NotificationContainer.Children.Remove(toast);
-                        });
-
-                        NotificationContainer.Children.Add(toast);
-                    });
-                };
-            }
-        }
-
-        private void RootFrame_Navigating(object sender, System.Windows.Navigation.NavigatingCancelEventArgs e)
-        {
-            // iOSé£æ ¼é¡µé¢åˆ‡æ¢åŠ¨ç”»ï¼šæ»‘åŠ¨ + æ·¡å…¥æ·¡å‡º
-            if(e.Content is Page page)
-            {
-                page.Opacity = 0;
-                page.RenderTransform = new System.Windows.Media.TranslateTransform(30, 0);
-                
-                var storyboard = new System.Windows.Media.Animation.Storyboard();
-                
-                // æ·¡å…¥åŠ¨ç”»
-                var fadeIn = new System.Windows.Media.Animation.DoubleAnimation
-                {
-                    From = 0,
-                    To = 1,
-                    Duration = System.TimeSpan.FromSeconds(0.3),
-                    DecelerationRatio = 0.7
-                };
-                System.Windows.Media.Animation.Storyboard.SetTarget(fadeIn, page);
-                System.Windows.Media.Animation.Storyboard.SetTargetProperty(fadeIn, new PropertyPath("Opacity"));
-                
-                // æ»‘åŠ¨åŠ¨ç”»
-                var slideIn = new System.Windows.Media.Animation.DoubleAnimation
-                {
-                    From = 30,
-                    To = 0,
-                    Duration = System.TimeSpan.FromSeconds(0.3),
-                    DecelerationRatio = 0.8
-                };
-                System.Windows.Media.Animation.Storyboard.SetTarget(slideIn, page);
-                System.Windows.Media.Animation.Storyboard.SetTargetProperty(slideIn, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
-                
-                storyboard.Children.Add(fadeIn);
-                storyboard.Children.Add(slideIn);
-                storyboard.Begin();
-            }
-        }
-
-        private void RootNavigation_BackRequested(NavigationView sender, object args)
-        {
-            if (RootFrame.CanGoBack)
-            {
-                RootFrame.GoBack();
-            }
-            else
-            {
-                // Fallback: If we can't go back, maybe we should go to Home?
-                // Or maybe the user expects the back button to always take them 'up' a level.
-                // For now, let's try to navigate to Home if we are not at Home.
-                if (!(RootFrame.Content is Views.HomePage))
-                {
-                    NavigateTo("home");
-                }
-            }
-        }
-
-
-        private void RootNavigation_SelectionChanged(NavigationView sender, RoutedEventArgs args)
-        {
-            System.Console.WriteLine("[Nav] SelectionChanged fired!");
-            try
-            {
-                if (sender.SelectedItem is NavigationViewItem item)
-                {
-                    var tag = item.Tag?.ToString()?.ToLower()?.Trim();
-                    System.Console.WriteLine($"[Nav] SelectionChanged: {tag}");
-
-                    NavigateTo(tag);
-                }
-            }
-            catch (System.Exception ex)
-            {
-                System.Console.WriteLine($"[Nav] SelectionChanged Error: {ex}");
-                System.Windows.MessageBox.Show($"Navigation Error: {ex.Message}");
-            }
-        }
-
-        private void RootNavigation_ItemInvoked(NavigationView sender, RoutedEventArgs args)
-        {
-            System.Console.WriteLine($"[Nav] ItemInvoked fired!");
-            
-            try
-            {
-                // å°è¯•ä»senderè·å–é€‰ä¸­é¡¹
-                if (sender.SelectedItem is NavigationViewItem item)
-                {
-                    var tag = item.Tag?.ToString()?.ToLower()?.Trim();
-                    System.Console.WriteLine($"[Nav] ItemInvoked Tag: {tag}");
-                    NavigateTo(tag);
-                }
-                else
-                {
-                    System.Console.WriteLine("[Nav] ItemInvoked: SelectedItem is not NavigationViewItem");
-                }
-            }
-            catch (System.Exception ex)
-            {
-                System.Console.WriteLine($"[Nav] ItemInvoked Error: {ex}");
-                System.Windows.MessageBox.Show($"Navigation Error (ItemInvoked): {ex.Message}");
-            }
-        }
-
-        public void NavigateTo(string? tag)
-        {
-            System.Console.WriteLine($"[Nav] NavigateTo called with tag: {tag}");
-            switch (tag)
-            {
-                case "home":
-                    RootFrame.Navigate(new Views.HomePage());
-                    System.Console.WriteLine("[Nav] Navigated to HomePage");
-                    break;
-                case "resources":
-                    RootFrame.Navigate(new Views.ResourcesPage());
-                    System.Console.WriteLine("[Nav] Navigated to ResourcesPage");
-                    break;
-                case "download":
-                    // User explicitly wants the sidebar to open the Version Browser (New Games)
-                    RootFrame.Navigate(new Views.DownloadPage());
-                    System.Console.WriteLine("[Nav] Navigated to DownloadPage");
-                    break;
-                case "settings":
-                    RootFrame.Navigate(new Views.SettingsPage());
-                    System.Console.WriteLine("[Nav] Navigated to SettingsPage");
-                    break;
-                default:
-                    System.Console.WriteLine($"[Nav] Unknown tag: {tag}");
-                    break;
-            }
-        }
-
-        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-             // Initial Navigation - Explicitly navigate the frame
-             RootFrame.Navigate(new Views.HomePage());
-             RefreshNavigationVisibility();
-        }
-
-        private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-        {
-            if (e.Key == System.Windows.Input.Key.F12)
-            {
-                NavigateTo("settings");
-            }
-        }
-
-        public void RefreshNavigationVisibility()
-        {
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                var hiddenKeys = vm.ConfigService.Settings.HiddenPageKeys;
-
-                // Check MenuItems
-                foreach (var item in RootNavigation.MenuItems)
-                {
-                    if (item is NavigationViewItem navItem && navItem.Tag is string tag)
-                    {
-                        navItem.Visibility = hiddenKeys.Contains(tag.ToLower()) ? Visibility.Collapsed : Visibility.Visible;
-                    }
-                }
-
-                // Check FooterMenuItems
-                foreach (var item in RootNavigation.FooterMenuItems)
-                {
-                    if (item is NavigationViewItem navItem && navItem.Tag is string tag)
-                    {
-                        navItem.Visibility = hiddenKeys.Contains(tag.ToLower()) ? Visibility.Collapsed : Visibility.Visible;
-                    }
-                }
-            }
-        }
-
-        private void NavItem_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (sender is NavigationViewItem item)
-            {
-                var tag = item.Tag?.ToString()?.ToLower()?.Trim();
-                System.Console.WriteLine($"[Nav] å·¦é”®ç‚¹å‡»: {tag}");
-                NavigateTo(tag);
-                e.Handled = true; // é˜»æ­¢äº‹ä»¶ç»§ç»­ä¼ æ’­
-            }
-        }
-        
-        // Let's try to add a resource style in App.xaml or MainWindow.resources to style the Frame
-        // <Style TargetType="Frame"> ... </Style>
-
-        private void OpenDownloadPage_Click(object sender, RoutedEventArgs e)
-        {
-            NavigateTo("download");
-        }
-    }
-}
-/ *cascade08/‰*cascade08‰ÊÊø *cascade08øü *cascade08üå*cascade08åö *cascade08öí *cascade08íˆ *cascade08ˆÈ	 *cascade08È	„„³ *cascade08³´ *cascade08´²!*cascade08²!´! *cascade08´!É! *cascade08É!Ø!*cascade08Ø!Ü! *cascade08Ü!ß!*cascade08ß!à! *cascade08à!â!*cascade08â!ã! *cascade08ã!ì!*cascade08ì!í! *cascade08í!î!*cascade08î!ğ! *cascade08ğ!ñ!*cascade08ñ!ó! *cascade08ó!ô!*cascade08ô!ş! *cascade08ş!€"*cascade08€"‚" *cascade08‚"„" *cascade08„"ˆ"*cascade08ˆ"‡# *cascade08‡#š& *cascade08š&š&*cascade08š&Ä& *cascade08Ä&É& *cascade08É&à& *cascade08à&Å' *cascade08Å'(*cascade08(( *cascade08((*cascade08(’( *cascade08’(Ÿ(*cascade08Ÿ(¡( *cascade08¡(¥(*cascade08¥(±( *cascade08±(ã( *cascade08ã(ú( *cascade08ú(û( *cascade08û(Œ) *cascade08Œ)) *cascade08))*cascade08)‘) *cascade08‘)”)*cascade08”)•) *cascade08•)–)*cascade08–)—) *cascade08—)Ÿ) *cascade08Ÿ)¤)*cascade08¤)©) *cascade08©)ª)*cascade08ª)«) *cascade08«)¿)*cascade08¿)Á) *cascade08Á)Ü) *cascade08Ü)İ)*cascade08İ)Ş) *cascade08Ş)ß)*cascade08ß)à) *cascade08à)â)*cascade08â)ğ) *cascade08ğ)ò)*cascade08ò)ó) *cascade08ó)õ)*cascade08õ)ö) *cascade08ö)û)*cascade08û)ı) *cascade08ı)‚**cascade08‚*„* *cascade08„*†**cascade08†** *cascade08*’**cascade08’*˜* *cascade08˜*¨* *cascade08¨*«**cascade08«*¬* *cascade08¬*®**cascade08®*¯* *cascade08¯*²* *cascade08²*·* *cascade08·*¸**cascade08¸*º* *cascade08º*½**cascade08½*Ç* *cascade08Ç*Í**cascade08Í*Ó* *cascade08Ó*×**cascade08×*ƒ+*cascade08ƒ+…+ *cascade08…+‡+*cascade08‡++ *cascade08+”+*cascade08”+¢+ *cascade08¢+¤+*cascade08¤+É+*cascade08É+Ê+ *cascade08Ê+Ğ+*cascade08Ğ+Ñ+ *cascade08Ñ+Ó+*cascade08Ó+Ô+ *cascade08Ô+Õ+*cascade08Õ+Ö+ *cascade08Ö+á+*cascade08á+â+ *cascade08â+‘,*cascade08‘,“, *cascade08“,³,*cascade08³,´, *cascade08´,µ,*cascade08µ,¶, *cascade08¶,¸,*cascade08¸,º, *cascade08º,¾,*cascade08¾,¿, *cascade08¿,Æ, *cascade08Æ,É,*cascade08É,Ñ, *cascade08Ñ,Ö,*cascade08Ö,Ş, *cascade08Ş,ë,*cascade08ë,ï, *cascade08ï,ô,*cascade08ô,õ, *cascade08õ,ı,*cascade08ı,ş, *cascade08ş,ƒ-*cascade08ƒ-„- *cascade08„-†-*cascade08†-Š- *cascade08Š-‹- *cascade08‹-- *cascade08--*cascade08-- *cascade08-’-*cascade08’-•- *cascade08•-- *cascade08--*cascade08-Ÿ- *cascade08Ÿ- -*cascade08 -«- *cascade08«-¬- *cascade08¬-Ñ-*cascade08Ñ-Ò- *cascade08Ò-Ö-*cascade08Ö-×- *cascade08×-ï-*cascade08ï-ğ- *cascade08ğ-õ-*cascade08õ-ö- *cascade08ö-ş- *cascade08ş-ÿ- *cascade08ÿ-.*cascade08.ƒ. *cascade08ƒ.„.*cascade08„.. *cascade08.‘.*cascade08‘.’. *cascade08’.. *cascade08.£.*cascade08£.¤. *cascade08¤.§.*cascade08§.¯.*cascade08¯.±. *cascade08±.µ.*cascade08µ.Á. *cascade08Á.ô.*cascade08ô.ö.*cascade08ö.÷. *cascade08÷.ø.*cascade08ø.ù. *cascade08ù.ú.*cascade08ú.û. *cascade08û.…/*cascade08…/†/ *cascade08†/‰/*cascade08‰/Š/ *cascade08Š// *cascade08// *cascade08/—/*cascade08—/˜/ *cascade08˜/›/*cascade08›/œ/ *cascade08œ/§/*cascade08§/©/ *cascade08©/­/*cascade08­/µ/*cascade08µ/¹/ *cascade08¹/Á/*cascade08Á/Í/ *cascade08Í/Ò/*cascade08Ò/Ó/ *cascade08Ó/Õ/*cascade08Õ/Ö/ *cascade08Ö/Ü/*cascade08Ü/İ/ *cascade08İ/Ş/*cascade08Ş/ß/ *cascade08ß/à/*cascade08à/â/ *cascade08â/ç/*cascade08ç/è/ *cascade08è/ì/*cascade08ì/í/ *cascade08í/ô/*cascade08ô/ö/ *cascade08ö/ú/*cascade08ú/û/ *cascade08û/œ0*cascade08œ00 *cascade080¢0*cascade08¢0¤0 *cascade08¤0¨0*cascade08¨0©0 *cascade08©0«0*cascade08«0¬0 *cascade08¬0¯0*cascade08¯0±0 *cascade08±0Ğ0*cascade08Ğ0Ô0 *cascade08Ô0×0*cascade08×0è0 *cascade08è0ö0 *cascade08ö02*cascade082¢2 *cascade08¢2©2 *cascade08©2ª2*cascade08ª2³2*cascade08³2µ2 *cascade08µ2¹2*cascade08¹2Á2 *cascade08Á2Ä2*cascade08Ä2Ò2 *cascade08Ò2Ù2*cascade08Ù2Ú2 *cascade08Ú2Û2*cascade08Û2Ü2 *cascade08Ü2å2*cascade08å2ç2 *cascade08ç2ú2*cascade08ú2ü2 *cascade08ü2€3*cascade08€3Œ3 *cascade08Œ3”3*cascade08”3•3 *cascade08•3—3*cascade08—3˜3 *cascade08˜33*cascade083Ÿ3 *cascade08Ÿ3£3*cascade08£3¤3 *cascade08¤3¨3*cascade08¨3ª3 *cascade08ª3«3 *cascade08«3®3*cascade08®3¯3 *cascade08¯3°3 *cascade08°3²3*cascade08²3³3 *cascade08³3¶3*cascade08¶3·3 *cascade08·3¿3*cascade08¿3À3 *cascade08À3Á3*cascade08Á3Â3 *cascade08Â3å3*cascade08å3è3 *cascade08è3õ3*cascade08õ3ö3 *cascade08ö3÷3 *cascade08÷3ƒ4*cascade08ƒ4„4 *cascade08„4ˆ4*cascade08ˆ4‰4 *cascade08‰4–4*cascade08–4—4 *cascade08—4¢4*cascade08¢4¥4 *cascade08¥4§4*cascade08§4·4 *cascade08·4º4*cascade08º4Â4 *cascade08Â4Ç4*cascade08Ç4Ë4 *cascade08Ë4Ï4*cascade08Ï4Ğ4*cascade08Ğ4Ó4*cascade08Ó4Ô4 *cascade08Ô4Õ4*cascade08Õ4Ü4*cascade08Ü4İ4 *cascade08İ4ò4 *cascade08ò4ô4 *cascade08ô4õ4*cascade08õ4ü4 *cascade08ü4ÿ4*cascade08ÿ4‹5 *cascade08‹5«5*cascade08«5¬5 *cascade08¬5¶5 *cascade08¶5·5 *cascade08·5¹5 *cascade08¹5»5*cascade08»5¼5 *cascade08¼5Ç5*cascade08Ç5È5 *cascade08È5Í5*cascade08Í5Î5 *cascade08Î5Ş5*cascade08Ş5ß5 *cascade08ß5á5*cascade08á5â5 *cascade08â5æ5*cascade08æ5ç5 *cascade08ç5è5*cascade08è5é5*cascade08é5ê5*cascade08ê5ì5 *cascade08ì5ğ5*cascade08ğ5÷5 *cascade08÷5û5*cascade08û5ÿ5 *cascade08ÿ5™6*cascade08™6¦6 *cascade08¦6­6*cascade08­6°6 *cascade08°6±6 *cascade08±6¸6*cascade08¸6¹6 *cascade08¹6À6*cascade08À6Á6 *cascade08Á6Æ6*cascade08Æ6Ç6 *cascade08Ç6Ê6 *cascade08Ê6Í6*cascade08Í6Ï6 *cascade08Ï6Ò6 *cascade08Ò6Ó6*cascade08Ó6Ö6 *cascade08Ö6ì6 *cascade08ì6²7*cascade08²7¶7 *cascade08¶7º7*cascade08º7Ò7 *cascade08Ò7Ö7*cascade08Ö7×7 *cascade08×7å7*cascade08å7ù7 *cascade08ù7®8*cascade08®8Ä8 *cascade08Ä8Å8*cascade08Å8Æ8 *cascade08Æ8Ç8*cascade08Ç8È8 *cascade08È8Ê8*cascade08Ê8×8 *cascade08×8İ8*cascade08İ8Ş8*cascade08Ş8ß8 *cascade08ß8á8*cascade08á8â8 *cascade08â8æ8*cascade08æ8è8 *cascade08è8ô8*cascade08ô8ö8 *cascade08ö8÷8*cascade08÷89 *cascade089˜9*cascade08˜9 9 *cascade08 9«9*cascade08«9¬9 *cascade08¬9´9*cascade08´9µ9 *cascade08µ9¸9*cascade08¸9Î9 *cascade08Î9×9 *cascade08×9İ9*cascade08İ9Ş9 *cascade08Ş9à9*cascade08à9á9 *cascade08á9â9*cascade08â9ã9 *cascade08ã9ä9*cascade08ä9å9 *cascade08å9æ9*cascade08æ9÷9 *cascade08÷9ú9*cascade08ú9ÿ9 *cascade08ÿ9…:*cascade08…:†: *cascade08†:Œ:*cascade08Œ:: *cascade08:‘:*cascade08‘:’: *cascade08’:“:*cascade08“:”: *cascade08”:•:*cascade08•:–: *cascade08–:—:*cascade08—:˜: *cascade08˜:™:*cascade08™:°: *cascade08°:İ: *cascade08İ:ï: *cascade08ï:¯; *cascade08¯;½; *cascade08½;Ë;*cascade08Ë;Í; *cascade08Í;Ñ;*cascade08Ñ;Ú; *cascade08Ú;á; *cascade08á;ä;*cascade08ä;å; *cascade08å;æ;*cascade08æ;é; *cascade08é;í;*cascade08í;ô; *cascade08ô;û; *cascade08û;°<*cascade08°<²< *cascade08²<¶<*cascade08¶<Í< *cascade08Í<Ï<*cascade08Ï<Ñ< *cascade08Ñ<Ó<*cascade08Ó<à< *cascade08à<â<*cascade08â<ã< *cascade08ã<å<*cascade08å<æ< *cascade08æ<ñ<*cascade08ñ<ò< *cascade08ò<ó< *cascade08ó<ş<*cascade08ş<„= *cascade08„=¾=*cascade08¾=Î= *cascade08Î=Õ= *cascade08Õ=×=*cascade08×=Ù= *cascade08Ù=Ü=*cascade08Ü=İ= *cascade08İ=á=*cascade08á=â= *cascade08â=å=*cascade08å=æ= *cascade08æ=ç= *cascade08ç=è=*cascade08è=é= *cascade08é=ê=*cascade08ê=í= *cascade08í=ó=*cascade08ó=ô= *cascade08ô=õ=*cascade08õ=ö= *cascade08ö=÷= *cascade08÷=ú=*cascade08ú=ı= *cascade08ı=ş=*cascade08ş=€> *cascade08€>>*cascade08>ƒ> *cascade08ƒ>Ÿ>*cascade08Ÿ> > *cascade08 >Ó> *cascade08Ó>Ÿ? *cascade08Ÿ? ?*cascade08 ?£? *cascade08£?¤?*cascade08¤?¥? *cascade08¥?¦?*cascade08¦?¨? *cascade08¨?ª?*cascade08ª?µ? *cascade08µ?Õ?*cascade08Õ?è? *cascade08è?ê?*cascade08ê?ë? *cascade08ë?í?*cascade08í?ö? *cascade08ö?÷? *cascade08÷?ø?*cascade08ø?ù? *cascade08ù?û?*cascade08û?@ *cascade08@‚@*cascade08‚@…@ *cascade08…@†@*cascade08†@‰@ *cascade08‰@Š@*cascade08Š@@*cascade08@ÌJ *cascade08ÌJÖJ *cascade08ÖJÙJ *cascade08ÙJøJ *cascade08øJıJ*cascade08ıJ·L *cascade08·LÊL*cascade08ÊLşL *cascade08şLŠM*cascade08ŠMµM *cascade08µMÉM*cascade08ÉMÊM *cascade08ÊMÕM*cascade08ÕMÖM *cascade08ÖMØM*cascade08ØMÙM *cascade08ÙMõM*cascade08õM‘N *cascade08‘N´O *cascade08´OºO *cascade08ºOP *cascade08PP*cascade08PÄP *cascade08ÄPÊP *cascade082Cfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/MainWindow.xaml.cs

@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "解决\"Launch Failed\"错误，移除硬编码的Java路径。计划实现JavaService自动检测系统Java环境，更新SettingsPage允许用户选择Java路径，并修改MainViewModel使用配置的路径启动游戏。",
-  "updatedAt": "2026-02-11T13:46:06.406897500Z"
-}

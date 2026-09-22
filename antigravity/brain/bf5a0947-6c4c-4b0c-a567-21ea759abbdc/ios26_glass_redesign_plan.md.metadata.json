@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "Phased plan for iOS 26 glassmorphism redesign: Batch A (glass materials, custom scrollbar, floating window), Batch B (home page version-centric redesign, gem-style launch button), Batch C (download action sheet, smart memory warnings, version selector simplification), Batch D (resource card images, privacy mode). Each batch builds sequentially.",
-  "updatedAt": "2026-02-11T15:45:41.470601300Z"
-}

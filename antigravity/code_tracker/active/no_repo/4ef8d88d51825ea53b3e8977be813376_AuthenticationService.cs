@@ -1,237 +1,0 @@
-πNusing System;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
-using System.Security.Cryptography;
-using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
-using GeminiLauncher.Models;
-using System.Diagnostics;
-using System.Windows;
-
-namespace GeminiLauncher.Services
-{
-    public class AuthenticationService
-    {
-        private const string ClientId = "00000000402b5328"; // Azure Client ID (commonly used for Minecraft Launchers)
-        private const string RedirectUri = "https://login.live.com/oauth20_desktop.srf";
-        private const string Scope = "XboxLive.Signin offline_access";
-        
-        private readonly HttpClient _httpClient;
-
-        public AuthenticationService()
-        {
-            _httpClient = new HttpClient();
-        }
-
-        // --- Offline Login ---
-        public Account LoginOffline(string username)
-        {
-            return new Account
-            {
-                Username = username,
-                Uuid = GenerateOfflineUuid(username),
-                AccessToken = Guid.NewGuid().ToString("N"),
-                Type = AccountType.Offline,
-                AvatarUrl = $"https://minotar.net/helm/{username}/100.png"
-            };
-        }
-
-        private string GenerateOfflineUuid(string username)
-        {
-            string input = "OfflinePlayer:" + username;
-            using (MD5 md5 = MD5.Create())
-            {
-                byte[] hash = md5.ComputeHash(Encoding.UTF8.GetBytes(input));
-                hash[6] = (byte)((hash[6] & 0x0f) | 0x30);
-                hash[8] = (byte)((hash[8] & 0x3f) | 0x80);
-                return new Guid(hash).ToString();
-            }
-        }
-
-        // --- Microsoft Login ---
-        
-        public async Task<Account> LoginMicrosoftAsync()
-        {
-            // 1. Get Authorization Code
-            string authCode = await GetAuthorizationCodeAsync();
-
-            // 2. Get Microsoft Access Token
-            var msTokenData = await GetMicrosoftAccessTokenAsync(authCode);
-            string msAccessToken = msTokenData.AccessToken;
-            string refreshToken = msTokenData.RefreshToken;
-
-            // 3. Authenticate with Xbox Live
-            string xblToken = await AuthenticateXboxLiveAsync(msAccessToken);
-
-            // 4. Authenticate with XSTS
-            var xstsData = await AuthenticateXstsAsync(xblToken);
-            string xstsToken = xstsData.Token;
-            string userHash = xstsData.UserHash;
-
-            // 5. Authenticate with Minecraft
-            var mcTokenData = await AuthenticateMinecraftAsync(userHash, xstsToken);
-            string mcAccessToken = mcTokenData.AccessToken;
-            // mcTokenData also has expires_in
-
-            // 6. Get Game Profile
-            var profile = await GetMinecraftProfileAsync(mcAccessToken);
-
-            return new Account
-            {
-                Username = profile.Name,
-                Uuid = profile.Id,
-                AccessToken = mcAccessToken,
-                RefreshToken = refreshToken,
-                MinecraftAccessToken = mcAccessToken,
-                ExpiryTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + mcTokenData.ExpiresIn,
-                Type = AccountType.Microsoft,
-                AvatarUrl = $"https://minotar.net/helm/{profile.Name}/100.png"
-            };
-        }
-
-        private Task<string> GetAuthorizationCodeAsync()
-        {
-            string url = $"https://login.live.com/oauth20_authorize.srf?client_id={ClientId}&response_type=code&redirect_uri={RedirectUri}&scope={Scope}";
-            
-            return Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                var dialog = new Views.Dialogs.MicrosoftLoginDialog(url, RedirectUri)
-                {
-                    Owner = Application.Current.MainWindow
-                };
-
-                if (dialog.ShowDialog() == true)
-                {
-                    return dialog.AuthorizationCode!;
-                }
-                
-                throw new OperationCanceledException("Login cancelled by user.");
-            }).Task;
-        }
-
-        private async Task<(string AccessToken, string RefreshToken)> GetMicrosoftAccessTokenAsync(string code)
-        {
-            var content = new FormUrlEncodedContent(new[]
-            {
-                new KeyValuePair<string, string>("client_id", ClientId),
-                new KeyValuePair<string, string>("code", code),
-                new KeyValuePair<string, string>("grant_type", "authorization_code"),
-                new KeyValuePair<string, string>("redirect_uri", RedirectUri)
-            });
-
-            var response = await _httpClient.PostAsync("https://login.live.com/oauth20_token.srf", content);
-            response.EnsureSuccessStatusCode();
-            var json = JObject.Parse(await response.Content.ReadAsStringAsync());
-            
-            return (json["access_token"].ToString(), json["refresh_token"].ToString());
-        }
-
-        private async Task<string> AuthenticateXboxLiveAsync(string msAccessToken)
-        {
-            var payload = new
-            {
-                Properties = new
-                {
-                    AuthMethod = "RPS",
-                    SiteName = "user.auth.xboxlive.com",
-                    RpsTicket = $"d={msAccessToken}"
-                },
-                RelyingParty = "http://auth.xboxlive.com",
-                TokenType = "JWT"
-            };
-
-            var content = new StringContent(JObject.FromObject(payload).ToString(), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync("https://user.auth.xboxlive.com/user/authenticate", content);
-            response.EnsureSuccessStatusCode();
-            var json = JObject.Parse(await response.Content.ReadAsStringAsync());
-            
-            return json["Token"].ToString();
-        }
-
-        private async Task<(string Token, string UserHash)> AuthenticateXstsAsync(string xblToken)
-        {
-            var payload = new
-            {
-                Properties = new
-                {
-                    SandboxId = "RETAIL",
-                    UserTokens = new[] { xblToken }
-                },
-                RelyingParty = "rp://api.minecraftservices.com/",
-                TokenType = "JWT"
-            };
-
-            var content = new StringContent(JObject.FromObject(payload).ToString(), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync("https://xsts.auth.xboxlive.com/xsts/authorize", content);
-            response.EnsureSuccessStatusCode();
-            var json = JObject.Parse(await response.Content.ReadAsStringAsync());
-            
-            string token = json["Token"].ToString();
-            string uhs = json["DisplayClaims"]["xui"][0]["uhs"].ToString();
-            
-            return (token, uhs);
-        }
-
-        private async Task<(string AccessToken, long ExpiresIn)> AuthenticateMinecraftAsync(string userHash, string xstsToken)
-        {
-            var payload = new
-            {
-                identityToken = $"XBL3.0 x={userHash};{xstsToken}"
-            };
-
-            var content = new StringContent(JObject.FromObject(payload).ToString(), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync("https://api.minecraftservices.com/launcher/login", content);
-            response.EnsureSuccessStatusCode();
-            var json = JObject.Parse(await response.Content.ReadAsStringAsync());
-            
-            return (json["access_token"].ToString(), (long)json["expires_in"]);
-        }
-
-        private async Task<(string Id, string Name)> GetMinecraftProfileAsync(string mcAccessToken)
-        {
-            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", mcAccessToken);
-            var response = await _httpClient.GetAsync("https://api.minecraftservices.com/minecraft/profile");
-            response.EnsureSuccessStatusCode();
-            var json = JObject.Parse(await response.Content.ReadAsStringAsync());
-            
-            return (json["id"].ToString(), json["name"].ToString());
-        }
-
-        public async Task RefreshSessionAsync(Account account)
-        {
-            if (account.Type != AccountType.Microsoft) return;
-            
-            // 1. Refresh Microsoft Token
-            var content = new FormUrlEncodedContent(new[]
-            {
-                new KeyValuePair<string, string>("client_id", ClientId),
-                new KeyValuePair<string, string>("refresh_token", account.RefreshToken),
-                new KeyValuePair<string, string>("grant_type", "refresh_token"),
-                new KeyValuePair<string, string>("redirect_uri", RedirectUri)
-            });
-
-            var response = await _httpClient.PostAsync("https://login.live.com/oauth20_token.srf", content);
-            response.EnsureSuccessStatusCode();
-            var json = JObject.Parse(await response.Content.ReadAsStringAsync());
-
-            string newMsAccessToken = json["access_token"].ToString();
-            string newRefreshToken = json["refresh_token"].ToString();
-
-            // 2. Refresh Xbox Live Token
-            string xblToken = await AuthenticateXboxLiveAsync(newMsAccessToken);
-
-            // 3. Refresh XSTS Token
-            var xstsData = await AuthenticateXstsAsync(xblToken);
-
-            // 4. Refresh Minecraft Token
-            var mcTokenData = await AuthenticateMinecraftAsync(xstsData.UserHash, xstsData.Token);
-
-            // Update Account object
-            account.RefreshToken = newRefreshToken;
-            account.MinecraftAccessToken = mcTokenData.AccessToken;
-            account.ExpiryTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + mcTokenData.ExpiresIn;
-        }
-    }
-}
- *cascade084*cascade084 *cascade08ø*cascade08ø› *cascade08›¯*cascade08¯è*cascade08èÊ *cascade08Êæ*cascade08æÒ *cascade08Òû*cascade08ûﬁ *cascade08ﬁ¯*cascade08¯˘ *cascade08˘¸*cascade08¸˝ *cascade08˝Ä*cascade08ÄÅ *cascade08Å≈*cascade08≈∆ *cascade08∆À*cascade08ÀÕ *cascade08Õÿ*cascade08ÿ⁄ *cascade08⁄Í*cascade08ÍÎ *cascade08ÎÓ*cascade08ÓÔ *cascade08Ôá*cascade08áâ *cascade08â±*cascade08±≤ *cascade08≤À*cascade08ÀÃ *cascade08Ã·*cascade08·‚ *cascade08‚Ì*cascade08ÌÓ *cascade08Óó*cascade08óò *cascade08òú*cascade08úù *cascade08ù÷*cascade08÷‡ *cascade08‡™*cascade08™´ *cascade08´⁄*cascade08⁄‹ *cascade08‹Ò*cascade08ÒÛ *cascade08Ûó*cascade08óò *cascade08òΩ*cascade08Ωæ *cascade08æŒ*cascade08Œœ *cascade08œ‘*cascade08‘’ *cascade08’˝*cascade08˝˛ *cascade08˛˙*cascade08˙˚ *cascade08˚Ç*cascade08ÇÉ *cascade08Éê*cascade08êë *cascade08ë™*cascade08™´ *cascade08´º*cascade08ºΩ *cascade08Ω¿*cascade08¿¬ *cascade08¬ﬂ*cascade08ﬂ‡ *cascade08‡Â*cascade08ÂÊ *cascade08Ê˛*cascade08˛ˇ *cascade08ˇ÷*cascade08÷ÿ *cascade08ÿ£*cascade08£• *cascade08•ß*cascade08ß© *cascade08©Æ*cascade08ÆØ *cascade08Ø¥*cascade08¥µ *cascade08µ¬*cascade08¬√ *cascade08√º*cascade08ºø *cascade08ø¬*cascade08¬√ *cascade08√Ò*cascade08ÒÚ *cascade08Úí*cascade08íì *cascade08ìõ*cascade08õú *cascade08ú†*cascade08†¢ *cascade08¢ª*cascade08ªΩ *cascade08Ω¡*cascade08¡… *cascade08…£*cascade08£§ *cascade08§ì *cascade08ìì*cascade08ì÷ *cascade08÷◊*cascade08◊€ *cascade08€ﬁ*cascade08ﬁÂ *cascade08ÂÊ*cascade08ÊÁ *cascade08ÁË*cascade08ËÈ *cascade08ÈÎ*cascade08ÎÓ *cascade08Ó*cascade08Û *cascade08ÛÙ*cascade08Ù¸ *cascade08¸˝*cascade08˝˛ *cascade08˛ˇ*cascade08ˇÄ *cascade08ÄÅ*cascade08ÅÇ *cascade08ÇÑ*cascade08ÑÖ *cascade08Öà*cascade08àä *cascade08äã*cascade08ãô *cascade08ôö*cascade08ö™ *cascade08™¨ *cascade08¨≠*cascade08≠± *cascade08±¥*cascade08¥µ *cascade08µ∂*cascade08∂∑ *cascade08∑∫*cascade08∫ª *cascade08ªº*cascade08ºΩ *cascade08Ωæ*cascade08æ¿ *cascade08¿¬*cascade08¬√ *cascade08√ƒ*cascade08ƒ∆ *cascade08∆…*cascade08…  *cascade08 Ã*cascade08Ãœ *cascade08œ–*cascade08–“ *cascade08“÷*cascade08÷◊ *cascade08◊ÿ*cascade08ÿŸ *cascade08Ÿ⁄*cascade08⁄ﬂ *cascade08ﬂ·*cascade08·‚ *cascade08‚‰*cascade08‰È *cascade08ÈÍ*cascade08ÍÎ *cascade08ÎÏ*cascade08ÏÌ *cascade08ÌÔ*cascade08Ô *cascade08Û*cascade08ÛÉ *cascade08ÉÑ*cascade08Ñö *cascade08öõ*cascade08õû *cascade08ûü*cascade08ü† *cascade08†°*cascade08°¢ *cascade08¢•*cascade08•ß *cascade08ß®*cascade08®≠ *cascade08≠≤*cascade08≤µ *cascade08µ∑*cascade08∑∏ *cascade08∏ª*cascade08ªº *cascade08ºΩ*cascade08Ωæ *cascade08æ¿*cascade08¿“ *cascade08“Ÿ*cascade08Ÿ‚ *cascade08‚È *cascade08ÈÍ*cascade08ÍÎ *cascade08ÎÌ*cascade08ÌÓ *cascade08ÓÔ*cascade08Ô *cascade08Ò *cascade08ÒÙ*cascade08Ùı *cascade08ı¯*cascade08¯˙ *cascade08˙ˇ*cascade08ˇÄ *cascade08ÄÇ*cascade08ÇÖ *cascade08ÖÜ*cascade08Üá *cascade08áà*cascade08àö *cascade08öù*cascade08ùØ *cascade08Ø∞*cascade08∞¥ *cascade08¥µ*cascade08µΩ *cascade08Ω¡*cascade08¡ƒ *cascade08ƒ≈*cascade08≈∆ *cascade08∆…*cascade08…À *cascade08ÀÕ*cascade08ÕŒ *cascade08Œ“*cascade08“◊ *cascade08◊ÿ *cascade08ÿ‰ *cascade08‰Á*cascade08Á˜ *cascade08˜â  *cascade08â ã *cascade08ã è  *cascade08è ë *cascade08ë í  *cascade08í ì  *cascade08ì î *cascade08î ï  *cascade08ï ñ *cascade08ñ ó  *cascade08ó ò *cascade08ò ú  *cascade08ú ù *cascade08ù û  *cascade08û ü  *cascade08ü † *cascade08† Ø  *cascade08Ø ∞ *cascade08∞ ±  *cascade08± ≤ *cascade08≤ ¥  *cascade08¥ ∂ *cascade08∂ ∏  *cascade08∏ π *cascade08π ∫  *cascade08∫ º *cascade08º æ  *cascade08æ ∆ *cascade08∆ «  *cascade08« Œ *cascade08Œ ÿ  *cascade08ÿ Ÿ *cascade08Ÿ ⁄  *cascade08⁄ ﬂ *cascade08ﬂ ∏! *cascade08∏!¡! *cascade08¡!ÿ!*cascade08ÿ!Ÿ! *cascade08Ÿ!è"*cascade08è"ê" *cascade08ê"ò"*cascade08ò"ô" *cascade08ô"€"*cascade08€"‹" *cascade08‹"·"*cascade08·"„" *cascade08„"é#*cascade08é#ê# *cascade08ê#≤#*cascade08≤#≥# *cascade08≥#‚#*cascade08‚#„# *cascade08„#Ë#*cascade08Ë#È# *cascade08È#Ï#*cascade08Ï#Ì# *cascade08Ì#∆%*cascade08∆%«% *cascade08«%ˆ%*cascade08ˆ%˜% *cascade08˜%—(*cascade08—(“( *cascade08“(Ÿ(*cascade08Ÿ(⁄( *cascade08⁄(‰)*cascade08‰)Ê) *cascade08Ê)µ**cascade08µ*∂* *cascade08∂*Ë**cascade08Ë*È* *cascade08È*Å+*cascade08Å+Ç+ *cascade08Ç+Ñ,*cascade08Ñ,Ö, *cascade08Ö,í,*cascade08í,ì, *cascade08ì,Î,*cascade08Î,Ï, *cascade08Ï,˙,*cascade08˙,˚, *cascade08˚,ˇ,*cascade08ˇ,Ä- *cascade08Ä-Å-*cascade08Å-Ç- *cascade08Ç-†-*cascade08†-°- *cascade08°-ßA*cascade08ßA∂A *cascade08∂AØN*cascade08ØNπN *cascade082Rfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Services/AuthenticationService.cs

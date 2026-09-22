@@ -1,45 +1,0 @@
-Šusing System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Windows;
-using System.Windows.Controls;
-using GeminiLauncher.Services.Network;
-using CommunityToolkit.Mvvm.ComponentModel;
-
-namespace GeminiLauncher.Views
-{
-    public partial class DownloadManagerPanel : UserControl
-    {
-        public DownloadManagerService ViewModel => DownloadManagerService.Instance;
-
-        public DownloadManagerPanel()
-        {
-            InitializeComponent();
-            this.DataContext = this;
-            
-            // Periodically update active status
-            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            timer.Tick += (s, e) => {
-                OnPropertyChanged(nameof(HasActiveTasks));
-            };
-            timer.Start();
-        }
-
-        public bool HasActiveTasks => ViewModel.ActiveTasks.Any(t => !t.IsCompleted && !t.IsFailed);
-
-        private void NavigateToManager_Click(object sender, RoutedEventArgs e)
-        {
-            if (Application.Current.MainWindow is MainWindow mainWindow)
-            {
-                mainWindow.RootFrame.Navigate(new DownloadManagerPage());
-            }
-        }
-
-        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
-        protected virtual void OnPropertyChanged(string propertyName)
-        {
-            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
-        }
-    }
-}
-Õ *cascade08ÕÙ*cascade08ÙÚ *cascade08ÚÜ*cascade08ÜÝ *cascade08Ýà*cascade08àâ *cascade08âä*cascade08äå *cascade08åæ*cascade08æ§ *cascade08§¨ *cascade08¨©*cascade08©« *cascade08«¬ *cascade08¬® *cascade08®¶*cascade08¶· *cascade08·»*cascade08»½ *cascade08½É *cascade08Éã*cascade08ãå *cascade08åø*cascade08øù *cascade08ù¥	*cascade08¥	¦	 *cascade08¦	®	*cascade08®	¶	 *cascade08¶	¸	*cascade08¸	¹	 *cascade08¹	¼	*cascade08¼	½	 *cascade08½	Ì	*cascade08Ì	Š *cascade082Sfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Views/DownloadManagerPanel.xaml.cs

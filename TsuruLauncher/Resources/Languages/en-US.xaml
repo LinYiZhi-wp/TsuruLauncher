@@ -1,0 +1,226 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=mscorlib">
+    
+    <!-- HomePage -->
+    <system:String x:Key="Home_Welcome">Welcome to Tsuru Launcher</system:String>
+    <system:String x:Key="Home_Subtitle">Login to start playing Minecraft.</system:String>
+    <system:String x:Key="Home_ChooseMethod">Choose Login Method</system:String>
+    <system:String x:Key="Home_OfflineMode">Offline Mode</system:String>
+    <system:String x:Key="Home_Login">Login</system:String>
+    <system:String x:Key="Home_LoginMicrosoft">🎮 Login with Microsoft Account</system:String>
+    <system:String x:Key="Home_LoggedInAs">✓ Logged in as</system:String>
+    <system:String x:Key="Home_SelectVersion">Select Version</system:String>
+    <system:String x:Key="Home_LaunchGame">🚀 Launch Game</system:String>
+    
+    <!-- SettingsPage -->
+    <system:String x:Key="Settings_Title">Settings</system:String>
+    <system:String x:Key="Settings_Subtitle">Configure your game launcher preferences.</system:String>
+    <system:String x:Key="Settings_GameSettings">🎮 Game Settings</system:String>
+    <system:String x:Key="Settings_GamePath">Game Folder Path</system:String>
+    <system:String x:Key="Settings_Browse">📁 Browse</system:String>
+    <system:String x:Key="Settings_VersionIsolation">Enable Version Isolation</system:String>
+    <system:String x:Key="Settings_JavaSettings">☕ Java Settings</system:String>
+    <system:String x:Key="Settings_JavaPath">Java Path</system:String>
+    <system:String x:Key="Settings_AutoDetected">Auto-detected</system:String>
+    <system:String x:Key="Settings_AutoSearch">🔍 Auto Search</system:String>
+    <system:String x:Key="Settings_JavaDetected">✓ Java detected</system:String>
+    <system:String x:Key="Settings_MemoryAllocation">💾 Memory Allocation</system:String>
+    <system:String x:Key="Settings_AllocationMode">Allocation Mode</system:String>
+    <system:String x:Key="Settings_Auto">Auto</system:String>
+    <system:String x:Key="Settings_Custom">Custom</system:String>
+    <system:String x:Key="Settings_AllocatedMemory">Allocated Memory</system:String>
+    <system:String x:Key="Settings_Available">Available:</system:String>
+    <system:String x:Key="Settings_GameUsage">Game Usage:</system:String>
+    <system:String x:Key="Settings_Accounts">👤 Accounts</system:String>
+    <system:String x:Key="Settings_AddOffline">Add Offline</system:String>
+    <system:String x:Key="Settings_AddMicrosoft">Add Microsoft</system:String>
+    <system:String x:Key="Settings_Language">🌐 Language</system:String>
+    <system:String x:Key="Settings_English">English</system:String>
+    <system:String x:Key="Settings_Chinese">中文 (Chinese)</system:String>
+    <system:String x:Key="Settings_About">ℹ️ About</system:String>
+    <system:String x:Key="Settings_Version">Version:</system:String>
+    <system:String x:Key="Settings_CheckUpdate">Check for Updates</system:String>
+    
+    <!-- DownloadPage -->
+    <system:String x:Key="Download_Title">Install New Version</system:String>
+    <system:String x:Key="Download_Subtitle">Download and install Minecraft versions from official or mirror sources.</system:String>
+    <system:String x:Key="Download_RefreshList">Refresh List</system:String>
+    <system:String x:Key="Download_DownloadSource">Download Source:</system:String>
+    <system:String x:Key="Download_VersionID">Version ID</system:String>
+    <system:String x:Key="Download_Type">Type</system:String>
+    <system:String x:Key="Download_ReleaseTime">Release Time</system:String>
+    <system:String x:Key="Download_ReadyToDownload">Ready to download</system:String>
+    <system:String x:Key="Download_InstallSelected">⬇️ Install Selected</system:String>
+    
+    <!-- ResourcesPage -->
+    <system:String x:Key="Resources_Title">Resources</system:String>
+    <system:String x:Key="Resources_Subtitle">Manage mods, modpacks, and resource packs.</system:String>
+    <system:String x:Key="Resources_Search">🔍 Search</system:String>
+    <system:String x:Key="Resources_Import">📦 Import</system:String>
+    
+    <!-- Common -->
+    <system:String x:Key="Common_Home">Home</system:String>
+    <system:String x:Key="Common_Resources">Resources</system:String>
+    <system:String x:Key="Common_Download">Download</system:String>
+    <system:String x:Key="Common_Settings">Settings</system:String>
+    
+    <!-- DownloadPage Extended -->
+    <system:String x:Key="Download_ViewProgress">⬇ View Progress</system:String>
+    <system:String x:Key="Download_Filter_Release">Releases</system:String>
+    <system:String x:Key="Download_Filter_Snapshot">Snapshots</system:String>
+    <system:String x:Key="Download_Filter_Old">Old Versions</system:String>
+    <system:String x:Key="Download_SearchPlaceholder">Search versions...</system:String>
+    <system:String x:Key="Download_DownloadButton">💾 Download</system:String>
+
+    <!-- DownloadManagerPage -->
+    <system:String x:Key="DownloadManager_StatsTitle">Download Stats</system:String>
+    <system:String x:Key="DownloadManager_TotalProgress">Total Progress</system:String>
+    <system:String x:Key="DownloadManager_Speed">Download Speed</system:String>
+    <system:String x:Key="DownloadManager_Remaining">Remaining Files</system:String>
+    <system:String x:Key="DownloadManager_Title">Manage Active Downloads</system:String>
+    <system:String x:Key="DownloadManager_CancelAll">Cancel All</system:String>
+    <system:String x:Key="DownloadManager_NewDownload">New Download</system:String>
+    <system:String x:Key="DownloadManager_Step_JSON">Version JSON</system:String>
+    <system:String x:Key="DownloadManager_Step_Libs">Libraries</system:String>
+    <system:String x:Key="DownloadManager_Step_Assets">Assets</system:String>
+    <system:String x:Key="DownloadManager_Step_Install">Finalizing</system:String>
+
+    <!-- MainWindow -->
+    <system:String x:Key="Main_DownloadTooltip">Open Download Page / View Speed</system:String>
+    <system:String x:Key="App_Title">Tsuru Launcher</system:String>
+
+    <!-- SettingsPage Extended -->
+    <system:String x:Key="Settings_Section_GameEnv">GAME ENVIRONMENT</system:String>
+    <system:String x:Key="Settings_Section_Java">JAVA SETTINGS</system:String>
+    <system:String x:Key="Settings_Section_Memory">MEMORY ALLOCATION</system:String>
+    <system:String x:Key="Settings_Section_Accounts">ACCOUNTS</system:String>
+    <system:String x:Key="Settings_Section_General">GENERAL</system:String>
+    <system:String x:Key="Settings_JavaRuntime">Java Runtime</system:String>
+    <system:String x:Key="Settings_AutoDetect">Auto-Detect Java</system:String>
+    <system:String x:Key="Settings_ScanSystem">Scan System</system:String>
+    <system:String x:Key="Settings_SelectJavaPlaceholder">Select Java...</system:String>
+    <system:String x:Key="Settings_PrivacyMode">Privacy Mode</system:String>
+    <system:String x:Key="Settings_PrivacyDesc">Don't save login info (Cafe Mode)</system:String>
+    <system:String x:Key="Settings_TokenStatus">Token Status</system:String>
+    <system:String x:Key="Settings_Microsoft">Microsoft Login</system:String>
+
+    <!-- HomePage Extended -->
+    <system:String x:Key="Home_NoVersionSelected">No Version Selected</system:String>
+    <system:String x:Key="Home_ModManagerTooltip">Mod Manager</system:String>
+    <system:String x:Key="Home_VersionSettings">Version Settings</system:String>
+
+    <!-- VersionSelectorPage -->
+    <system:String x:Key="VersionSelector_Title">Version Selection</system:String>
+    <system:String x:Key="VersionSelector_ToggleFolderTooltip">Toggle Folder View</system:String>
+    <system:String x:Key="VersionSelector_FolderListHeader">Folder List</system:String>
+    <system:String x:Key="VersionSelector_AddFolder">+ Add Folder</system:String>
+
+    <!-- Status & Messages -->
+    <system:String x:Key="Status_Ready">Ready to Launch</system:String>
+    <system:String x:Key="Status_Checking">Checking Resources...</system:String>
+    <system:String x:Key="Status_Running">Game Running...</system:String>
+    <system:String x:Key="Status_Failed">Launch Failed</system:String>
+    <system:String x:Key="Msg_NoVersion">No version selected!</system:String>
+    <system:String x:Key="Msg_NoAccount">No account selected! Go to Settings.</system:String>
+    <system:String x:Key="Msg_JavaMissing">No valid Java installation found.\nPlease install Java {0} or set the path in Settings.</system:String>
+    <system:String x:Key="Title_Warning">Warning</system:String>
+    <system:String x:Key="Title_Crash">Crash Analyzer</system:String>
+    <system:String x:Key="Title_GameExited">Game Exited</system:String>
+    <system:String x:Key="Title_UploadComplete">Upload Complete</system:String>
+    <system:String x:Key="Title_ExportComplete">Export Complete</system:String>
+
+    <!-- Loader Selection -->
+    <system:String x:Key="Loader_Title">Select Loader</system:String>
+    <system:String x:Key="Loader_Message">You are downloading Minecraft {0}. Please select a loader type:</system:String>
+    <system:String x:Key="Loader_Vanilla">Vanilla</system:String>
+    <system:String x:Key="Loader_Fabric">Fabric</system:String>
+    <system:String x:Key="Loader_NeoForge">NeoForge</system:String>
+
+    <!-- Personalization -->
+    <system:String x:Key="Settings_Section_Personalization">Personalization</system:String>
+    <system:String x:Key="Settings_BackgroundImage">Background Image</system:String>
+    <system:String x:Key="Settings_SelectImage">Select Image</system:String>
+    <system:String x:Key="Settings_Opacity">Overlay Opacity</system:String>
+    <system:String x:Key="Settings_Blur">Background Blur</system:String>
+
+    <!-- Launch Settings -->
+    <system:String x:Key="Settings_Section_Launch">Launch Settings</system:String>
+    <system:String x:Key="Settings_LauncherVisibility">After Launch</system:String>
+    <system:String x:Key="Settings_Visibility_KeepOpen">Keep Open</system:String>
+    <system:String x:Key="Settings_Visibility_Hide">Hide Launcher</system:String>
+    <system:String x:Key="Settings_Visibility_Close">Close Launcher</system:String>
+    <system:String x:Key="Settings_ProcessPriority">Process Priority</system:String>
+    <system:String x:Key="Settings_Priority_Normal">Normal</system:String>
+    <system:String x:Key="Settings_Priority_High">High</system:String>
+
+    <!-- Memory Settings (PCL Style) -->
+    <system:String x:Key="Settings_AutoDetectMemory">Auto-Detect Memory</system:String>
+    <system:String x:Key="Settings_MaxMemory">Maximum Memory (MB)</system:String>
+    <system:String x:Key="Settings_MinMemory">Minimum Memory (MB)</system:String>
+    <system:String x:Key="Settings_MemoryInfo">System Memory: {0} MB | Recommended: {1} MB</system:String>
+
+    <!-- Download Settings -->
+    <system:String x:Key="Settings_Section_Download">Download Settings</system:String>
+    <system:String x:Key="Settings_DownloadSource">Download Source</system:String>
+    <system:String x:Key="Settings_Source_Official">Official</system:String>
+    <system:String x:Key="Settings_Source_BMCLAPI">BMCLAPI Mirror</system:String>
+    <system:String x:Key="Settings_MaxThreads">Max Download Threads</system:String>
+
+    <!-- Advanced Launch Settings -->
+    <system:String x:Key="Settings_Section_Advanced">Advanced Launch Settings</system:String>
+    <system:String x:Key="Settings_JvmArgs">JVM Arguments (Global)</system:String>
+    <system:String x:Key="Settings_GameArgs">Game Arguments (Global)</system:String>
+    <system:String x:Key="Settings_WindowTitle">Custom Window Title</system:String>
+
+    <!-- UI Customization -->
+    <system:String x:Key="Settings_Section_UI">UI Customization</system:String>
+    <system:String x:Key="Settings_HidePages">Function Hiding</system:String>
+    <system:String x:Key="Settings_Hide_Download">Hide "Download" Page</system:String>
+    <system:String x:Key="Settings_Hide_Settings">Hide "Settings" Page (Press F12 to show)</system:String>
+
+    <!-- Export -->
+    <system:String x:Key="Export_TabTitle">Export Modpack</system:String>
+    <system:String x:Key="Export_ModpackName">Modpack Name</system:String>
+    <system:String x:Key="Export_ModpackVersion">Modpack Version</system:String>
+    <system:String x:Key="Export_Section_Content">Content Selection</system:String>
+    <system:String x:Key="Export_GameCore">Game Core</system:String>
+    <system:String x:Key="Export_GameSettings">Game Settings (Controls, Volume, Video, etc.)</system:String>
+    <system:String x:Key="Export_Saves">Singleplayer Saves (Worlds/Maps)</system:String>
+    <system:String x:Key="Export_PCL_Launcher">PCL Launcher (Package PCL for players without launcher)</system:String>
+    <system:String x:Key="Export_PCL_Settings">PCL Customizations (Hidden features, homepage, music, etc.)</system:String>
+    <system:String x:Key="Export_Button_Start">📦 Start Export Guide</system:String>
+    <system:String x:Key="Export_Success_Title">Export Complete</system:String>
+    <system:String x:Key="Export_Success_Message">Modpack exported successfully!</system:String>
+    <system:String x:Key="Export_Error_Title">Error</system:String>
+    <system:String x:Key="Export_Exporting">Exporting...</system:String>
+
+    <!-- Dialog Messages -->
+    <system:String x:Key="Msg_LogNotFound">Log file not found.</system:String>
+    <system:String x:Key="Msg_UploadNotImplemented">Log upload is not yet implemented. Stay tuned.</system:String>
+    <system:String x:Key="Msg_SelectVersionFirst">Please select a game version first</system:String>
+    <system:String x:Key="Msg_GameDirNotFound">Game directory not found. Please configure in Settings.</system:String>
+    <system:String x:Key="Msg_LogNotGenerated">Log file has not been generated yet.</system:String>
+    <system:String x:Key="Msg_UpdateNotImplemented">Auto-update is not yet implemented. Current version {0}.\nPlease visit GitHub for the latest version.</system:String>
+    <system:String x:Key="Msg_VersionDeleted">Version files not found. Please reselect a version.</system:String>
+    <system:String x:Key="Msg_JavaAutoSwitch">Java Auto-Switch</system:String>
+    <system:String x:Key="Msg_JavaAutoSwitchDetail">Automatically switched to compatible Java</system:String>
+    <system:String x:Key="Msg_LaunchFailed">Launch Failed</system:String>
+    <system:String x:Key="Msg_CannotStartJava">Cannot start Java process</system:String>
+    <system:String x:Key="Msg_ResourceCheck">Resource Check</system:String>
+    <system:String x:Key="Msg_MissingFiles">{0} missing files detected</system:String>
+    <system:String x:Key="Msg_AllResourcesReady">All resources downloaded</system:String>
+    <system:String x:Key="Msg_DownloadFailed">Download Failed</system:String>
+    <system:String x:Key="Msg_NoVersionSelectedDownload">No version selected. Download the latest version?</system:String>
+    <system:String x:Key="Msg_DownloadComplete">Download complete!</system:String>
+    <system:String x:Key="Msg_ModpackImportSuccess">Modpack imported successfully!</system:String>
+    <system:String x:Key="Msg_UpdateComplete">Update downloaded! Application will restart.</system:String>
+    <system:String x:Key="Title_VersionCheck">Version Check</system:String>
+    <system:String x:Key="Title_Success">Success</system:String>
+    <system:String x:Key="LoaderSelect_Subtitle">Choose a mod loader to install</system:String>
+    <system:String x:Key="Common_Confirm">OK</system:String>
+    <system:String x:Key="Common_Cancel">Cancel</system:String>
+    <system:String x:Key="Home_Greeting">👋 Hello, {0}</system:String>
+    <system:String x:Key="Title_UpdateComplete">Update Complete</system:String>
+    <system:String x:Key="Java_NotFound">No Java installation found</system:String>
+</ResourceDictionary>

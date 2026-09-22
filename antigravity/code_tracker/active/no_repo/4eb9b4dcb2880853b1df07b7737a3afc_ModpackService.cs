@@ -1,272 +1,0 @@
-ô_using System;
-using System.IO;
-using System.IO.Compression;
-using System.Linq;
-using System.Threading.Tasks;
-using GeminiLauncher.Models;
-using GeminiLauncher.Services.Network;
-using Newtonsoft.Json.Linq;
-
-namespace GeminiLauncher.Services.Ecosystem
-{
-    public class ModpackService
-    {
-        private readonly DownloadService _downloadService;
-        private readonly ModLoaderService _modLoaderService;
-
-        public ModpackService()
-        {
-            _downloadService = new DownloadService();
-            _modLoaderService = new ModLoaderService();
-        }
-
-        public async Task ImportMrPackAsync(string filePath, string dotMinecraftPath, IProgress<double>? progress = null, IProgress<string>? status = null)
-        {
-            if (!File.Exists(filePath)) throw new FileNotFoundException("Modpack file not found.", filePath);
-
-            string tempDir = Path.Combine(Path.GetTempPath(), "LinLaunch_Import_" + Guid.NewGuid());
-            Directory.CreateDirectory(tempDir);
-
-            try
-            {
-                status?.Report("Extracting package...");
-                progress?.Report(0);
-
-                // 1. Extract .mrpack
-                ZipFile.ExtractToDirectory(filePath, tempDir);
-
-                // 2. Read modrinth.index.json
-                string indexFile = Path.Combine(tempDir, "modrinth.index.json");
-                if (!File.Exists(indexFile)) throw new Exception("Invalid .mrpack: modrinth.index.json missing.");
-
-                var json = JObject.Parse(File.ReadAllText(indexFile));
-                string packName = json["name"]?.ToString() ?? "Unknown Modpack";
-                string safeName = string.Join("_", packName.Split(Path.GetInvalidFileNameChars()));
-
-                status?.Report($"Preparing {packName}...");
-
-                // Setup version directory
-                string versionDir = Path.Combine(dotMinecraftPath, "versions", safeName);
-                if (Directory.Exists(versionDir))
-                {
-                    safeName += "_" + DateTime.Now.Ticks;
-                    versionDir = Path.Combine(dotMinecraftPath, "versions", safeName);
-                }
-                Directory.CreateDirectory(versionDir);
-
-                // 3. Handle Game/Loader Version
-                var dependencies = json["dependencies"];
-                string minecraftVer = dependencies?["minecraft"]?.ToString();
-                string fabricVer = dependencies?["fabric-loader"]?.ToString();
-                // ... (rest of version logic) ...
-                
-                string baseVersionId = minecraftVer;
-                JObject versionJson = null;
-
-                if (!string.IsNullOrEmpty(fabricVer))
-                {
-                    status?.Report($"Installing Fabric Loader {fabricVer}...");
-                    // Install Fabric and get the profile JSON
-                    // This downloads fabric libraries and returns the JObject for the version
-                    versionJson = await _modLoaderService.InstallFabricAsync(minecraftVer, fabricVer, dotMinecraftPath, progress, status);
-                    
-                    // Modify the ID to match our modpack
-                    versionJson["id"] = safeName;
-                }
-                else
-                {
-                    // Fallback or Vanilla
-                    versionJson = new JObject();
-                    versionJson["id"] = safeName;
-                    versionJson["inheritsFrom"] = minecraftVer;
-                    versionJson["type"] = "release";
-                    // For vanilla modpacks, we assume client.jar or inheritance.
-                    // But since GameService doesn't support inheritance fully yet, this might need work for Vanilla packs.
-                    // However, most .mrpacks are modded.
-                } 
-                
-                File.WriteAllText(Path.Combine(versionDir, $"{safeName}.json"), versionJson.ToString());
-
-                // 4. Download Files
-                string modsDir = Path.Combine(versionDir, "mods");
-                Directory.CreateDirectory(modsDir);
-
-                var files = json["files"] as JArray;
-                if (files != null && files.Count > 0)
-                {
-                    int totalFiles = files.Count;
-                    int currentFile = 0;
-
-                    foreach (var file in files)
-                    {
-                         currentFile++;
-                         double pct = (double)currentFile / totalFiles * 100;
-                         progress?.Report(pct);
-                         
-                         string downloadUrl = file["downloads"]?[0]?.ToString();
-                         string path = file["path"]?.ToString(); 
-                         if (string.IsNullOrEmpty(downloadUrl) || string.IsNullOrEmpty(path)) continue;
-
-                         string fileName = Path.GetFileName(path);
-                         status?.Report($"Downloading {fileName} ({currentFile}/{totalFiles})...");
-
-                         string destPath = Path.Combine(versionDir, path); 
-                         string destDir = Path.GetDirectoryName(destPath);
-                         if (!Directory.Exists(destDir)) Directory.CreateDirectory(destDir);
-
-                         await _downloadService.DownloadFileAsync(downloadUrl, destPath, null);
-                    }
-                }
-
-                // 5. Copy Overrides
-                string overridesDir = Path.Combine(tempDir, "overrides");
-                if (Directory.Exists(overridesDir))
-                {
-                    CopyDirectory(overridesDir, versionDir, true);
-                }
-                
-                // Copy overrides/mods if any separate
-                // Some packs use "client-overrides"
-                string clientOverrides = Path.Combine(tempDir, "client-overrides");
-                 if (Directory.Exists(clientOverrides))
-                {
-                    CopyDirectory(clientOverrides, versionDir, true);
-                }
-
-            }
-            finally
-            {
-                try { Directory.Delete(tempDir, true); } catch { }
-            }
-        }
-
-        private static void CopyDirectory(string sourceDir, string destinationDir, bool recursive)
-        {
-            var dir = new DirectoryInfo(sourceDir);
-            if (!dir.Exists) throw new DirectoryNotFoundException($"Source directory not found: {dir.FullName}");
-
-            DirectoryInfo[] dirs = dir.GetDirectories();
-            Directory.CreateDirectory(destinationDir);
-
-            foreach (FileInfo file in dir.GetFiles())
-            {
-                string targetFilePath = Path.Combine(destinationDir, file.Name);
-                file.CopyTo(targetFilePath, true);
-            }
-
-            if (recursive)
-            {
-                foreach (DirectoryInfo subDir in dirs)
-                {
-                    string newDestinationDir = Path.Combine(destinationDir, subDir.Name);
-                    CopyDirectory(subDir.FullName, newDestinationDir, true);
-                }
-            }
-        }
-        public async Task ExportMrPackAsync(GameInstance instance, string outputPath)
-        {
-            if (instance == null || string.IsNullOrEmpty(instance.GameDir)) 
-                throw new ArgumentException("Invalid game instance.");
-
-            string tempDir = Path.Combine(Path.GetTempPath(), "LinLaunch_Export_" + Guid.NewGuid());
-            Directory.CreateDirectory(tempDir);
-
-            try
-            {
-                // 1. Prepare Structures
-                var indexJson = new JObject();
-                indexJson["formatVersion"] = 1;
-                indexJson["game"] = "minecraft";
-                indexJson["versionId"] = "1.0.0";
-                indexJson["name"] = instance.Id;
-                indexJson["summary"] = "Exported by LinLaunch";
-                
-                var dependencies = new JObject();
-                // We should ideally detect these from the instance metadata or json
-                // For now, heuristic or placeholder
-                dependencies["minecraft"] = instance.Id.Split('-')[0]; // Crude
-                dependencies["fabric-loader"] = "0.14.21"; // Placeholder, TODO: Detect
-                indexJson["dependencies"] = dependencies;
-
-                var filesArray = new JArray();
-                var modrinthService = new ModrinthService();
-                
-                string modsDir = Path.Combine(instance.GameDir, "mods");
-                if (Directory.Exists(modsDir))
-                {
-                    foreach (var file in Directory.GetFiles(modsDir, "*.jar"))
-                    {
-                        // Calculate Hash (SHA1 for lookup, SHA512 for index)
-                        string sha1 = ComputeHash(file, System.Security.Cryptography.SHA1.Create());
-                        string sha512 = ComputeHash(file, System.Security.Cryptography.SHA512.Create());
-
-                        // Lookup on Modrinth
-                        var modInfo = await modrinthService.GetVersionByHashAsync(sha1);
-
-                        if (modInfo != null)
-                        {
-                            // It's a Modrinth mod! Add to index.
-                            var fileObj = new JObject();
-                            fileObj["path"] = "mods/" + Path.GetFileName(file);
-                            
-                            var hashes = new JObject();
-                            hashes["sha1"] = sha1;
-                            hashes["sha512"] = sha512;
-                            fileObj["hashes"] = hashes;
-
-                            var env = new JObject();
-                            env["client"] = "required";
-                            env["server"] = "required"; // Default
-                            fileObj["env"] = env;
-
-                            var downloads = new JArray();
-                            downloads.Add(modInfo.DownloadUrl);
-                            fileObj["downloads"] = downloads;
-                            
-                            fileObj["fileSize"] = new FileInfo(file).Length;
-
-                            filesArray.Add(fileObj);
-                        }
-                        else
-                        {
-                            // It's a custom jar (overrides)
-                            string relPath = "overrides/mods/" + Path.GetFileName(file);
-                            string destPath = Path.Combine(tempDir, "overrides", "mods", Path.GetFileName(file));
-                            Directory.CreateDirectory(Path.GetDirectoryName(destPath));
-                            File.Copy(file, destPath);
-                        }
-                    }
-                }
-                indexJson["files"] = filesArray;
-
-                // 2. Process Configs (Add to overrides)
-                string configDir = Path.Combine(instance.GameDir, "config");
-                if (Directory.Exists(configDir))
-                {
-                    CopyDirectory(configDir, Path.Combine(tempDir, "overrides", "config"), true);
-                }
-                
-                // 3. Write index
-                File.WriteAllText(Path.Combine(tempDir, "modrinth.index.json"), indexJson.ToString());
-
-                // 4. Zip it up
-                if (File.Exists(outputPath)) File.Delete(outputPath);
-                ZipFile.CreateFromDirectory(tempDir, outputPath);
-            }
-            finally
-            {
-                 try { Directory.Delete(tempDir, true); } catch { }
-            }
-        }
-
-        private string ComputeHash(string filePath, System.Security.Cryptography.HashAlgorithm algorithm)
-        {
-            using (var stream = File.OpenRead(filePath))
-            {
-                byte[] hash = algorithm.ComputeHash(stream);
-                return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-            }
-        }
-    }
-}
-Ù *cascade08Ù¥*cascade08¥Ç *cascade08Çª*cascade08ª® *cascade08®Ó*cascade08Ó¶ *cascade08¶à	*cascade08à	Í *cascade08Í©*cascade08©Ò *cascade08ÒÛ*cascade08Ûˆ *cascade08ˆ˜*cascade08˜¯ *cascade08¯˘*cascade08˘ã *cascade08ãå*cascade08åé *cascade08éè*cascade08èê *cascade08êí*cascade08íÌ *cascade08Ìú*cascade08ú¡ *cascade08¡√*cascade08√ƒ *cascade08ƒÏ*cascade08ÏÌ *cascade08ÌÔ*cascade08Ô *cascade08Û*cascade08ÛÙ *cascade08Ùõ*cascade08õû *cascade08û¿*cascade08¿¡ *cascade08¡ *cascade08 À *cascade08À€*cascade08€‹ *cascade08‹Ü*cascade08Üá *cascade08á†*cascade08†¢ *cascade08¢Á*cascade08ÁÈ *cascade08Èî*cascade08î† *cascade08†¢*cascade08¢® *cascade08®∑*cascade08∑∏ *cascade08∏∫*cascade08∫ª *cascade08ª¿*cascade08¿¡ *cascade08¡É*cascade08ÉÑ *cascade08Ñî*cascade08îï *cascade08ïπ*cascade08πª *cascade08ªƒ*cascade08ƒ≈ *cascade08≈‘*cascade08‘Á *cascade08ÁË*cascade08ËÍ *cascade08ÍÓ*cascade08Ó˘ *cascade08˘Ä*cascade08ÄÖ *cascade08Ö´*cascade08´¨ *cascade08¨¥*cascade08¥∂ *cascade08∂”*cascade08”Ò *cascade08Òı*cascade08ı§ *cascade08§•*cascade08•µ *cascade08µ∏*cascade08∏Â *cascade08ÂÈ*cascade08È´ *cascade08´∂*cascade08∂∑ *cascade08∑…*cascade08…  *cascade08 €*cascade08€‹ *cascade08‹â*cascade08âã *cascade08ãú*cascade08úù *cascade08ùü*cascade08ü† *cascade08†£*cascade08£§ *cascade08§ß*cascade08ß® *cascade08®¨*cascade08¨≠ *cascade08≠≤*cascade08≤¥ *cascade08¥π*cascade08π∫ *cascade08∫≈*cascade08≈« *cascade08«Ã*cascade08Ãœ *cascade08œ◊*cascade08◊ÿ *cascade08ÿ‹*cascade08‹› *cascade08›ﬁ*cascade08ﬁﬂ *cascade08ﬂÂ*cascade08ÂÊ *cascade08ÊË*cascade08ËÈ *cascade08ÈÉ*cascade08ÉÑ *cascade08Ñá*cascade08áâ *cascade08âê*cascade08êí *cascade08íì*cascade08ìó *cascade08óû*cascade08ûü *cascade08ü°*cascade08°¢ *cascade08¢∑*cascade08∑∏ *cascade08∏∏*cascade08∏∞! *cascade08∞!√!*cascade08√!Ì! *cascade08Ì!Ã"*cascade08Ã"ô# *cascade08ô#›$*cascade08›$‰& *cascade08‰&è(*cascade08è(œ8 *cascade08œ8ì_*cascade08ì_ô_ *cascade082Ufile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Services/Ecosystem/ModpackService.cs

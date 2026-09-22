@@ -1,0 +1,344 @@
+<Page x:Class="TsuruLauncher.Views.VersionSettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:anim="clr-namespace:TsuruLauncher.Services.Animation"
+        xmlns:motion="clr-namespace:TsuruLauncher.Services.Animation"
+        xmlns:seg="clr-namespace:TsuruLauncher.Controls"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      Title="Version Settings">
+
+    <Page.Resources>
+        <!-- 版本设置左侧标签：改成 RadioButton（原来是 Button + IsEnabled=False 表示选中，
+             同样是瞬时硬切）。选中底色交给容器里的纵向滑动指示块
+             （seg:SegmentedIndicator Axis=Vertical，150ms 单段 TranslateY + Height），
+             项自己做 150ms 的双层文字交叉淡入。 -->
+        <Style x:Key="TabButtonStyle" TargetType="RadioButton">
+            <Setter Property="Height" Value="45"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="15,0"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                         <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="{StaticResource RadiusLarge}">
+                             <Grid Margin="{TemplateBinding Padding}">
+                                 <ContentPresenter x:Name="TextNormal" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                   TextElement.FontWeight="SemiBold"/>
+                                 <ContentPresenter x:Name="TextAccent" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                   Opacity="0" IsHitTestVisible="False"
+                                                   TextElement.Foreground="{DynamicResource AccentForegroundBrush}"
+                                                   TextElement.FontWeight="SemiBold"/>
+                             </Grid>
+                         </Border>
+                         <ControlTemplate.Triggers>
+                             <!-- ⚠ 必须是 MultiTrigger（排除已选中）。
+                                  指示块 VersionTabPill 在 Canvas 里、而 StackPanel 排在它后面，
+                                  所以 RadioButton 自己的 Background 是**画在绿色指示块上面**的。
+                                  原来只写 IsMouseOver：鼠标停在选中项上时，GlassMediumBrush 会把绿盖掉 ——
+                                  表现就是「绿色滑下来变成白色，鼠标一走又变回绿色」。 -->
+                             <MultiTrigger>
+                                 <MultiTrigger.Conditions>
+                                     <Condition Property="IsMouseOver" Value="True"/>
+                                     <Condition Property="IsChecked" Value="False"/>
+                                 </MultiTrigger.Conditions>
+                                 <Setter TargetName="border" Property="Background" Value="{DynamicResource GlassMediumBrush}"/>
+                             </MultiTrigger>
+                             <Trigger Property="IsChecked" Value="True">
+                                 <Trigger.EnterActions>
+                                     <BeginStoryboard>
+                                         <Storyboard>
+                                             <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                              To="0" Duration="0:0:0.15"
+                                                              EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                             <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                              To="1" Duration="0:0:0.15"
+                                                              EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                         </Storyboard>
+                                     </BeginStoryboard>
+                                 </Trigger.EnterActions>
+                                 <Trigger.ExitActions>
+                                     <BeginStoryboard>
+                                         <Storyboard>
+                                             <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                              To="1" Duration="0:0:0.15"
+                                                              EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                             <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                              To="0" Duration="0:0:0.15"
+                                                              EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                         </Storyboard>
+                                     </BeginStoryboard>
+                                 </Trigger.ExitActions>
+                             </Trigger>
+                         </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             「概览」信息卡 —— 与 HomePage 的 Card 同一套规范：
+             圆角 12（RadiusLarge）+ 1px GlassBorderBrush + 无阴影；
+             背景 / 前景 / 描边全部 DynamicResource，主题切换实时生效。
+             ══════════════════════════════════════════════════════════════ -->
+        <Style x:Key="OverviewCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLarge}"/>
+            <Setter Property="Padding" Value="20,20,20,8"/>
+            <Setter Property="Margin" Value="0,0,0,16"/>
+        </Style>
+        <Style x:Key="OverviewSection" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="Margin" Value="2,4,0,12"/>
+        </Style>
+        <Style x:Key="OverviewLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+        <Style x:Key="OverviewValue" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+        <!-- 路径类值（游戏目录 / Java）允许换行，避免把版本文件夹名裁掉 -->
+        <Style x:Key="OverviewValueWrap" TargetType="TextBlock" BasedOn="{StaticResource OverviewValue}">
+            <Setter Property="TextTrimming" Value="None"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="OverviewStatTile" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMedium}"/>
+            <Setter Property="Padding" Value="14,11"/>
+        </Style>
+        <Style x:Key="OverviewStatLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+        </Style>
+        <Style x:Key="OverviewStatValue" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="Margin" Value="0,3,0,0"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+    </Page.Resources>
+
+    <!-- 注意：这里**没有** Page.Triggers / Page.RenderTransform。
+         外壳的 PageTransition.PlayPageEnter 已经给整页做了 opacity + translateY + scale 的进场，
+         页面再挂一份自己的 Storyboard 只会和外层抢同一个 RenderTransform（而且它没有归位兜底）。 -->
+
+    <!-- 页面根不再是「卡片里再套一层卡片」：
+         原来这里是 Border(iOS26.ContentLayer + RadiusCard + 40px 黑色投影) 包着一条 60px 的
+         GlassStrong 标题条 —— 外壳的 FrameContainer 本身已经是圆角面板，于是页面变成卡片套卡片，
+         再加上那条标题条，整页看着就像「从外壳里剥离出去的一个独立应用」。
+         现在和 HomePage / ResourcesPage 一样直接铺在内容区上，只保留 20/16 的页面内边距；
+         投影也一并去掉（设计红线：卡片无阴影）。 -->
+    <Grid Margin="20,20,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 页头：与其它页面同一套排版（标题 24 + 副标题 12 三级灰），不再是独立的「应用栏」。
+             原标题条还踩了一个坑：它的 Grid.Clip 写的是
+             RectangleGeometry Rect="0,0,10000,60" RadiusX/Y=36 —— 几何右边界在 x=10000，
+             根本没被裁到，于是只有**左边**两个角被倒角、右边是直边（而且 36 和容器的 16 也不匹配），
+             就是「左边圆角右边直角」。现在没有底色条，这个问题自然不存在。 -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,14">
+            <TextBlock x:Name="TitleText" Text="版本设置" FontSize="24" FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock x:Name="SubtitleText" Text="Loading..." FontSize="12" Margin="0,6,0,0"
+                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+        </StackPanel>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="180"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left Tab Navigation -->
+                <Border Grid.Column="0" Background="{DynamicResource GlassMediumBrush}" CornerRadius="{StaticResource RadiusXLarge}" Margin="0,0,0,0" Padding="15">
+                    <!-- 纵向滑动指示块（与左导航 NavSlider / 资源页 CategoryIndicator 同一套机制）：
+                         位置交给绝对定位基线，位移只由一个 TranslateY 承担，高度用自身 Height 承载，
+                         绝不改容器尺寸（否则 desired size 变化会触发自我打断的反馈环）。 -->
+                    <Grid x:Name="VersionTabGroup"
+                          seg:SegmentedIndicator.Host="True"
+                          seg:SegmentedIndicator.Axis="Vertical"
+                          seg:SegmentedIndicator.Indicator="{Binding ElementName=VersionTabPill}">
+                        <Canvas IsHitTestVisible="False">
+                            <Border x:Name="VersionTabPill" CornerRadius="{StaticResource RadiusLarge}" Opacity="0"
+                                    Background="{DynamicResource AccentBrush}"/>
+                        </Canvas>
+                        <StackPanel>
+                            <RadioButton x:Name="TabOverview" Content="📦 概览" Click="TabButton_Click" Tag="overview"
+                                    GroupName="VersionTab" IsChecked="True"
+                                    Style="{StaticResource TabButtonStyle}"/>
+                            <RadioButton x:Name="TabSettings" Content="⚙️ 设置" Click="TabButton_Click" Tag="settings"
+                                    GroupName="VersionTab"
+                                    Style="{StaticResource TabButtonStyle}"/>
+                            <RadioButton x:Name="TabMods" Content="🧩 Mod管理" Click="TabButton_Click" Tag="mods"
+                                    GroupName="VersionTab"
+                                    Style="{StaticResource TabButtonStyle}"/>
+                            <RadioButton x:Name="TabExport" Content="📤 导出" Click="TabButton_Click" Tag="export"
+                                    GroupName="VersionTab"
+                                    Style="{StaticResource TabButtonStyle}"/>
+                            <RadioButton x:Name="TabMaintenance" Content="🛠️ 维护" Click="TabButton_Click" Tag="maintenance"
+                                    GroupName="VersionTab"
+                                    Style="{StaticResource TabButtonStyle}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Right Content Area · 左右各 20 内边距（页头已经在外面，这里不再需要顶部内边距） -->
+                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="20,0,0,0">
+                    <Grid x:Name="ContentArea">
+                        <!-- 「概览」宿主：静态声明（颜色 / 圆角 / 描边全部 DynamicResource）。
+                             其余四个标签的内容由 code-behind 构建后追加到同一个 Grid。 -->
+                        <StackPanel x:Name="OverviewPanel" Visibility="Collapsed" Margin="0,0,0,24">
+
+                            <!-- ① 版本头卡：版本名 + 类型 / 加载器 / 隔离徽标 -->
+                            <Border Style="{StaticResource OverviewCard}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Width="60" Height="60" CornerRadius="{StaticResource RadiusLarge}"
+                                            Background="{DynamicResource AccentGlassMediumBrush}">
+                                        <TextBlock Text="🧊" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+
+                                    <StackPanel Grid.Column="1" Margin="16,0,16,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="OverviewName" FontSize="22" FontWeight="Bold"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock x:Name="OverviewSubtitle" FontSize="12.5" Margin="0,6,0,0"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+
+                                    <Border Grid.Column="2" VerticalAlignment="Center"
+                                            Background="{DynamicResource AccentGlassLightBrush}"
+                                            BorderBrush="{DynamicResource AccentBorderBrush}"
+                                            BorderThickness="1" CornerRadius="{StaticResource RadiusPill}"
+                                            Padding="12,6">
+                                        <TextBlock x:Name="OverviewIsolation" FontSize="12"
+                                                   Foreground="{DynamicResource AccentBrush}"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <!-- ② 版本信息卡：版本名 / 版本类型 / 加载器 / 游戏目录 / Java / 内存 -->
+                            <TextBlock Text="版本信息" Style="{StaticResource OverviewSection}"/>
+                            <Border Style="{StaticResource OverviewCard}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="96"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="版本名" Style="{StaticResource OverviewLabel}"/>
+                                    <TextBlock x:Name="OverviewInfoName" Grid.Row="0" Grid.Column="1" Style="{StaticResource OverviewValue}"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="版本类型" Style="{StaticResource OverviewLabel}"/>
+                                    <TextBlock x:Name="OverviewInfoType" Grid.Row="1" Grid.Column="1" Style="{StaticResource OverviewValue}"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="加载器" Style="{StaticResource OverviewLabel}"/>
+                                    <TextBlock x:Name="OverviewInfoLoader" Grid.Row="2" Grid.Column="1" Style="{StaticResource OverviewValue}"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="游戏目录" Style="{StaticResource OverviewLabel}"/>
+                                    <TextBlock x:Name="OverviewInfoDir" Grid.Row="3" Grid.Column="1" Style="{StaticResource OverviewValueWrap}"
+                                               ToolTipService.ShowDuration="30000"/>
+
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Java" Style="{StaticResource OverviewLabel}"/>
+                                    <TextBlock x:Name="OverviewInfoJava" Grid.Row="4" Grid.Column="1" Style="{StaticResource OverviewValueWrap}"/>
+
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="内存" Style="{StaticResource OverviewLabel}"/>
+                                    <TextBlock x:Name="OverviewInfoMemory" Grid.Row="5" Grid.Column="1" Style="{StaticResource OverviewValue}"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- ③ 最近游玩卡 -->
+                            <TextBlock Text="最近游玩" Style="{StaticResource OverviewSection}"/>
+                            <Border Style="{StaticResource OverviewCard}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource OverviewStatTile}" Margin="0,0,8,8">
+                                        <StackPanel>
+                                            <TextBlock Text="上次启动" Style="{StaticResource OverviewStatLabel}"/>
+                                            <TextBlock x:Name="OverviewLastPlayed" Style="{StaticResource OverviewStatValue}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource OverviewStatTile}" Margin="8,0,0,8">
+                                        <StackPanel>
+                                            <TextBlock Text="累计时长" Style="{StaticResource OverviewStatLabel}"/>
+                                            <TextBlock x:Name="OverviewPlayTime" Style="{StaticResource OverviewStatValue}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource OverviewStatTile}" Margin="0,0,8,0">
+                                        <StackPanel>
+                                            <TextBlock Text="启动次数" Style="{StaticResource OverviewStatLabel}"/>
+                                            <TextBlock x:Name="OverviewLaunchCount" Style="{StaticResource OverviewStatValue}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource OverviewStatTile}" Margin="8,0,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="系统内存" Style="{StaticResource OverviewStatLabel}"/>
+                                            <TextBlock x:Name="OverviewSystemMemory" Style="{StaticResource OverviewStatValue}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <!-- ④ 快速操作 -->
+                            <TextBlock Text="快速操作" Style="{StaticResource OverviewSection}"/>
+                            <WrapPanel>
+                                <Button Content="▶ 启动游戏" Click="OverviewLaunch_Click"
+                                        Style="{StaticResource iOS26.CapsuleButtonBrand}"
+                                        Height="40" Padding="22,0" Margin="0,0,10,10"/>
+                                <Button Content="📂 打开目录" Click="OverviewOpenDir_Click"
+                                        Style="{StaticResource iOS26.SecondaryButton}"
+                                        Height="40" Padding="22,0" Margin="0,0,10,10"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+</Page>

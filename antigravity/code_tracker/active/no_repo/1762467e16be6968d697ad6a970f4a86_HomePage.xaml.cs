@@ -1,270 +1,0 @@
-Pusing System.Windows;
-using System.Windows.Controls;
-using GeminiLauncher.ViewModels;
-using System.Diagnostics;
-using System.IO;
-using GeminiLauncher.Models;
-
-namespace GeminiLauncher.Views
-{
-    public partial class HomePage : Page
-    {
-        public HomePage()
-        {
-            InitializeComponent();
-            this.DataContext = ((App)System.Windows.Application.Current).MainWindow.DataContext;
-            
-            // Auto login as offline player by default
-            AutoLoginOffline();
-        }
-
-        private void AutoLoginOffline()
-        {
-            if (DataContext is MainViewModel vm)
-            {
-                // Default offline player name
-                string defaultPlayer = "Player";
-                vm.AccountManager.LoginOffline(defaultPlayer);
-                
-                // Update account capsule
-                PlayerNameText.Text = defaultPlayer;
-                
-                // Enable launch button
-                LaunchButton.IsEnabled = true;
-            }
-        }
-
-        private void AccountCapsule_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            var border = sender as System.Windows.FrameworkElement;
-            if (border == null) return;
-
-            var menu = new ContextMenu
-            {
-                Style = null,
-                Background = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#F0202020")!),
-                BorderBrush = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#40FFFFFF")!),
-                BorderThickness = new Thickness(1),
-                Foreground = System.Windows.Media.Brushes.White
-            };
-
-            // Switch Account (offline)
-            var switchItem = new MenuItem { Header = "ğŸ”„ åˆ‡æ¢ç¦»çº¿è´¦å·", Foreground = System.Windows.Media.Brushes.White };
-            switchItem.Click += (s, args) =>
-            {
-                // Simple WPF input dialog
-                var dlg = new Window
-                {
-                    Title = "åˆ‡æ¢ç¦»çº¿è´¦å·",
-                    Width = 340, Height = 160,
-                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                    Owner = Window.GetWindow(this),
-                    Background = new System.Windows.Media.SolidColorBrush(
-                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1A1A1A")!),
-                    ResizeMode = ResizeMode.NoResize
-                };
-                var sp = new StackPanel { Margin = new Thickness(20) };
-                sp.Children.Add(new TextBlock { Text = "è¾“å…¥ç©å®¶å:", Foreground = System.Windows.Media.Brushes.White, Margin = new Thickness(0,0,0,8) });
-                var tb = new TextBox { Text = "Player", FontSize = 14, Padding = new Thickness(6,4,6,4) };
-                sp.Children.Add(tb);
-                var okBtn = new Button { Content = "ç¡®å®š", Margin = new Thickness(0,12,0,0), Padding = new Thickness(20,6,20,6), HorizontalAlignment = HorizontalAlignment.Right };
-                okBtn.Click += (_, __) => { dlg.DialogResult = true; };
-                sp.Children.Add(okBtn);
-                dlg.Content = sp;
-
-                if (dlg.ShowDialog() == true && !string.IsNullOrWhiteSpace(tb.Text))
-                {
-                    var vm = DataContext as MainViewModel;
-                    vm?.AccountManager.LoginOffline(tb.Text.Trim());
-                    PlayerNameText.Text = tb.Text.Trim();
-                }
-            };
-            menu.Items.Add(switchItem);
-
-            // Microsoft Login
-            var msItem = new MenuItem { Header = "ğŸŸ¢ å¾®è½¯è´¦å·ç™»å½•", Foreground = System.Windows.Media.Brushes.White };
-            msItem.Click += async (s, args) =>
-            {
-                try
-                {
-                    var vm = DataContext as MainViewModel;
-                    if (vm != null)
-                    {
-                        await vm.AccountManager.LoginMicrosoft();
-                        var acc = vm.AccountManager.ActiveAccount;
-                        if (acc != null)
-                            PlayerNameText.Text = acc.Username;
-                    }
-                }
-                catch (System.Exception ex)
-                {
-                    MessageBox.Show($"ç™»å½•å¤±è´¥: {ex.Message}", "é”™è¯¯");
-                }
-            };
-            menu.Items.Add(msItem);
-
-            menu.Items.Add(new Separator());
-
-            // Logout
-            var logoutItem = new MenuItem { Header = "ğŸšª æ³¨é”€", Foreground = System.Windows.Media.Brushes.White };
-            logoutItem.Click += (s, args) =>
-            {
-                var vm = DataContext as MainViewModel;
-                vm?.AccountManager.Logout();
-                PlayerNameText.Text = "Player";
-            };
-            menu.Items.Add(logoutItem);
-
-            menu.PlacementTarget = border;
-            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-            menu.IsOpen = true;
-        }
-
-        private Models.GameInstance? _currentSelectedVersion;
-
-        private void OpenVersionSelector_Click(object sender, RoutedEventArgs e)
-        {
-            // Old Dialog Logic Removed
-            /*
-            var dialog = new VersionSelectorDialog
-            {
-                Owner = Window.GetWindow(this)
-            };
-
-            if (dialog.ShowDialog() == true && dialog.SelectedVersion != null)
-            {
-               // ...
-            }
-            */
-
-            // New Page Navigation with Callback
-            NavigationService.Navigate(new VersionSelectorPage((selectedGv) => 
-            {
-                // Sync with MainViewModel
-                if (DataContext is MainViewModel vm)
-                {
-                    var match = vm.GameVersions.FirstOrDefault(v => v.Id == selectedGv.Id);
-                    if (match != null)
-                    {
-                        vm.SelectedVersion = match;
-                        _currentSelectedVersion = match; // Keep local ref in sync
-                        
-                        // Update UI
-                        VersionHeroText.Text = match.Id;
-                        CurrentVersionSubtitle.Text = $"{match.Type} ({match.Id})";
-                    }
-                    else
-                    {
-                        // If not in ScanVersions, we might need to Rescan (simplified logic for now)
-                        vm.LoadVersions();
-                        match = vm.GameVersions.FirstOrDefault(v => v.Id == selectedGv.Id);
-                        if (match != null)
-                        {
-                            vm.SelectedVersion = match;
-                            _currentSelectedVersion = match;
-                            VersionHeroText.Text = match.Id;
-                            CurrentVersionSubtitle.Text = $"{match.Type} ({match.Id})";
-                        }
-                    }
-                }
-            }));
-        }
-
-        private void OpenVersionSettings_Click(object sender, RoutedEventArgs e)
-        {
-            if (_currentSelectedVersion == null)
-            {
-                MessageBox.Show("è¯·å…ˆé€‰æ‹©ä¸€ä¸ªæ¸¸æˆç‰ˆæœ¬", "æç¤º", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            // var settingsDialog = new VersionSettingsDialog(_currentSelectedVersion)
-            // {
-            //     Owner = Window.GetWindow(this)
-            // };
-            // settingsDialog.ShowDialog();
-            
-            // New Smooth Transition
-            NavigationService.Navigate(new VersionSettingsPage(_currentSelectedVersion));
-        }
-
-        private void OpenModManager_Click(object sender, RoutedEventArgs e)
-        {
-            if (DataContext is not MainViewModel vm || vm.SelectedVersion == null)
-            {
-                MessageBox.Show("è¯·å…ˆé€‰æ‹©ä¸€ä¸ªæ¸¸æˆç‰ˆæœ¬", "æç¤º", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            var btn = sender as Button;
-            if (btn == null) return;
-
-            var menu = new ContextMenu();
-            
-            // 1. Open Mods Folder
-            var openFolderItem = new MenuItem { Header = "ğŸ“‚ æ‰“å¼€ Mods æ–‡ä»¶å¤¹" };
-            openFolderItem.Click += (s, args) => 
-            {
-                try 
-                {
-                    string modPath = Path.Combine(vm.SelectedVersion.GameDir, "mods");
-                    Directory.CreateDirectory(modPath);
-                    Process.Start("explorer.exe", modPath);
-                }
-                catch (System.Exception ex)
-                {
-                    MessageBox.Show($"æ— æ³•æ‰“å¼€æ–‡ä»¶å¤¹: {ex.Message}");
-                }
-            };
-            menu.Items.Add(openFolderItem);
-
-            // 2. Manage Mods (UI)
-            var manageItem = new MenuItem { Header = "âš™ï¸ ç®¡ç†æ¨¡ç»„" };
-            manageItem.Click += (s, args) => 
-            {
-                if (_currentSelectedVersion != null)
-                {
-                    // var settingsDialog = new VersionSettingsDialog(_currentSelectedVersion)
-                    // {
-                    //     Owner = Window.GetWindow(this)
-                    // };
-                    // settingsDialog.ShowModsTab();
-                    // settingsDialog.ShowDialog();
-
-                    // New Smooth Transition
-                    NavigationService.Navigate(new VersionSettingsPage(_currentSelectedVersion, "mods"));
-                }
-            };
-            menu.Items.Add(manageItem);
-
-            menu.PlacementTarget = btn;
-            menu.IsOpen = true;
-        }
-
-        // LaunchButton_Click removed as we use MVVM Command binding now
-
-        // SimulateLaunchProgress removed
-    }
-}
-*cascade087 *cascade087Y*cascade08Y¤¤Ì *cascade08Ì¤ *cascade08¤À *cascade08ÀÂ*cascade08ÂÃ *cascade08ÃÇ*cascade08ÇÈ *cascade08ÈÍ*cascade08ÍÑ *cascade08ÑÒ*cascade08ÒØ *cascade08Øİ*cascade08İß *cascade08ßä*cascade08äå *cascade08åç*cascade08çè *cascade08èé*cascade08éø *cascade08øú*cascade08úû *cascade08ûÿ*cascade08ÿ *cascade08„*cascade08„† *cascade08†‡*cascade08‡Š *cascade08Š‹*cascade08‹• *cascade08•˜*cascade08˜¢ *cascade08¢£*cascade08£¤ *cascade08¤¦*cascade08¦§ *cascade08§¨*cascade08¨« *cascade08«¬*cascade08¬¯ *cascade08¯°*cascade08°³ *cascade08³´*cascade08´¶ *cascade08¶·*cascade08·¸ *cascade08¸¼*cascade08¼¿ *cascade08¿Á*cascade08ÁË *cascade08ËÌ*cascade08ÌŸ *cascade08Ÿ¦*cascade08¦§ *cascade08§¨*cascade08¨© *cascade08©ª*cascade08ª± *cascade08±¶*cascade08¶¸ *cascade08¸¹*cascade08¹Ñ *cascade08ÑÕ *cascade08ÕÖ*cascade08ÖØ *cascade08ØÙ*cascade08ÙÛ *cascade08ÛÜ*cascade08Üİ *cascade08İá*cascade08áä *cascade08äå*cascade08åç *cascade08çë*cascade08ëì *cascade08ìí*cascade08íï *cascade08ï *cascade08‡*cascade08‡ˆ *cascade08ˆ‰*cascade08‰‹ *cascade08‹Œ*cascade08Œ *cascade08*cascade08‘ *cascade08‘“*cascade08“˜ *cascade08˜ *cascade08 ¢ *cascade08¢¥*cascade08¥§ *cascade08§¨*cascade08¨© *cascade08©ª*cascade08ª¬ *cascade08¬®*cascade08®Ö *cascade08ÖÛ*cascade08ÛÜ *cascade08Üà*cascade08àá *cascade08áâ*cascade08âã *cascade08ãä*cascade08äå *cascade08åè*cascade08èé *cascade08éê*cascade08êş *cascade08ş‚*cascade08‚„ *cascade08„‡*cascade08‡ˆ *cascade08ˆ‰*cascade08‰Š *cascade08Š‹*cascade08‹ *cascade08*cascade08” *cascade08”™*cascade08™› *cascade08›*cascade08  *cascade08 ¡*cascade08¡À *cascade08ÀÁ*cascade08ÁÂ *cascade08ÂÃ*cascade08ÃÄ *cascade08ÄÊ*cascade08ÊË *cascade08ËÎ*cascade08Îä *cascade08äï*cascade08ïğ *cascade08ğö*cascade08öø *cascade08øı*cascade08ış *cascade08ş„	*cascade08„	©	 *cascade08©	³	*cascade08³	´	 *cascade08´	¿	*cascade08¿	À	 *cascade08À	Á	 *cascade08Á	Ë	*cascade08Ë	Í	 *cascade08Í	â	*cascade08â	ã	 *cascade08ã	š
-*cascade08š
-›
- *cascade08›
-õ
-*cascade08õ
-ö
-*cascade08ö
-ù
-*cascade08ù
-ú
- *cascade08ú
-ü
-*cascade08ü
-‡*cascade08‡ˆ*cascade08ˆ¼*cascade08¼½ *cascade08½Å*cascade08ÅÆ *cascade08ÆĞ*cascade08ĞÑ *cascade08Ñä*cascade08äå *cascade08åº*cascade08º»*cascade08»ş*cascade08şÿ *cascade08ÿ*cascade08ú*cascade08úü *cascade08üÿ*cascade08ÿ€ *cascade08€ƒ*cascade08ƒ„ *cascade08„…*cascade08…† *cascade08†‡*cascade08‡ˆ *cascade08ˆ¾*cascade08¾¿ *cascade08¿ä*cascade08äå *cascade08åç*cascade08çè *cascade08èé*cascade08éê *cascade08êë *cascade08ëó*cascade08óô *cascade08ô’*cascade08’“ *cascade08“ä *cascade08ä*cascade08” *cascade08”Ÿ*cascade08Ÿ¡ *cascade08¡»*cascade08»¼ *cascade08¼Á*cascade08ÁÂ *cascade08ÂÅ*cascade08ÅÇ *cascade08ÇÈ *cascade08ÈÉ*cascade08ÉÊ *cascade08Ê×*cascade08×Ø *cascade08Øã*cascade08ãä *cascade08äŒ*cascade08Œ *cascade08œ*cascade08œ *cascade08»*cascade08»¼ *cascade08¼É*cascade08ÉÊ *cascade08ÊÌ*cascade08ÌÍ *cascade08ÍÎ*cascade08ÎÏ *cascade08ÏÓ*cascade08ÓÔ *cascade08ÔÙ*cascade08ÙÚ *cascade08Úİ*cascade08İŞ *cascade08Şå*cascade08åæ *cascade08æ™*cascade08™š *cascade08š£*cascade08£¤ *cascade08¤©*cascade08©ª *cascade08ªµ*cascade08µ¶ *cascade08¶½*cascade08½¾ *cascade08¾Á*cascade08ÁÄ *cascade08ÄË*cascade08ËÌ *cascade08ÌÓ*cascade08ÓÔ *cascade08Ô*cascade08‚ *cascade08‚“*cascade08“• *cascade08•™*cascade08™š *cascade08š *cascade08 ¢ *cascade08¢£*cascade08£¤ *cascade08¤«*cascade08«¬ *cascade08¬°*cascade08°Ã *cascade08ÃÄ *cascade08ÄÈ*cascade08ÈÉ *cascade08ÉÏ*cascade08ÏÒ *cascade08Òß*cascade08ßà *cascade08à‹*cascade08‹Œ *cascade08Œ¸*cascade08¸¹ *cascade08¹Í*cascade08ÍÎ *cascade08Î¥*cascade08¥¦ *cascade08¦Ä*cascade08ÄÅ *cascade08ÅÑ*cascade08Ñå *cascade08åŠ*cascade08Š *cascade08ª*cascade08ª° *cascade08°± *cascade08±Å*cascade08ÅË*cascade08ËÍ *cascade08ÍÜ *cascade08Ü*cascade08 *cascade08•*cascade08•– *cascade08–Á*cascade08ÁÄ *cascade08ÄÇ*cascade08ÇÈ *cascade08ÈÓ *cascade08Óİ*cascade08İŞ *cascade08Şá*cascade08á… *cascade08…† *cascade08†‡*cascade08‡ˆ *cascade08ˆ *cascade08™*cascade08™š *cascade08š*cascade08ã *cascade08ãä *cascade08ä*cascade08‚ *cascade08‚*cascade08 *cascade08¤*cascade08¤¥ *cascade08¥§*cascade08§¨ *cascade08¨ª*cascade08ª« *cascade08«­*cascade08­® *cascade08®Ä*cascade08ÄÅ *cascade08Å× *cascade08×­*cascade08­® *cascade08®¯*cascade08¯° *cascade08°²*cascade08²³ *cascade08³´ *cascade08´¼*cascade08¼¾*cascade08¾Æ *cascade08ÆÈ *cascade08ÈÊ *cascade08ÊÍ*cascade08ÍÛ *cascade08Û¿ *cascade08¿ À  *cascade08À Ô *cascade08Ô ß  *cascade08ß ã  *cascade08ã ê  *cascade08ê ×#*cascade08×#Û# *cascade08Û#İ# *cascade08İ#Ş# *cascade08Ş#á#*cascade08á#ä# *cascade08ä#å#*cascade08å#æ# *cascade08æ#ç# *cascade08ç#Ê$*cascade08Ê$Ë$ *cascade08Ë$Í$*cascade08Í$Î$ *cascade08Î$Ù$*cascade08Ù$Ú$ *cascade08Ú$ğ$*cascade08ğ$ñ$ *cascade08ñ$ò$*cascade08ò$ó$ *cascade08ó$€%*cascade08€%% *cascade08%%*cascade08%% *cascade08% %*cascade08 %¡% *cascade08¡%©%*cascade08©%²% *cascade08²%µ%*cascade08µ%É%*cascade08É%Ë% *cascade08Ë%Ì% *cascade08Ì%ü%*cascade08ü%ı% *cascade08ı%‡&*cascade08‡&ˆ& *cascade08ˆ&&*cascade08&& *cascade08&¯&*cascade08¯&°& *cascade08°&µ&*cascade08µ&¶& *cascade08¶&ü&*cascade08ü&ı& *cascade08ı&€'*cascade08€'' *cascade08'§'*cascade08§'¨' *cascade08¨'´'*cascade08´'·' *cascade08·'•(*cascade08•(—( *cascade08—(¾(*cascade08¾(¿( *cascade08¿(Ô(*cascade08Ô(Ö( *cascade08Ö(è(*cascade08è(é( *cascade08é(ï(*cascade08ï(ğ( *cascade08ğ(õ(*cascade08õ(ö( *cascade08ö()*cascade08)‚)*cascade08‚)‰)*cascade08‰)‹) *cascade08‹)Ñ)*cascade08Ñ)Ü) *cascade08Ü)á)*cascade08á)é) *cascade08é)ë)*cascade08ë)ì) *cascade08ì)í)*cascade08í)ñ) *cascade08ñ)ü) *cascade08ü)ş)ş)ÿ) *cascade08ÿ)**‚* *cascade08‚*„*„*²* *cascade08²*´**cascade08´*µ* *cascade08µ*¶**cascade08¶*·* *cascade08·*»**cascade08»*Â* *cascade08Â*Ë**cascade08Ë*Ì* *cascade08Ì*Ñ**cascade08Ñ*Ó* *cascade08Ó*á**cascade08á*â* *cascade08â*‹+ *cascade08‹+Ä+*cascade08Ä+Ì+ *cascade08Ì+Í+ *cascade08Í+Ü+*cascade08Ü+â+ *cascade08â+å+*cascade08å+æ+ *cascade08æ+è+*cascade08è+é+ *cascade08é+, *cascade08,, *cascade08,Õ,*cascade08Õ,Ö,*cascade08Ö,Ú,*cascade08Ú,Û, *cascade08Û,İ,*cascade08İ,Ş, *cascade08Ş,ç,*cascade08ç,è, *cascade08è,ì,*cascade08ì,í, *cascade08í,ğ,*cascade08ğ,ñ, *cascade08ñ,ö,*cascade08ö,ø, *cascade08ø,ù, *cascade08ù,«- *cascade08«-Ö-*cascade08Ö-×- *cascade08×-î-*cascade08
-î-ï- ï-ñ-*cascade08
-ñ-ò- ò-û-*cascade08
-û-ü- ü-ÿ-*cascade08ÿ-€. *cascade08€.‚.*cascade08‚.ƒ. *cascade08ƒ.‡.*cascade08‡.‰. *cascade08‰.•.*cascade08•.–. *cascade08–.—.*cascade08—.˜. *cascade08˜.š.*cascade08š.›. *cascade08›.œ.*cascade08œ.. *cascade08.¢.*cascade08¢.£. *cascade08£.ª.*cascade08ª.¬. *cascade08¬.±.*cascade08±.². *cascade08².´. *cascade08´.¸. *cascade08¸.×.*cascade08×.ã. *cascade08ã.ä.*cascade08ä.ù. *cascade08ù.€/€/‚/ *cascade08‚/‰/‰/Š/ *cascade08Š/Œ/Œ// *cascade08//// *cascade08/­/­/²/ *cascade08²/³/³/´/ *cascade08´/·/·/¹/ *cascade08¹/Â/Â/Ã/ *cascade08Ã/Ä/Ä/Å/ *cascade08Å/Æ/Æ/×/ *cascade08×/Ø/ *cascade08Ø/‚0‚0„0*cascade08„0…0 *cascade08…0†0*cascade08†0‡0 *cascade08‡0ˆ0*cascade08ˆ0‰0 *cascade08‰0000 *cascade080000 *cascade080“0“0”0 *cascade08”0˜0˜0™0 *cascade08™0›0›00 *cascade08000Ÿ0 *cascade08Ÿ0¨0¨0­0 *cascade08­0¯0 *cascade08¯0±0±0²0 *cascade08²0µ0µ0È0 *cascade08È0Ş0Ş0ô0 *cascade08ô0õ0õ0Š1 *cascade08Š1‹1‹1Œ1 *cascade08Œ111’1 *cascade08’1”1”1™1 *cascade08™1›1›1Ÿ1 *cascade08Ÿ1 1 1¡1 *cascade08¡1©1©1¼1 *cascade08¼1½1 *cascade08½1Ä1Ä1Í1*cascade08Í1Û1 *cascade08Û1é1é1ê1 *cascade08ê1ï1ï1ñ1 *cascade08ñ1õ1õ1ö1 *cascade08ö1¹2¹2º2 *cascade08º2Ø2Ø2Ù2 *cascade08Ù2Ú2 *cascade08Ú2ß2 *cascade08ß2ø2ø2ú2 *cascade08ú2ş2*cascade08ş2†3 *cascade08†3Š3*cascade08Š33 *cascade083œ3œ33 *cascade083¡3¡3¨3 *cascade08¨3´3´3¶3 *cascade08¶3¸3¸3¹3 *cascade08¹3¿3¿3À3 *cascade08À3Ä3Ä3Å3 *cascade08Å3ú3ú3û3 *cascade08û3µ4µ4¶4 *cascade08¶4·4·4¸4 *cascade08¸4¼4¼4¾4 *cascade08¾4À4À4Ç4 *cascade08Ç4Î4Î4Ï4 *cascade08Ï4Ó4Ó4Õ4 *cascade08Õ4Ş4Ş4à4 *cascade08
-à4á4 á4ü4*cascade08
-ü45 5¤5 *cascade08¤5¦5¦5ª5 *cascade08ª5«5 *cascade08«5¯5 *cascade08¯5²5*cascade08²5·5 *cascade08·5º5 *cascade08º5»5 *cascade08»5Ä5Ä5Å5 *cascade08Å5Æ5 *cascade08Æ5Ğ5Ğ5Ø5 *cascade08Ø5Ù5Ù5Ú5 *cascade08Ú5ä5ä5å5 *cascade08å5ñ5ñ5ò5 *cascade08ò5÷5÷5ø5 *cascade08ø5¨6¨6°6*cascade08°6Ç6 *cascade08Ç6ì6ì6í6 *cascade08í6ğ6 *cascade08ğ6ò6 *cascade08ò6ó6 *cascade08ó6õ6*cascade08õ6û6 *cascade08û6ü6 *cascade08ü6€7€77 *cascade087‚7 *cascade08‚7„7„7‡7 *cascade08‡7‹7‹7›7 *cascade08›7¬7¬7¯7 *cascade08¯7Ã7Ã7Ù7 *cascade08Ù7ä7ä7æ7 *cascade08æ7ï7ï7ğ7 *cascade08ğ7ò7ò7ó7 *cascade08ó7ù7ù7û7 *cascade08û7ı7ı7ş7 *cascade08ş7ÿ7ÿ78 *cascade088ƒ8 *cascade08ƒ8„8„8”8 *cascade08”8Ÿ8Ÿ8£8*cascade08£8¤8 *cascade08¤8¥8*cascade08¥8§8 *cascade08§8«8 *cascade08«8­8 *cascade08­8µ8*cascade08µ8¶8 *cascade08¶8·8*cascade08·8¸8 *cascade08¸8º8*cascade08º8½8 *cascade08½8¾8¾8¿8 *cascade08¿8Â8Â8Ã8*cascade08Ã8É8É8Ê8 *cascade08Ê8Ï8Ï8Ñ8 *cascade08Ñ8×8×8Ø8*cascade08Ø8Ù8Ù8Ú8 *cascade08Ú8Ü8 *cascade08Ü8ß8ß8ä8 *cascade08ä8å8*cascade08å8ï8 *cascade08ï8õ8õ8‡9 *cascade08‡9ˆ9 *cascade08ˆ9‰9 *cascade08‰9Ÿ9Ÿ9¡9 *cascade08¡9£9 *cascade08£9®9 *cascade08®9±9*cascade08±9¶9 *cascade08¶9¸9 *cascade08¸9¹9*cascade08¹9º9 *cascade08º9Í9*cascade08Í9Î9 *cascade08Î9Ï9 *cascade08Ï9Ó9*cascade08Ó9Ô9 *cascade08Ô9Ù9*cascade08Ù9İ9 *cascade08İ9à9*cascade08à9ï9*cascade08ï9ğ9 *cascade08ğ9ù9*cascade08ù9ü9 *cascade08ü9:*cascade08:š: *cascade08š::*cascade08:¡: *cascade08¡:©: *cascade08©:«:*cascade08«:¬: *cascade08¬:Ä:*cascade08Ä:Å: *cascade08Å:Ç:*cascade08Ç:È: *cascade08È:Ï:*cascade08Ï:Ø: *cascade08Ø:Ü:*cascade08Ü:ã: *cascade08ã:ä: *cascade08ä:í:*cascade08í:î: *cascade08î:ï:*cascade08ï:ğ: *cascade08ğ:ô:*cascade08ô:õ: *cascade08õ:«;*cascade08«;¬; *cascade08¬;­;*cascade08­;®; *cascade08®;¸;*cascade08¸;º; *cascade08º;À;*cascade08À;Á; *cascade08Á;Â; *cascade08Â;Å;*cascade08Å;Æ; *cascade08Æ;È;*cascade08È;É; *cascade08É;Í;*cascade08Í;Î; *cascade08Î;Õ;*cascade08Õ;Ö; *cascade08Ö;×;*cascade08×;Ø; *cascade08Ø;Û;*cascade08Û;ß; *cascade08ß;à; *cascade08à;î; *cascade08î;õ;*cascade08õ;ƒ< *cascade08ƒ<†<*cascade08†<”< *cascade08”<—<*cascade08—<š<*cascade08š<›< *cascade08›<©<*cascade08©<ª< *cascade08ª<«<*cascade08«<¬< *cascade08¬<¯<*cascade08¯<±< *cascade08±<·< *cascade08·<¸<*cascade08¸<¹< *cascade08¹<»<*cascade08»<¼< *cascade08¼<¾<*cascade08¾<¿< *cascade08¿<À<*cascade08À<Á< *cascade08Á<Â<*cascade08Â<Ã< *cascade08Ã<Í<*cascade08Í<Î< *cascade08Î<Ğ<*cascade08Ğ<Ñ< *cascade08Ñ<Ó<*cascade08Ó<Ô< *cascade08Ô<Ö<*cascade08Ö<×< *cascade08×<Ù<*cascade08Ù<Û< *cascade08Û<Ş<*cascade08Ş<ì< *cascade08ì<ï<*cascade08ï<ğ<*cascade08ğ<ı< *cascade08ı<€=*cascade08€=†= *cascade08†=Š=*cascade08Š=‹= *cascade08‹=£=*cascade08£=°= *cascade08°=±= *cascade08±=´=*cascade08´=µ= *cascade08µ=Ã= *cascade08Ã=Æ=*cascade08Æ=á= *cascade08á=ğ>*cascade08ğ>é? *cascade08é?ñ?ñ?ò? *cascade08ò?ø?ø?ù? *cascade08ù?ú?ú?û? *cascade08û?“@“@òA *cascade08òAõAõAöA *cascade08öAøAøAúA *cascade08úAüAüA€B *cascade08€BƒBƒB„B *cascade08„B…B…B†B *cascade08†B‰B‰BŒB *cascade08ŒBBB›B *cascade08›BBBB *cascade08B B B£B *cascade08£B¤B¤B§B *cascade08§B«B«B²B *cascade08²B³B³BÃB *cascade08ÃBÆBÆBÇB *cascade08ÇBËBËBÌB *cascade08ÌBÍBÍBĞB *cascade08ĞBÑBÑBÒB *cascade08ÒBÔBÔBÕB *cascade08ÕBÖBÖB×B *cascade08×BØBØBÙB *cascade08ÙBÛBÛBÜB *cascade08ÜBİBİBßB *cascade08ßBàBàBüB *cascade08üB„C„C†C *cascade08†C‡C‡C‹C *cascade08‹CŒC *cascade08ŒCCCC *cascade08C’C’CšC *cascade08šC¢C *cascade08¢C£C£C¥C *cascade08¥C§C§C¨C *cascade08¨C©C©C«C *cascade08«C¬C¬C­C *cascade08­C¯C¯C°C *cascade08°C²C²C³C *cascade08³CµCµC·C *cascade08·C¸C¸C¹C *cascade08¹C¼C¼C½C *cascade08½C¾C¾CÀC *cascade08ÀCÇCÇCËC *cascade08ËCÌCÌCÍC *cascade08ÍCÒCÒCÓC *cascade08ÓCÙCÙCÚC *cascade08ÚCŞCŞCßC *cascade08ßCéCéCêC *cascade08êCìCìCúC *cascade08úCüCüCşC *cascade08şC€D€DD *cascade08D‚D‚DƒD *cascade08ƒD…D…D‡D *cascade08‡D—D—D˜D *cascade08˜D™D™DšD *cascade08šD›D›DD *cascade08DDDÁD *cascade08ÁDÃDÃDÖD *cascade08ÖD×D×DíD *cascade08íDîD *cascade08îDïDïDğD *cascade08ğDòD *cascade08òDóDóDôD *cascade08ôDõDõDöD *cascade08öDøDøDúD *cascade08úDşD *cascade08şD€E€EE *cascade08E‚E‚E…E *cascade08…EˆEˆEŠE *cascade08ŠEEEE *cascade08EEE‘E *cascade08‘E“E“E”E *cascade08”E–E–E—E *cascade08—E™E™E›E *cascade08›EEEE *cascade08E£E£E¤E *cascade08¤E«E«E¬E *cascade08¬E®E®EÅE *cascade08ÅEÆEÆEÇE *cascade08ÇEÈEÈEÊE *cascade08ÊEËEËEÌE *cascade08ÌEĞEĞEÔE *cascade08ÔEÖEÖE×E *cascade08×EØEØEÚE *cascade08ÚEÛEÛEİE *cascade08İEŞEŞEßE *cascade08ßEæEæEşE *cascade08şEÿEÿEF *cascade08F‚F‚F…F *cascade08…F‡F‡FˆF *cascade08ˆF‰F‰FŠF *cascade08ŠFFFF *cascade08F‘F‘F“F *cascade08“F”F”F•F *cascade08•F–F–F—F *cascade08—F˜F˜F™F *cascade08™F›F›FœF *cascade08œFFFF *cascade08F F F¡F *cascade08¡F¤F¤FµF *cascade08µF¸F¸FÊF *cascade08ÊFËFËFÎF *cascade08ÎFÏFÏFĞF *cascade08ĞFÑFÑFØF *cascade08ØFÛFÛFÜF *cascade08ÜFŞFŞFßF *cascade08ßFàFàFãF *cascade08ãFäFäF÷F *cascade08÷FûFûFG *cascade08G’G’G“G *cascade08“G”G”G•G *cascade08•G—G—G™G *cascade08™G¸G¸GºG *cascade08ºG»G *cascade08»GÃGÃGÄG *cascade08ÄGÅGÅGØG *cascade08ØGÙGÙGçG *cascade08çGèGèGúG *cascade08úGûGûGüG *cascade08üG€H€H‚H *cascade08‚HˆHˆH‰H *cascade08‰HŒHŒHH *cascade08H”H”H©H *cascade08©H¯H¯H³H *cascade08³H´H´H·H *cascade08·H¼H¼HÊH *cascade08ÊHËHËHÌH *cascade08ÌHĞHĞHÒH *cascade08ÒHÕHÕHÖH *cascade08ÖHâHâHãH *cascade08ãHëHëHìH *cascade08ìHîHîHïH *cascade08ïHğHğHôH *cascade08ôH‡I‡IˆI *cascade08ˆIŠIŠI™I *cascade08™I›I›IœI *cascade08œI I I¡I *cascade08¡I¦I¦I§I *cascade08§I©I©IªI *cascade08ªI«I«I­I *cascade08­I°I°I±I *cascade08±I¶I¶I¸I *cascade08¸I¹I¹IÛI *cascade08ÛIàIàIáI *cascade08áIâIâIåI *cascade08åIéIéIëI *cascade08ëIìIìIîI *cascade08îIñIñIòI *cascade08òIóIóIôI *cascade08ôIõIõIöI *cascade08öIüIüIıI *cascade08ıIşIşI‘J *cascade08‘J”J”J¨J *cascade08¨J«J*cascade08«J®J®J¯J *cascade08¯J±J±J²J *cascade08²J¹J¹JºJ *cascade08ºJ¼J¼J½J *cascade08½JÁJÁJÂJ *cascade08ÂJÃJÃJÇJ *cascade08ÇJÈJÈJÉJ *cascade08ÉJÏJÏJÒJ *cascade08ÒJÕJÕJÖJ *cascade08ÖJÛJÛJİJ *cascade08İJßJßJàJ *cascade08àJáJáJâJ *cascade08âJåJåJæJ *cascade08æJçJçJèJ *cascade08èJòJòJˆK *cascade08ˆK‹K*cascade08‹KŒKŒK¡K *cascade08¡K¤K*cascade08¤K©K *cascade08©K«K«K±K *cascade08±K²K²K³K *cascade08³K¶K¶K¸K *cascade08¸K¹K¹KºK *cascade08ºK¼K¼K¾K *cascade08¾KÁKÁKÂK *cascade08ÂKÆKÆKİK *cascade08İKàK*cascade08àKâKâK÷K *cascade08÷KúK*cascade08úKşK *cascade08şK‰L‰LŠL *cascade08ŠL’L’L“L *cascade08“L—L—L®L *cascade08®L±L*cascade08±LµLµL¶L *cascade08¶LËLËLæM*cascade08æMçM *cascade08çMèMèMúM *cascade08úMŠNŠN™N *cascade08™NŸNŸN¢N *cascade08¢N£N£N¤N *cascade08¤N¥N¥N¦N *cascade08¦NªNªN¬N *cascade08¬N­N­N®N *cascade08®N²N²NÄN *cascade08ÄNßNßNğN *cascade08ğNñNñNòN *cascade08òNóNóNôN *cascade08ôNşNşNŠO *cascade08ŠOOOšO *cascade08šO›O›OœO *cascade08œOOOŸO *cascade08ŸO®O®O¯O *cascade08¯O·O·O¹O *cascade08¹OºOºO¼O *cascade08¼O¾O¾O¿O *cascade08¿OÃOÃOÄO *cascade08ÄOÅOÅOËO *cascade08ËOÙOÙOãO *cascade08ãOåOåOæO *cascade08æOëOëOìO *cascade08ìOíOíOîO *cascade08îOğOğOóO *cascade08óOõOõO÷O *cascade08÷OùOùOıO *cascade08ıOşOşOP *cascade08P„P„P†P *cascade08†PP *cascade082Gfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Views/HomePage.xaml.cs

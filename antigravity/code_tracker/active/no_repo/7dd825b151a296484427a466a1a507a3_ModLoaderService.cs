@@ -1,86 +1,0 @@
-–using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
-using GeminiLauncher.Services.Network;
-
-namespace GeminiLauncher.Services.Ecosystem
-{
-    public class ModLoaderService
-    {
-        private readonly DownloadService _downloadService;
-        private const string FabricMetaUrl = "https://meta.fabricmc.net/v2";
-
-        public ModLoaderService()
-        {
-            _downloadService = new DownloadService();
-        }
-
-        public async Task<JObject> InstallFabricAsync(string mcVersion, string loaderVersion, string dotMinecraftPath, IProgress<double>? progress = null, IProgress<string>? status = null)
-        {
-            string versionId = $"{mcVersion}-fabric-{loaderVersion}";
-            string versionDir = Path.Combine(dotMinecraftPath, "versions", versionId);
-            string jsonPath = Path.Combine(versionDir, $"{versionId}.json");
-
-            // 1. Fetch Profile JSON
-            string url = $"{FabricMetaUrl}/versions/loader/{mcVersion}/{loaderVersion}/profile/json";
-            status?.Report($"Fetching Fabric metadata...");
-            
-            string jsonContent = await _downloadService.DownloadStringAsync(url);
-            var json = JObject.Parse(jsonContent);
-
-            // 2. Setup Directory
-            if (!Directory.Exists(versionDir)) Directory.CreateDirectory(versionDir);
-
-            // 3. Fix ID in JSON (Fabric meta returns "id": "fabric-loader-...")
-            json["id"] = versionId;
-            File.WriteAllText(jsonPath, json.ToString());
-
-            // 4. Download Libraries
-            var libraries = json["libraries"] as JArray;
-            if (libraries != null)
-            {
-                var downloads = new List<DownloadRequest>();
-
-                foreach (var lib in libraries)
-                {
-                    string name = lib["name"]?.ToString();
-                    string urlBase = lib["url"]?.ToString() ?? "https://maven.fabricmc.net/";
-                    
-                    if (string.IsNullOrEmpty(name)) continue;
-
-                    // Parse Maven coordinates (group:name:version)
-                    var parts = name.Split(':');
-                    if (parts.Length < 3) continue;
-
-                    string group = parts[0].Replace('.', '/');
-                    string artifact = parts[1];
-                    string version = parts[2];
-                    string path = $"{group}/{artifact}/{version}/{artifact}-{version}.jar";
-                    string destPath = Path.Combine(dotMinecraftPath, "libraries", path);
-
-                    if (!File.Exists(destPath))
-                    {
-                        downloads.Add(new DownloadRequest 
-                        { 
-                            Url = $"{urlBase}{path}", 
-                            DestinationPath = destPath 
-                        });
-                    }
-                }
-
-                if (downloads.Any())
-                {
-                    status?.Report($"Downloading {downloads.Count} libraries...");
-                    await _downloadService.DownloadBatchAsync(downloads, progress);
-                }
-            }
-
-            return json;
-        }
-    }
-}
-È *cascade08ÈÎ*cascade08Î 	 *cascade08 	 	*cascade08 	ž *cascade08ž¤*cascade08¤¥ *cascade08¥¦*cascade08¦³ *cascade08³¶*cascade08¶· *cascade08·¸*cascade08¸º *cascade08º¼*cascade08¼½ *cascade08½¾*cascade08¾À *cascade08ÀÁ*cascade08ÁÂ *cascade08ÂÅ*cascade08Åç *cascade08çï*cascade08ïð *cascade08ðõ*cascade08õö *cascade08öø*cascade08øù *cascade08ùú*cascade08ú *cascade08Ã*cascade08ÃÛ *cascade08ÛÝ*cascade08Ýß *cascade08ßà*cascade08àø *cascade08øý*cascade08ýÿ *cascade08ÿ*cascade08ƒ *cascade08ƒ„*cascade08„† *cascade08†‡*cascade08‡ˆ *cascade08ˆŠ*cascade08Š‹ *cascade08‹*cascade08‘ *cascade08‘’*cascade08’” *cascade08”°*cascade08°É *cascade08ÉÊ*cascade08ÊØ *cascade08Øâ*cascade08âî *cascade08îñ*cascade08ñò *cascade08òó*cascade08óô *cascade08ôõ*cascade08õý *cascade08ýþ*cascade08þÿ *cascade08ÿ€*cascade08€ƒ *cascade08ƒ„*cascade08„— *cascade08—˜*cascade08˜® *cascade08®²*cascade08²³ *cascade08³º*cascade08º» *cascade08»â*cascade08âã *cascade08ãä*cascade08äå *cascade08åë*cascade08ë‚ *cascade08‚Š*cascade08Š‹ *cascade08‹“*cascade08“” *cascade08”—*cascade08—™ *cascade08™š*cascade08š› *cascade08›£*cascade08£¤ *cascade08¤«*cascade08«® *cascade08®¯*cascade08¯° *cascade08°±*cascade08±³ *cascade08³¶*cascade08¶· *cascade08·¿*cascade08¿ú *cascade08úû*cascade08û– *cascade082Wfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Services/Ecosystem/ModLoaderService.cs

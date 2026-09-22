@@ -1,816 +1,0 @@
-ŞÒusing System;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.IO.Compression;
-using GeminiLauncher.Models;
-using GeminiLauncher.Services.Network;
-using Newtonsoft.Json.Linq;
-
-namespace GeminiLauncher.Services
-{
-    public class LaunchService
-    {
-        private readonly NotificationService _notificationService;
-        private readonly ConfigService _configService;
-
-        public LaunchService(NotificationService notificationService, ConfigService configService)
-        {
-            _notificationService = notificationService;
-            _configService = configService;
-        }
-
-        public async Task<Process?> LaunchGameAsync(GameInstance game, Account account, int globalMaxRamMb, string globalJavaPath, Action<string>? statusCallback = null)
-        {
-            // 0. Validate Account
-            if (string.IsNullOrEmpty(account.Username) || string.IsNullOrEmpty(account.Uuid) || string.IsNullOrEmpty(account.AccessToken))
-            {
-                 throw new ArgumentException("Invalid Account: Username, UUID, or Access Token is missing. Please re-login.");
-            }
-
-            // 0. Validate & Repair (Isolate Check)
-            statusCallback?.Invoke("æ ¡éªŒèµ„æºæ–‡ä»¶...");
-            await ValidateAndRepairAsync(game, statusCallback);
-
-            // Determine effective settings
-            int maxRamMb = game.UseGlobalSettings ? globalMaxRamMb : game.CustomMemoryMb;
-            
-            if (maxRamMb <= 0) maxRamMb = globalMaxRamMb;
-            if (maxRamMb <= 0) maxRamMb = 2048;
-
-            string javaPath = game.UseGlobalSettings ? globalJavaPath : game.CustomJavaPath;
-            if (string.IsNullOrEmpty(javaPath)) javaPath = globalJavaPath; // Fallback
-
-            if (string.IsNullOrEmpty(javaPath)) 
-                throw new ArgumentException("Java path is missing!");
-
-            // 0.5 Check Java Version & Auto-Switch
-            statusCallback?.Invoke("æ£€æŸ¥ Java ç¯å¢ƒ...");
-            var javaService = new JavaService();
-            try
-            {
-                var javaInfo = javaService.GetJavaInfo(javaPath);
-                int majorVer = 0;
-                if (javaInfo != null) majorVer = javaService.GetMajorVersion(javaInfo.Version);
-
-                // Smart Java Selection: If current java is too old or missing
-                if (game.RequiredJavaVersion > 0 && (majorVer < game.RequiredJavaVersion || javaInfo == null))
-                {
-                    Debug.WriteLine($"Java version mismatch. Required: {game.RequiredJavaVersion}, Current: {majorVer}");
-                    
-                    var bestJava = javaService.AutoDetectBestJava(game.RequiredJavaVersion);
-                    if (!string.IsNullOrEmpty(bestJava))
-                    {
-                        javaPath = bestJava;
-                        Debug.WriteLine($"[Auto-Switch] Switched to better Java: {javaPath}");
-                        _notificationService.Show("Java è‡ªåŠ¨åˆ‡æ¢", $"ä¸ºé€‚é…æ¸¸æˆç‰ˆæœ¬ï¼Œå·²è‡ªåŠ¨åˆ‡æ¢è‡³ Java {game.RequiredJavaVersion}+", NotificationType.Info);
-                    }
-                    else
-                    {
-                        // Still mismatch and no alternative found -> BLOCK
-                        var msg = $"ä¸¥é‡é”™è¯¯: æ¸¸æˆéœ€è¦ Java {game.RequiredJavaVersion}+ï¼Œä½†æœªèƒ½æ‰¾åˆ°å¯ç”¨ç‰ˆæœ¬ã€‚è¯·æ‰‹åŠ¨å®‰è£…å¹¶åœ¨â€œç‰ˆæœ¬è®¾ç½®â€ä¸­æŒ‡å®šã€‚";
-                        Debug.WriteLine(msg);
-                        _notificationService.Show("å¯åŠ¨å¤±è´¥", msg, NotificationType.Error);
-                        throw new Exception(msg); // This will bubble up and stop launch
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                // If it's our explicit failure, rethrow to stop launch
-                if (ex.Message.Contains("ä¸¥é‡é”™è¯¯")) throw;
-                // Otherwise Log and proceed (best effort)
-                Debug.WriteLine($"Java check error: {ex.Message}");
-                // We use Log(message) defined later, but it depends on logFile being set.
-                // Actually let's just use Debug for now or move the logging down.
-            }
-            
-            string librariesPath = Path.Combine(game.RootPath, "libraries");
-            string assetsPath = Path.Combine(game.RootPath, "assets");
-            // å°† natives ç›®å½•æ”¾åœ¨å½“å‰æ¸¸æˆç›®å½•ä¸‹ï¼Œæ›´è´´è¿‘å®˜æ–¹å¯åŠ¨å™¨åšæ³•ï¼Œé¿å…æŸäº›ç³»ç»Ÿ/æƒé™å¯¹ .minecraft\\bin çš„ç‰¹æ®Šé™åˆ¶
-            string nativesPath = Path.Combine(game.GameDir, "natives");
-            string logFile = Path.Combine(game.GameDir, "gemini_launch_log.txt");
-
-            // Clear log
-            try { File.WriteAllText(logFile, $"--- Launch Log Start {DateTime.Now} ---\n"); } catch {}
-            void Log(string m) { 
-                Debug.WriteLine(m); 
-                try { File.AppendAllText(logFile, m + "\n"); } catch {} 
-            }
-
-            Log($"[Java Check] Required: {game.RequiredJavaVersion}, Actual: {javaPath}");
-            Log($"Game Dir: {game.GameDir}");
-            Log($"Java Path: {javaPath}");
-            Log($"Main Class: {game.MainClass}");
-
-            // 1. Prepare Natives
-            statusCallback?.Invoke("è§£å‹è¿è¡Œåº“...");
-            if (Directory.Exists(nativesPath))
-            {
-                try { Directory.Delete(nativesPath, true); } catch {}
-            }
-            Directory.CreateDirectory(nativesPath);
-
-            // #region agent log
-            try
-            {
-                var payload0 = new
-                {
-                    id = "log_" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    location = "LaunchService.cs:beforeExtractLoop",
-                    message = "Before extracting natives",
-                    runId = "pre-fix",
-                    hypothesisId = "H1",
-                    data = new
-                    {
-                        rootPath = game.RootPath,
-                        librariesPath,
-                        nativesPath,
-                        libraryCount = game.Libraries.Count
-                    }
-                };
-                var json0 = Newtonsoft.Json.JsonConvert.SerializeObject(payload0);
-                File.AppendAllText(@"c:\Users\Linyizhi\.gemini\GeminiLauncher\.cursor\debug.log", json0 + Environment.NewLine);
-            }
-            catch { }
-            // #endregion
-
-            foreach (var lib in game.Libraries)
-            {
-                string fullPath = Path.Combine(librariesPath, lib.Path.Replace('/', Path.DirectorySeparatorChar));
-                bool isWindowsNative = lib.Name.Contains("natives-windows") || lib.Path.Contains("natives-windows");
-
-                if (!File.Exists(fullPath) && isWindowsNative)
-                {
-                    // #region agent log
-                    try
-                    {
-                        var payloadMissing = new
-                        {
-                            id = "log_" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                            location = "LaunchService.cs:missingNativeJar",
-                            message = "Native jar file missing",
-                            runId = "pre-fix",
-                            hypothesisId = "H1",
-                            data = new
-                            {
-                                libName = lib.Name,
-                                libPath = lib.Path,
-                                resolvedPath = fullPath
-                            }
-                        };
-                        var jsonMissing = Newtonsoft.Json.JsonConvert.SerializeObject(payloadMissing);
-                        File.AppendAllText(@"c:\Users\Linyizhi\.gemini\GeminiLauncher\.cursor\debug.log", jsonMissing + Environment.NewLine);
-                    }
-                    catch { }
-                    // #endregion
-                }
-
-                if (File.Exists(fullPath) && isWindowsNative)
-                {
-                    try
-                    {
-                        Log($"Extracting native: {lib.Name}");
-                        using (var archive = System.IO.Compression.ZipFile.OpenRead(fullPath))
-                        {
-                            int extractedCount = 0;
-                           foreach (var entry in archive.Entries)
-                           {
-                               if (entry.FullName.EndsWith(".dll") || entry.FullName.EndsWith(".so") || entry.FullName.EndsWith(".dylib"))
-                               {
-                                   if (entry.FullName.Contains("META-INF")) continue;
-                                   string dest = Path.Combine(nativesPath, entry.Name);
-                                   entry.ExtractToFile(dest, true);
-                                    extractedCount++;
-                               }
-                           }
-
-                            // #region agent log
-                            try
-                            {
-                                var payloadOk = new
-                                {
-                                    id = "log_" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                                    location = "LaunchService.cs:extractedFromJar",
-                                    message = "Extracted dlls from native jar",
-                                    runId = "pre-fix",
-                                    hypothesisId = "H1",
-                                    data = new
-                                    {
-                                        libName = lib.Name,
-                                        libPath = lib.Path,
-                                        resolvedPath = fullPath,
-                                        extractedCount
-                                    }
-                                };
-                                var jsonOk = Newtonsoft.Json.JsonConvert.SerializeObject(payloadOk);
-                                File.AppendAllText(@"c:\Users\Linyizhi\.gemini\GeminiLauncher\.cursor\debug.log", jsonOk + Environment.NewLine);
-                            }
-                            catch { }
-                            // #endregion
-                        }
-                    }
-                    catch (System.Exception ex)
-                    {
-                        Log($"Failed to extract native {lib.Name}: {ex.Message}");
-                    }
-                }
-            }
-
-            // #region agent log
-            try
-            {
-                var nativeFiles = Directory.Exists(nativesPath)
-                    ? Directory.GetFiles(nativesPath, "*.*", SearchOption.TopDirectoryOnly)
-                    : Array.Empty<string>();
-
-                var payload = new
-                {
-                    id = "log_" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    location = "LaunchService.cs:afterExtractNatives",
-                    message = "Natives extracted summary",
-                    runId = "pre-fix",
-                    hypothesisId = "H1",
-                    data = new
-                    {
-                        nativesPath,
-                        fileCount = nativeFiles.Length,
-                        sample = nativeFiles.Take(10).ToArray()
-                    }
-                };
-                var json = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
-                File.AppendAllText(@"c:\Users\Linyizhi\.gemini\GeminiLauncher\.cursor\debug.log", json + Environment.NewLine);
-            }
-            catch { }
-            // #endregion
-
-            // 2. Build Classpath
-            var sbCp = new StringBuilder();
-            int libCount = 0;
-            foreach (var lib in game.Libraries)
-            {
-                string fullPath = Path.Combine(librariesPath, lib.Path.Replace('/', Path.DirectorySeparatorChar));
-                if (File.Exists(fullPath))
-                {
-                    sbCp.Append(fullPath).Append(Path.PathSeparator);
-                    libCount++;
-                }
-                else
-                {
-                    Log($"[WARNING] Missing Library: {lib.Name}");
-                }
-            }
-            string clientJar = Path.Combine(game.RootPath, "versions", game.Id, $"{game.Id}.jar");
-            if (!File.Exists(clientJar)) Log($"[ERROR] Missing Client Jar: {clientJar}");
-            sbCp.Append(clientJar);
-            
-            Log($"Classpath built with {libCount} libraries and client jar.");
-
-            // 3. Build Arguments
-            statusCallback?.Invoke("æ„å»ºå¯åŠ¨å‚æ•°...");
-            var sbArgs = new StringBuilder();
-
-            // JVM Args
-            sbArgs.Append($"-Xmx{maxRamMb}M ");
-            // ç»Ÿä¸€è®¾ç½® natives ç›¸å…³è·¯å¾„ï¼Œç¡®ä¿ LWJGL æ€»èƒ½æ‰¾åˆ°æœ¬åœ°åº“
-            // å³ä½¿ç‰ˆæœ¬ JSON é‡Œä¹Ÿæœ‰ -Djava.library.path / -Dorg.lwjgl.librarypathï¼Œåé¢æ„å»ºçš„å‚æ•°ä¼šè¦†ç›–è¿™é‡Œï¼Œ
-            // ä½†è‡³å°‘ä¿è¯æœ‰ä¸€ç»„æ­£ç¡®çš„å€¼ã€‚
-            sbArgs.Append($"-Djava.library.path=\"{nativesPath}\" ");
-            sbArgs.Append($"-Dorg.lwjgl.librarypath=\"{nativesPath}\" ");
-            sbArgs.Append($"-Dorg.lwjgl.system.SharedLibraryExtractPath=\"{nativesPath}\" ");
-            
-            // Global JVM Arguments
-            if (!string.IsNullOrEmpty(_configService.Settings.GlobalJvmArguments))
-            {
-                // Simple append, user is responsible for valid args
-                sbArgs.Append(_configService.Settings.GlobalJvmArguments + " ");
-            }
-
-            // Custom Window Title
-            if (!string.IsNullOrEmpty(_configService.Settings.CustomWindowTitle))
-            {
-                string title = _configService.Settings.CustomWindowTitle;
-                if (title.Contains(" ")) title = $"\"{title}\"";
-                sbArgs.Append($"-Dminecraft.launcher.title={title} ");
-            }
-            
-            // Log4j Config
-            if (game.LogConfig != null && !string.IsNullOrEmpty(game.LogConfig.Argument))
-            {
-                 string logConfigPath = Path.Combine(assetsPath, "log_configs", game.LogConfig.File.Id);
-                 if (File.Exists(logConfigPath))
-                 {
-                     string logArg = game.LogConfig.Argument.Replace("${path}", $"{logConfigPath}");
-                     sbArgs.Append(logArg).Append(" ");
-                     Log($"[Log4j] Configured: {logArg}");
-                 }
-                 else
-                 {
-                     Log($"[Log4j] Warning: Log config file not found at {logConfigPath}");
-                 }
-            }
-            
-            foreach(var arg in game.JvmArguments)
-            {
-               string val = ReplacePlaceholders(arg.Value, game, account, assetsPath, sbCp.ToString());
-               sbArgs.Append(val).Append(" ");
-            }
-            
-            // Only add default -cp if it wasn't already added by JvmArguments loop
-            if (game.JvmArguments.Count == 0 || !sbArgs.ToString().Contains("-cp"))
-            {
-                sbArgs.Append($"-cp \"{sbCp}\" ");
-            }
-            sbArgs.Append(game.MainClass).Append(" ");
-
-            // Game Args
-            if (!string.IsNullOrEmpty(game.MinecraftArguments))
-            {
-                string args = ReplacePlaceholders(game.MinecraftArguments, game, account, assetsPath, "");
-                sbArgs.Append(args);
-            }
-            else
-            {
-                 foreach(var arg in game.GameArguments)
-                 {
-                    string val = ReplacePlaceholders(arg.Value, game, account, assetsPath, "");
-                    sbArgs.Append(val).Append(" ");
-                 }
-            }
-
-            // Global Game Arguments
-            if (!string.IsNullOrEmpty(_configService.Settings.GlobalGameArguments))
-            {
-                sbArgs.Append(_configService.Settings.GlobalGameArguments + " ");
-            }
-
-            // 4. Start Process
-            statusCallback?.Invoke("å¯åŠ¨æ¸¸æˆè¿›ç¨‹...");
-            var psi = new ProcessStartInfo
-            {
-                FileName = javaPath,
-                Arguments = sbArgs.ToString().Trim(),
-                WorkingDirectory = game.GameDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            // ç¡®ä¿ Windows çš„ DLL æœç´¢è·¯å¾„ä¹ŸåŒ…å« natives ç›®å½•ï¼ŒåŒä¿é™©
-            try
-            {
-                var currentPath = psi.EnvironmentVariables["PATH"] ?? Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-                if (!currentPath.Split(Path.PathSeparator).Any(p => string.Equals(p, nativesPath, StringComparison.OrdinalIgnoreCase)))
-                {
-                    psi.EnvironmentVariables["PATH"] = nativesPath + Path.PathSeparator + currentPath;
-                }
-            }
-            catch { }
-
-            // #region agent log
-            try
-            {
-                var payload2 = new
-                {
-                    id = "log_" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    location = "LaunchService.cs:beforeProcessStart",
-                    message = "ProcessStartInfo summary",
-                    runId = "pre-fix",
-                    hypothesisId = "H2",
-                    data = new
-                    {
-                        javaPath = psi.FileName,
-                        workingDir = psi.WorkingDirectory,
-                        argsPrefix = psi.Arguments.Length > 512 ? psi.Arguments.Substring(0, 512) + "..." : psi.Arguments,
-                        pathEnv = psi.EnvironmentVariables["PATH"],
-                        is64BitProcess = Environment.Is64BitProcess,
-                        osArch = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE")
-                    }
-                };
-                var json2 = Newtonsoft.Json.JsonConvert.SerializeObject(payload2);
-                File.AppendAllText(@"c:\Users\Linyizhi\.gemini\GeminiLauncher\.cursor\debug.log", json2 + Environment.NewLine);
-            }
-            catch { }
-            // #endregion
-
-            var fullCmd = $"\"{psi.FileName}\" {psi.Arguments}";
-            Log($"Launch Command: {fullCmd}");
-            File.WriteAllText(Path.Combine(game.GameDir, "debug_launch_cmd.txt"), fullCmd);
-
-            var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
-            
-            process.OutputDataReceived += (s, e) => 
-            {
-                if (!string.IsNullOrEmpty(e.Data))
-                {
-                    Log($"[GAME STDOUT]: {e.Data}");
-                }
-            };
-            process.ErrorDataReceived += (s, e) => 
-            {
-                if (!string.IsNullOrEmpty(e.Data))
-                {
-                    Log($"[GAME STDERR]: {e.Data}");
-                }
-            };
-            process.Exited += (s, e) =>
-            {
-                try
-                {
-                    Log($"[GAME EXIT] Code={process.ExitCode}");
-                }
-                catch { }
-            };
-
-            try
-            {
-                if (!process.Start())
-                {
-                    Log("[ERROR] Failed to start java process (Start() returned false).");
-                    _notificationService.Show("å¯åŠ¨å¤±è´¥", "æ— æ³•å¯åŠ¨ Java è¿›ç¨‹ï¼Œè¯·æ£€æŸ¥ Java è·¯å¾„å’Œæƒé™ã€‚", NotificationType.Error);
-                    return null;
-                }
-            }
-            catch (Exception ex)
-            {
-                Log($"[ERROR] Exception when starting process: {ex}");
-                _notificationService.Show("å¯åŠ¨å¤±è´¥", $"å¯åŠ¨ Java è¿›ç¨‹æ—¶å‡ºç°å¼‚å¸¸ï¼š{ex.Message}", NotificationType.Error);
-                return null;
-            }
-
-            try
-            {
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-            }
-            catch (Exception ex)
-            {
-                Log($"[WARN] Failed to hook process output: {ex.Message}");
-            }
-
-            return process;
-        }
-
-        private string ReplacePlaceholders(string input, GameInstance game, Account account, string assetsPath, string classpath)
-        {
-            if (string.IsNullOrEmpty(input)) return "";
-
-            string osName = "Windows 10"; // Default to a safe MC-expected value
-            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
-                osName = "Windows 10"; // MC usually expects this for Win 10/11
-            
-            string osVer = Environment.OSVersion.Version.ToString();
-
-            return input
-                .Replace("${auth_player_name}", account.Username)
-                .Replace("${version_name}", game.Id)
-                .Replace("${game_directory}", $"\"{game.GameDir}\"")
-                .Replace("${assets_root}", $"\"{assetsPath}\"")
-                .Replace("${assets_index_name}", game.AssetIndexId)
-                .Replace("${auth_uuid}", account.Uuid)
-                .Replace("${auth_access_token}", account.AccessToken)
-                .Replace("${user_properties}", "{}")
-                .Replace("${user_type}", "msa")
-                .Replace("${version_type}", game.Type)
-                .Replace("${clientid}", "Gemini")
-                .Replace("${auth_xuid}", "0")
-                .Replace("${launcher_name}", "GeminiLauncher")
-                .Replace("${launcher_version}", "1.0.0")
-                // ä¸ä¸Šæ–‡ nativesPath å®šä¹‰ä¿æŒä¸€è‡´ï¼šä½¿ç”¨æ¯ä¸ª GameDir ä¸‹çš„ natives ç›®å½•
-                .Replace("${natives_directory}", $"\"{Path.Combine(game.GameDir, "natives")}\"")
-                .Replace("${classpath}", $"\"{classpath}\"")
-                .Replace("${os.name}", $"\"{osName}\"")
-                .Replace("${os.version}", $"\"{osVer}\"");
-        }
-
-        private async Task ValidateAndRepairAsync(GameInstance game, Action<string>? statusCallback)
-        {
-            var downloadService = new DownloadService(_configService.Settings.MaxDownloadThreads);
-            var requests = new List<DownloadRequest>();
-            string fileRoot = game.RootPath; // .minecraft
-
-            // 1. Check Libraries
-            string librariesPath = Path.Combine(fileRoot, "libraries");
-            foreach (var lib in game.Libraries)
-            {
-                if (string.IsNullOrEmpty(lib.Path)) continue;
-                
-                string fullPath = Path.Combine(librariesPath, lib.Path.Replace('/', Path.DirectorySeparatorChar));
-                if (!File.Exists(fullPath) || new FileInfo(fullPath).Length == 0)
-                {
-                    // Missing!
-                    Debug.WriteLine($"Missing Library: {lib.Name}");
-                    if (!string.IsNullOrEmpty(lib.Url)) 
-                    {
-                        requests.Add(new DownloadRequest(lib.Url, fullPath, lib.Checksum));
-                    }
-                }
-            }
-
-            // 2. Check Client Jar
-            string clientJar = Path.Combine(fileRoot, "versions", game.Id, $"{game.Id}.jar");
-            bool clientJarExists = File.Exists(clientJar);
-            
-            // Check for 0-byte or corrupt file if size is known
-            if (clientJarExists && game.FileSize > 0)
-            {
-                long localSize = new FileInfo(clientJar).Length;
-                if (localSize == 0 || Math.Abs(localSize - game.FileSize) > 1024 * 1024) // > 1MB diff (broad check to avoid small mismatch)
-                {
-                     Debug.WriteLine($"Client Jar size mismatch or empty. Local: {localSize}, Remote: {game.FileSize}");
-                     clientJarExists = false;
-                     try { File.Delete(clientJar); } catch {}
-                }
-            }
-
-            if (!string.IsNullOrEmpty(game.ClientJarUrl))
-            {
-                if (!clientJarExists)
-                {
-                    Debug.WriteLine($"Missing/Corrupt Client Jar: {clientJar}");
-                    requests.Add(new DownloadRequest(game.ClientJarUrl, clientJar, game.ClientJarSha1));
-                    Debug.WriteLine($"[Repair] Scheduled download for Client Jar: {game.Id}.jar");
-                }
-            }
-            else if (!clientJarExists)
-            {
-                 // Log warning if we can't repair it
-                 Debug.WriteLine($"Missing Client Jar: {clientJar} (No URL to repair)");
-            }
-
-            // 2.5 Check Log Config
-            if (game.LogConfig != null && !string.IsNullOrEmpty(game.LogConfig.File.Url))
-            {
-                string logConfigPath = Path.Combine(game.RootPath, "assets", "log_configs", game.LogConfig.File.Id);
-                if (!File.Exists(logConfigPath) || new FileInfo(logConfigPath).Length != game.LogConfig.File.Size)
-                {
-                     Debug.WriteLine($"Missing/Corrupt Log Config: {logConfigPath}");
-                     requests.Add(new DownloadRequest(game.LogConfig.File.Url, logConfigPath, game.LogConfig.File.Sha1));
-                }
-            }
-
-            // 3. Process Downloads
-            if (requests.Count > 0)
-            {
-                Debug.WriteLine($"Downloading {requests.Count} missing files...");
-                statusCallback?.Invoke($"ä¸‹è½½ {requests.Count} ä¸ªç¼ºå¤±æ–‡ä»¶...");
-                _notificationService.Show("Resource Check", $"Detected {requests.Count} missing files. Downloading...", NotificationType.Info);
-                try
-                {
-                    // Use progress reporting
-                    var progress = new Progress<double>(p => 
-                    {
-                         // Optional: could update a status var
-                    });
-                    
-                    await downloadService.DownloadBatchAsync(requests, progress);
-                    _notificationService.Show("Resource Check", "All resources downloaded successfully.", NotificationType.Success);
-                }
-                catch (System.Exception ex)
-                {
-                    Debug.WriteLine($"Download failed: {ex}");
-                    _notificationService.Show("Download Failed", $"Failed to download core files: {ex.Message}", NotificationType.Error);
-                }
-            }
-        }
-    }
-}
-ƒ *cascade08ƒ  *cascade08 · *cascade08
-·ú úÍ *cascade08
-Í‡ ‡¾*cascade08
-¾ƒ ƒ *cascade08
- Û Û‡*cascade08
-‡¤ ¤÷ *cascade08÷ş*cascade08ş *cascade08•*cascade08•œ *cascade08œÃÃÎ *cascade08ÎŞ *cascade08
-ŞÚ
- Ú
-İ *cascade08İÕ*cascade08Õı *cascade08ı‚ *cascade08
-‚°! °!Ù! *cascade08Ù!Ş!*cascade08Ş!ß! *cascade08ß!á!*cascade08á!£" *cascade08£"¨"*cascade08¨"©" *cascade08©"«"*cascade08«"Ä" *cascade08
-Ä"á# á#ˆ$ *cascade08
-ˆ$±$ ±$²$ *cascade08²$º$º$»$ *cascade08»$¼$ *cascade08¼$¾$*cascade08¾$Ó$Ó$Ö$ *cascade08Ö$Ù$Ù$Û$ *cascade08Û$ë$ë$ì$ *cascade08
-ì$´% ´%¶% *cascade08¶%·%·%¸% *cascade08¸%¿%¿%À% *cascade08À%Ï%Ï%Ñ% *cascade08Ñ%Ó%Ó%Ô% *cascade08Ô%Õ%Õ%Ö% *cascade08Ö%á%á%å% *cascade08å%æ%æ%ç% *cascade08
-ç%£& £&¤& *cascade08¤&²&²&³& *cascade08
-³&Ó& Ó&Ô& *cascade08Ô&ì&ì&í& *cascade08í&ï&ï&ğ& *cascade08ğ&÷&÷&ù& *cascade08
-ù&²' ²'³' *cascade08³'È'È'É' *cascade08É'Ë'Ë'Ì' *cascade08Ì'Í'Í'Î' *cascade08Î'Ó'Ó'Ô' *cascade08Ô'Ù'Ù'Ú' *cascade08
-Ú'ÿ' ÿ'€( *cascade08€(ƒ(ƒ(„( *cascade08
-„(ô( ô(—) *cascade08—)¤) *cascade08
-¤)Ş) Ş)à) *cascade08à)â) *cascade08â)ì)*cascade08ì)î) *cascade08î)Ÿ* *cascade08Ÿ*¡* *cascade08¡*·**cascade08·*¸* *cascade08¸*Ì**cascade08Ì*Í* *cascade08Í*Î**cascade08Î*Ï* *cascade08Ï*ğ* *cascade08ğ*ñ* *cascade08ñ*‰+*cascade08‰+Š+ *cascade08Š+¤+ *cascade08¤+¨+¨+ª+ *cascade08ª+®+®+°+ *cascade08°+´+´+¶+ *cascade08
-¶+Ã+ Ã+Å+ *cascade08Å+Æ+Æ+Ç+ *cascade08Ç+È+È+ç+ *cascade08ç+è+è+é+ *cascade08é+ê+ê+ë+ *cascade08ë+ó+ó+ô+ *cascade08ô+õ+õ+ø+ *cascade08ø+ù+ù+Š, *cascade08
-Š,Œ, Œ,, *cascade08,Ÿ,Ÿ,¡, *cascade08¡,¦,¦,§, *cascade08§,±,±,², *cascade08²,´,´,¶, *cascade08¶,»,»,¼, *cascade08¼,¾,¾,¿, *cascade08¿,È,È,É, *cascade08É,Ö,Ö,Ø, *cascade08Ø,Ü,Ü,İ, *cascade08
-İ,è, è,ì, *cascade08ì,ñ,ñ,ó, *cascade08ó,õ,õ,ö, *cascade08ö,ı,ı,ş, *cascade08ş,ÿ,ÿ,- *cascade08-ƒ-ƒ-„- *cascade08„-…-…-†- *cascade08†-‰-‰-Š- *cascade08Š---- *cascade08-˜-˜-™- *cascade08™-›-›-œ- *cascade08œ---- *cascade08-Ÿ-Ÿ- - *cascade08 -£-£-¤- *cascade08¤-¦-¦-¨- *cascade08¨-©-©-ª- *cascade08ª-­-­-®- *cascade08®-¯-¯-Á- *cascade08Á-Å-Å-Ç- *cascade08Ç-È-È-Ë- *cascade08Ë-Ó-Ó-Ô- *cascade08Ô-Õ-Õ-Ö- *cascade08Ö-Ù-Ù-Ú- *cascade08Ú-â-â-ä- *cascade08ä-è-è-é- *cascade08é-ê-ê-ì- *cascade08
-ì-ú- ú-ş- *cascade08ş-ˆ.ˆ.‰. *cascade08‰.... *cascade08...‘. *cascade08‘.•.•.–. *cascade08–.˜.˜. . *cascade08 .£.£.¤. *cascade08¤.¥.¥.¦. *cascade08
-¦.Ä. Ä.Å. *cascade08Å.É.É.Ê. *cascade08Ê.Ì.Ì.Í. *cascade08
-Í.Ø. Ø.Ú. *cascade08Ú.ì.ì.í. *cascade08í.ò.ò.ó. *cascade08
-ó.…/ …/ˆ/ *cascade08ˆ/“/“/•/ *cascade08•/š/š/›/ *cascade08
-›/²/ ²/Ä/ *cascade08Ä/Ë/Ë/Ì/ *cascade08Ì/Ó/Ó/Ô/ *cascade08Ô/Ø/Ø/Ù/ *cascade08Ù/Ú/ *cascade08Ú/Ş/Ş/ß/ *cascade08ß/à/à/â/ *cascade08
-â/ï/ ï/ğ/ *cascade08ğ/ü/ü/ş/ *cascade08ş/ÿ/ *cascade08ÿ/…0*cascade08…0†0 *cascade08†0ˆ0ˆ0Š0 *cascade08
-Š0¥0 ¥0§0 *cascade08§0©0©0«0 *cascade08«0°0°0²0 *cascade08²0³0 *cascade08³0Â0 *cascade08Â0Ã0Ã0Ä0 *cascade08Ä0Ê0Ê0Ë0 *cascade08Ë0Ì0Ì0Í0 *cascade08Í0Î0 *cascade08Î0Ô0Ô0Õ0 *cascade08Õ0Ö0 *cascade08Ö0Ş0Ş0æ0 *cascade08
-æ0í0 í0ğ0 *cascade08
-ğ0¤1 ¤1ª1 *cascade08ª1¬1¬1­1 *cascade08­1±1±1²1 *cascade08²1´1´1µ1 *cascade08µ1·1·1¸1 *cascade08¸1¹1¹1º1 *cascade08º1¾1¾1¿1 *cascade08¿1Ê1Ê1Ë1 *cascade08Ë1Ì1Ì1Í1 *cascade08Í1Ğ1Ğ1Ñ1 *cascade08Ñ1Ò1Ò1Ó1 *cascade08Ó1Û1Û1İ1 *cascade08İ1è1è1ù1 *cascade08ù1ú1ú1û1 *cascade08û1ü1ü1ı1 *cascade08ı122‚2 *cascade08‚2ˆ2ˆ2‰2 *cascade08‰2222 *cascade082“2“2”2 *cascade08”2•2 *cascade08•2–2 *cascade08–2˜2˜2™2 *cascade08™222Ÿ2 *cascade08Ÿ2£2£2¥2 *cascade08¥2¦2¦2§2 *cascade08§2©2©2ª2 *cascade08ª2­2 *cascade08­2¯2¯2°2 *cascade08°2³2³2µ2 *cascade08µ2¸2¸2¹2 *cascade08¹2Å2Å2Æ2 *cascade08Æ2Ì2Ì2Í2 *cascade08Í2Ö2Ö2Ø2 *cascade08Ø2Û2Û2Ü2 *cascade08Ü2İ2İ2ß2 *cascade08ß2è2è2õ2 *cascade08
-õ2ø2 ø2ü2 *cascade08ü2ı2 *cascade08ı2ÿ2ÿ2€3 *cascade08€3…3…3†3 *cascade08†3‡3‡3ˆ3 *cascade08
-ˆ3”3 ”3•3 *cascade08•3—3—3˜3 *cascade08˜333Ÿ3 *cascade08Ÿ3¡3¡3¢3 *cascade08¢3¤3¤3¦3 *cascade08
-¦3¸3 ¸3¹3 *cascade08¹3»3»3¼3 *cascade08¼3¾3¾3¿3 *cascade08¿3Â3Â3Ã3 *cascade08Ã3Å3Å3È3 *cascade08È3Ë3Ë3Ì3 *cascade08Ì3Ğ3Ğ3Ò3 *cascade08Ò3Ó3Ó3Ô3 *cascade08Ô3×3×3ä3 *cascade08ä3å3å3ù3 *cascade08ù3ş3 *cascade08ş34*cascade0844 *cascade084š4*cascade08š4›4 *cascade08›4£4*cascade08£4¤4 *cascade08¤4ª4*cascade08ª4¬4 *cascade08¬4À4*cascade08À4Á4 *cascade08Á4Ê4*cascade08Ê4Ë4 *cascade08Ë4Ì4*cascade08Ì4Í4 *cascade08Í4Ï4*cascade08Ï4Ğ4 *cascade08Ğ4é4 *cascade08
-é4ß5 ß5ã5 *cascade08ã5ä5ä5í5 *cascade08í5î5 *cascade08î5ı5 *cascade08
-ı5–7 –7—7 *cascade08—7›7›7œ7 *cascade08
-œ7ú7 ú7û7 *cascade08û7ş7ş7ÿ7 *cascade08
-ÿ7¾8 ¾8À8 *cascade08À8Ç8Ç8È8 *cascade08È8Ò8Ò8Ó8 *cascade08Ó8×8×8Ø8 *cascade08Ø8İ8İ8Ş8*cascade08
-Ş8”9 ”9•9 *cascade08•9999 *cascade089±9±9³9 *cascade08
-³9Ş9 Ş9ß9 *cascade08ß9æ9æ9ç9 *cascade08ç9è9è9í9 *cascade08í9ù9ù9ú9 *cascade08ú9û9û9ı9 *cascade08
-ı9¡: ¡:¢: *cascade08
-¢:Ï: Ï:Ğ: *cascade08Ğ:Ó:Ó:Ô: *cascade08Ô:Û:Û:Ü: *cascade08
-Ü:á: á:â: *cascade08
-â:Ï; Ï;Ô; *cascade08
-Ô;ı; ı;< *cascade08<‡<‡<ˆ< *cascade08
-ˆ<½= ½=À= *cascade08À=Ã=Ã=Ä= *cascade08Ä=É=É=Ê= *cascade08Ê=Ë=Ë=Ì= *cascade08Ì=Ş=Ş=ß= *cascade08
-ß=> >‘> *cascade08‘>’>’>“> *cascade08“>>>Ÿ> *cascade08Ÿ>´>´>µ> *cascade08µ>è>è>é> *cascade08é>î>î>ï> *cascade08
-ï>ô? ô?õ? *cascade08õ?ù?ù?ú? *cascade08ú?@@“@ *cascade08“@™@™@Ã@ *cascade08Ã@Ä@ *cascade08Ä@Û@ *cascade08
-Û@šA šAÃA *cascade08ÃAÅA *cascade08ÅAÔA*cascade08ÔAÕA *cascade08ÕAõA*cascade08õAöA *cascade08öA“B *cascade08
-“BÇB ÇBøB *cascade08øBùB *cascade08ùB…C*cascade08…C†C *cascade08†C‡C*cascade08‡C‰C *cascade08‰CŒC*cascade08ŒC˜C *cascade08˜CÃC *cascade08ÃCÄC *cascade08ÄCÚC*cascade08ÚCÛC *cascade08ÛCìC*cascade08ìCíC *cascade08íC÷C*cascade08÷CøC *cascade08øC–D*cascade08–D˜D *cascade08˜D©D*cascade08©DªD *cascade08ªDÒD *cascade08ÒDûD *cascade08ûDıD *cascade08ıD„E*cascade08„E…E *cascade08…EE*cascade08EŸE *cascade08ŸE¡E*cascade08¡E¢E *cascade08¢EËE *cascade08ËEæE *cascade08æEíE *cascade08íEòE*cascade08òEóE *cascade08óEõE*cascade08õEöE *cascade08öE±F *cascade08±F²F *cascade08²FÄF *cascade08
-ÄFúF úF±G *cascade08±G²G *cascade08²G¸G *cascade08
-¸G¹G ¹GÑG *cascade08
-ÑG‰H ‰HH *cascade08H§H§H¼H *cascade08¼HÑHÑHÒH *cascade08
-ÒHÀI ÀIÂI *cascade08
-ÂI‚J ‚JƒJ *cascade08ƒJ¼J¼J½J *cascade08
-½JöJ öJ÷J *cascade08÷JÿJÿJ€K *cascade08€K‡K‡K‰K *cascade08‰KKKK *cascade08
-KÃK ÃKÅK *cascade08ÅKÈKÈKÉK *cascade08ÉKÊKÊKËK *cascade08ËKÙKÙKÛK *cascade08
-ÛKŠL ŠL‹L *cascade08‹LLLL *cascade08L“L“L”L *cascade08”L—L—L˜L *cascade08
-˜LÓL ÓLèL *cascade08
-èL§M §M©M *cascade08©M¶M¶MÆM *cascade08ÆMÇM *cascade08ÇMÎM *cascade08ÎM×M×MØM *cascade08ØMİMİMŞM *cascade08
-ŞMÙN ÙNÚN *cascade08
-ÚNQ QQ *cascade08Q¥Q¥Q¦Q *cascade08¦Q«Q«Q¬Q *cascade08¬QÅQÅQÆQ *cascade08ÆQÌQÌQÍQ *cascade08ÍQÏQÏQĞQ *cascade08ĞQÑQÑQÕQ *cascade08
-ÕQ×S ×SßS *cascade08ßSàS *cascade08àSçS*cascade08çSèS *cascade08èSéS*cascade08éSëS *cascade08ëSòS *cascade08òS÷S *cascade08÷SøS *cascade08øSÄT *cascade08
-ÄTÿ] ÿ]Ï^ *cascade08
-Ï^í^ í^±a *cascade08±aÀaÀaÁa *cascade08ÁaÅaÅaáa *cascade08áaäaäaåa *cascade08åaæaæaça *cascade08
-çab b‚b *cascade08‚b‘b‘b’b *cascade08’bbbb *cascade08b¢b¢b¤b *cascade08¤b¥b¥b¦b *cascade08¦b§b§b¬b *cascade08¬b±b±b²b *cascade08²b·b·b¸b *cascade08
-¸bÖb ÖbÛb *cascade08ÛbÜbÜbc *cascade08c“c*cascade08“c”c *cascade08”c–c*cascade08–cÌc *cascade08
-Ìc¦d ¦d¾d *cascade08
-¾dše šeÉe *cascade08
-Ée†f †fıf *cascade08
-ıfi iÆi *cascade08
-ÆiÉi ÉiÊi *cascade08ÊiÒiÒiÓi *cascade08ÓiÛiÛiÜi *cascade08Üiåiåiçi *cascade08çióióiôi *cascade08ôiøiøiùi *cascade08ùişişi…j *cascade08…jŒjŒjj *cascade08jjjŸj *cascade08Ÿj¢j¢j£j *cascade08£j¨j¨j©j *cascade08©j¯j¯j±j *cascade08±j´j´jµj *cascade08µj¼j¼j½j *cascade08½jÃjÃjÅj *cascade08ÅjÏjÏjÑj *cascade08ÑjÒjÒjÔj *cascade08Ôjájájâj *cascade08
-âjîj îj‹k *cascade08‹k¥p*cascade08¥p×u *cascade08
-×uäu äu´v *cascade08´vÀvÀvÈv *cascade08ÈvÕvÕv×v *cascade08×vÚvÚvÜv *cascade08ÜvİvİvŞv *cascade08Şvôvôvõv *cascade08õvúvúvûv *cascade08ûv…w…w‡w *cascade08‡wŒwŒwªw *cascade08ªw«w«wãw *cascade08
-ãwy y¿y *cascade08
-¿yÍy Íy’{ *cascade08’{“{“{—{ *cascade08—{˜{˜{{ *cascade08{Ÿ{Ÿ{¤{ *cascade08¤{¥{¥{¦{ *cascade08¦{§{§{«{ *cascade08«{¬{¬{­{ *cascade08­{²{²{³{ *cascade08³{´{´{¼{ *cascade08¼{Å{ *cascade08Å{Æ{Æ{Í{ *cascade08Í{Î{Î{Ğ{ *cascade08Ğ{Ñ{Ñ{} *cascade08}}}¢} *cascade08¢}¤}¤}¥} *cascade08¥}¦}¦}®} *cascade08®}¯}¯}±} *cascade08±}²}²}µ} *cascade08µ}¹} *cascade08¹}Â} *cascade08Â}Ã}Ã}Ê} *cascade08Ê}Ë}Ë}Í} *cascade08Í}Î}Î}›~ *cascade08›~ƒ€ *cascade08ƒ€³€ *cascade08³€ğ€ ğ€ƒ *cascade08ƒ‡*cascade08‡ˆ *cascade08ˆ‰*cascade08‰Š *cascade08Š‹*cascade08‹Œ *cascade08Œ*cascade08 *cascade08*cascade08‘ *cascade08‘’*cascade08’“ *cascade08“” *cascade08”•*cascade08•– *cascade08–—*cascade08—˜ *cascade08˜™ *cascade08™š*cascade08š§ *cascade08§¨*cascade08¨û *cascade08
-û‚‚‚‚ïƒ *cascade08ïƒıƒ *cascade08ıƒö„ ö„ú„ *cascade08
-ú„û„û„ü„ *cascade08
-ü„……… *cascade08
-…Ì…Ì…Í… *cascade08
-Í…â…â…ã… *cascade08ã…¨† ¨†ª† *cascade08
-ª†«†«†¬† *cascade08
-¬†º†º†»† *cascade08
-»†Ã†Ã†Ä† *cascade08
-Ä†Í†Í†Î† *cascade08
-Î†Ú†Ú†Û† *cascade08
-Û†Ş†Ş†ß† *cascade08
-ß†á†á†â† *cascade08
-â†ç†ç†è† *cascade08
-è†é†é†ê† *cascade08
-ê†ë†ë†ì† *cascade08ì†ÿ† ÿ†‡ *cascade08‡–‡ –‡š‡ *cascade08
-š‡‡‡Ÿ‡ *cascade08
-Ÿ‡¡‡¡‡¥‡ *cascade08
-¥‡­‡­‡®‡ *cascade08
-®‡´‡´‡µ‡ *cascade08
-µ‡ç‡ç‡õ‡ *cascade08õ‡Íˆ ÍˆĞˆ *cascade08ĞˆÜˆ ÜˆŞˆ *cascade08Şˆàˆ àˆáˆ *cascade08áˆ“‰ “‰¤‰ *cascade08
-¤‰¶‰¶‰·‰ *cascade08
-·‰»‰»‰¼‰ *cascade08¼‰ŞŠ ŞŠßŠ *cascade08
-ßŠâŠâŠãŠ *cascade08
-ãŠäŠäŠåŠ *cascade08
-åŠõŠõŠöŠ *cascade08öŠ‹ ‹‹ *cascade08
-‹±‹±‹³‹ *cascade08³‹Ô‹ Ô‹Ö‹ *cascade08Ö‹›Œ ›ŒŒ *cascade08
-Œ¢Œ¢Œ£Œ *cascade08£Œœ œ¥ *cascade08¥€ € *cascade08
-™™š *cascade08š» »¼ *cascade08
-¼ÏÏÑ *cascade08Ñ× ×Ù *cascade08
-Ùââä *cascade08
-äééê *cascade08êÄ ÄÅ *cascade08
-Å‚‘‚‘„‘ *cascade08„‘‘‘ ‘‘’‘ *cascade08
-’‘”‘”‘•‘ *cascade08
-•‘Í‘Í‘Î‘ *cascade08
-Î‘×‘×‘Ø‘ *cascade08
-Ø‘Ş‘Ş‘ß‘ *cascade08
-ß‘ó‘ó‘ô‘ *cascade08
-ô‘÷‘÷‘ø‘ *cascade08ø‘‰’ ‰’Š’ *cascade08Š’»’ »’¼’ *cascade08
-¼’¿’¿’À’ *cascade08À’Ò’ Ò’Ô’ *cascade08
-Ô’å’å’æ’ *cascade08
-æ’õ’õ’ö’ *cascade08
-ö’ÿ’ÿ’“ *cascade08
-“„“„“‰“ *cascade08‰“´“ ´“” *cascade08”È” *cascade08
-È”ä”ä”‘– *cascade08‘–òš òšöš *cascade08
-öšÿšÿš€› *cascade08
-€›ˆ›ˆ›‰› *cascade08
-‰›©›©›ª› *cascade08ª›Ñ› Ñ›Ò› *cascade08
-Ò›ÆœÆœÇœ *cascade08Çœèœ èœéœ *cascade08éœ   ¡ *cascade08
-¡²²» *cascade08»Á ÁÍ *cascade08
-Íëëì *cascade08
-ìõõö *cascade08ö¬ ¬­ *cascade08
-­‰Ÿ‰ŸŠŸ *cascade08ŠŸõŸ õŸöŸ *cascade08
-öŸüŸüŸıŸ *cascade08
-ıŸşŸşŸÿŸ *cascade08
-ÿŸ  †  *cascade08† ˆ¡ ˆ¡‹¡ *cascade08‹¡¯¢ ¯¢°¢ *cascade08
-°¢Â¢Â¢Ã¢ *cascade08Ã¢ú£ ú£û£ *cascade08û£ó¥ ó¥ô¥ *cascade08
-ô¥”¦”¦•¦ *cascade08
-•¦¥¦¥¦¦¦ *cascade08¦¦ş§ ş§ÿ§ *cascade08ÿ§¼© ¼©½© *cascade08½©ª ª‚ª *cascade08‚ªî­ î­ï­ *cascade08
-ï­€®€®® *cascade08
-®«®«®­® *cascade08
-­®±®±®²® *cascade08
-²®¸®¸®º® *cascade08º®Û® Û®Ü® *cascade08
-Ü®ë®ë®í® *cascade08
-í®¯¯“¯ *cascade08
-“¯¦¯¦¯§¯ *cascade08
-§¯º¯º¯Ç¯ *cascade08
-Ç¯á¯á¯â¯ *cascade08
-â¯ô¯ô¯ş¯ *cascade08ş¯° °†° *cascade08
-†°‰°‰°‹° *cascade08
-‹°•°•°–° *cascade08
-–°£°£°¤° *cascade08
-¤°®°®°¯° *cascade08
-¯°¹°¹°º° *cascade08
-º°Ï°Ï°Ğ° *cascade08Ğ°ş° ş°ÿ° *cascade08
-ÿ°±±‚± *cascade08
-‚±Š±Š±‹± *cascade08
-‹±–±–±—± *cascade08
-—±œ±œ±± *cascade08±¦± ¦±Ğ±*cascade08Ğ±é± é±ê± *cascade08
-ê±ı±ı±ş± *cascade08
-ş±ÿ±ÿ±² *cascade08²À² À²Á² *cascade08Á²Û² Û²Ü² *cascade08
-Ü²à²à²á² *cascade08á²Æ³ Æ³Ç³ *cascade08
-Ç³Ô³Ô³Õ³ *cascade08Õ³Æ´ Æ´Ç´ *cascade08
-Ç´Ş´Ş´à´ *cascade08
-à´ì´ì´í´ *cascade08
-í´õ´õ´ö´ *cascade08
-ö´ú´ú´ü´ *cascade08
-ü´†µ†µ‡µ *cascade08
-‡µ­µ­µ®µ *cascade08®µüµ üµşµ *cascade08
-şµÿµÿµ€¶ *cascade08
-€¶‚¶‚¶ƒ¶ *cascade08
-ƒ¶‡¶‡¶¥¶ *cascade08¥¶· ·¨· *cascade08¨·â· â·ã· *cascade08
-ã·é·é·ê· *cascade08
-ê·ò·ò·ó· *cascade08
-ó·ø·ø·ù· *cascade08
-ù·€¸€¸¸ *cascade08
-¸¸¸‘¸ *cascade08
-‘¸¡¸¡¸£¸ *cascade08
-£¸¤¸¤¸¥¸ *cascade08
-¥¸¦¸¦¸¶¸ *cascade08¶¸Ì¸ Ì¸Ù¸ *cascade08Ù¸à¸ à¸ë¸ *cascade08ë¸¤¹ ¤¹¥¹ *cascade08
-¥¹Á¹Á¹Â¹ *cascade08
-Â¹É¹É¹Ê¹ *cascade08
-Ê¹Ğ¹Ğ¹Ñ¹ *cascade08
-Ñ¹Ø¹Ø¹Ù¹ *cascade08Ù¹ö¹ ö¹÷¹ *cascade08÷¹»º »º½º *cascade08
-½ºåºåºòº *cascade08òº—½ —½±½ *cascade08±½¡¾ ¡¾¢¾ *cascade08
-¢¾§¾§¾¨¾ *cascade08¨¾Ñ¾ Ñ¾Ò¾ *cascade08Ò¾°¿ °¿±¿ *cascade08±¿ĞÀ ĞÀÓÀ *cascade08
-ÓÀÖÀÖÀ×À *cascade08×ÀıÀ ıÀşÀ *cascade08
-şÀ†Á†Á‡Á *cascade08
-‡ÁŒÁŒÁÁ *cascade08
-Á”Á”Á•Á *cascade08
-•Á—Á—Á˜Á *cascade08˜Á¤Â ¤Â¥Â *cascade08
-¥Â©Â©ÂÍÂ *cascade08
-ÍÂóÂóÂ€Ã *cascade08€ÃœÃ œÃÃ *cascade08
-Ã¨Ã¨Ã©Ã *cascade08
-©Ã¯Ã¯Ã°Ã *cascade08°ÃİÃ İÃßÃ *cascade08
-ßÃèÃèÃéÃ *cascade08
-éÃëÃëÃíÃ *cascade08
-íÃõÃõÃöÃ *cascade08
-öÃûÃûÃüÃ *cascade08
-üÃÄÄÄ *cascade08ÄŸÄ ŸÄ»Ç *cascade08»Ç¿Ç*cascade08¿ÇÀÇ *cascade08ÀÇÊÇ*cascade08ÊÇ–É *cascade08–ÉªÉ ªÉ°É *cascade08°ÉÓÉ ÓÉÔÉ *cascade08ÔÉşÉ şÉÿÉ *cascade08
-ÿÉÊÊ‚Ê *cascade08
-‚Ê‰Ê‰Ê‹Ê *cascade08‹ÊôÊ ôÊõÊ *cascade08
-õÊ÷Ê÷ÊøÊ *cascade08
-øÊüÊüÊıÊ *cascade08
-ıÊşÊşÊÿÊ *cascade08ÿÊÂË ÂËÄË *cascade08
-ÄË„Ì„ÌˆÌ *cascade08
-ˆÌÌÌŸÌ *cascade08
-ŸÌ¤Ì¤Ì³Ì *cascade08³ÌèÌ èÌëÌ *cascade08ëÌõÍ õÍöÍ *cascade08
-öÍ€Î€ÎÎ *cascade08
-Î„Î„Î…Î *cascade08
-…Î‰Î‰ÎŠÎ *cascade08ŠÎåÎ åÎæÎ *cascade08
-æÎîÎîÎïÎ *cascade08
-ïÎúÎúÎûÎ *cascade08
-ûÎ†Ï†Ï‡Ï *cascade08‡Ï¬Ï ¬Ï­Ï *cascade08
-­Ï®Ï®Ï¯Ï *cascade08
-¯ÏÂÏÂÏÃÏ *cascade08
-ÃÏÓÏÓÏÔÏ *cascade08
-ÔÏÖÏÖÏ×Ï *cascade08
-×ÏØÏØÏÙÏ *cascade08
-ÙÏÚÏÚÏÛÏ *cascade08
-ÛÏãÏãÏåÏ *cascade08
-åÏûÏûÏüÏ *cascade08
-üÏƒĞƒĞ„Ğ *cascade08
-„Ğ‡Ğ‡ĞˆĞ *cascade08
-ˆĞĞĞ“Ğ *cascade08
-“Ğ¤Ğ¤Ğ±Ğ *cascade08
-±ĞÀĞÀĞÁĞ *cascade08
-ÁĞÈĞÈĞÉĞ *cascade08ÉĞúĞ úĞûĞ *cascade08
-ûĞşĞşĞÿĞ *cascade08
-ÿĞ„Ñ„Ñ…Ñ *cascade08
-…Ñ‘Ñ‘Ñ’Ñ *cascade08’ÑÅÑ ÅÑÆÑ *cascade08
-ÆÑÒÑÒÑÓÑ *cascade08
-ÓÑøÑøÑùÑ *cascade08
-ùÑ€Ò€Ò‚Ò *cascade08
-‚ÒŠÒŠÒ‹Ò *cascade08
-‹ÒªÒªÒ«Ò *cascade08«ÒËÒ ËÒŞÒ *cascade082Jfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Services/LaunchService.cs

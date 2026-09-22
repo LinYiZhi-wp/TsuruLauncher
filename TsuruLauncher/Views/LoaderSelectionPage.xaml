@@ -1,0 +1,479 @@
+<Page x:Class="TsuruLauncher.Views.LoaderSelectionPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:anim="clr-namespace:TsuruLauncher.Services.Animation"
+        xmlns:motion="clr-namespace:TsuruLauncher.Services.Animation"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:conv="clr-namespace:TsuruLauncher.Converters"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      mc:Ignorable="d" 
+      d:DesignHeight="700" d:DesignWidth="800"
+      Title="LoaderSelectionPage">
+
+    <Page.Resources>
+        <conv:ExpandIconConverter x:Key="ExpandIconConverter"/>
+        <conv:BoolToAngleConverter x:Key="BoolToAngleConverter"/>
+        <conv:StepDotBrushConverter x:Key="StepDotBrushConverter"/>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
+        <conv:InverseBoolConverter x:Key="InverseBoolConverter"/>
+
+        <Style x:Key="LoaderListBox" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBox">
+                        <ItemsPresenter/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Padding" Value="14,6,12,6"/>
+                        <Setter Property="Margin" Value="0"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="10"
+                                            Padding="{TemplateBinding Padding}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock x:Name="Dot" Text="○" FontSize="12" Margin="0,0,8,0"
+                                                       VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                            <TextBlock Text="{Binding Version}" FontSize="13"
+                                                       VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                       x:Name="Ver"/>
+                                            <TextBlock Text="{Binding Type}" FontSize="11" Margin="8,0,0,0"
+                                                       VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}"
+                                                       x:Name="TypeTag"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Dot" Property="Text" Value="●"/>
+                                            <Setter TargetName="Dot" Property="Foreground" Value="#00E676"/>
+                                            <Setter TargetName="Ver" Property="Foreground" Value="#00E676"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#15FFFFFF"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DropShadowEffect x:Key="CardShadow" BlurRadius="30" ShadowDepth="4" Opacity="0.3" Color="Black"/>
+    </Page.Resources>
+
+    <Grid Background="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Margin="20,20,20,16">
+            <DockPanel LastChildFill="True">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                    <Button Content="←" Style="{StaticResource iOS26.CapsuleButton}"
+                            Foreground="{DynamicResource TextSecondaryBrush}" Background="{DynamicResource Surface4Brush}"
+                            Width="36" Height="36" Padding="0"
+                            Click="Back_Click" ToolTip="返回">
+                        <Button.ContentTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="←" FontSize="18" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </Button.ContentTemplate>
+                    </Button>
+
+                    <Border Width="40" Height="40" CornerRadius="12" Margin="14,0,12,0"
+                            Background="{DynamicResource Surface4Brush}" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1">
+                        <TextBlock Text="⛏️" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding McVersion}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <TextBlock Text="{DynamicResource LoaderSelect_Subtitle}" FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Loader List -->
+        <ScrollViewer Grid.Row="1" Padding="20,8,20,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="LoaderPanel">
+
+                <!-- Forge -->
+                <Border CornerRadius="16" Background="{DynamicResource Surface3Brush}" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"
+                        Margin="0,0,0,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                                </Trigger>
+                                <DataTrigger Binding="{Binding ForgeExpanded}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentGlassMediumBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <Button Command="{Binding ToggleForgeCommand}" HorizontalAlignment="Stretch"
+                                Style="{x:Null}" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                Padding="0" Margin="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <ContentPresenter/>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <Grid Margin="18,16,18,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" Grid.Column="0">
+                                    <Border Width="34" Height="34" CornerRadius="9" Background="{DynamicResource AccentGlassMediumBrush}" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <ui:SymbolIcon Symbol="Wrench24" FontSize="17" Foreground="{DynamicResource AccentBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Forge" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,1,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsForgeLoading}" Value="True">
+                                                            <Setter Property="Text" Value="获取中..."/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding ForgeVersions.Count}" Value="0">
+                                                            <Setter Property="Text" Value="不可用"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding ForgeSelectedVersion}" Value="">
+                                                            <Setter Property="Text" Value="可以添加"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                    <Setter Property="Text" Value="{Binding ForgeSelectedVersion}"/>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="获取中…" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
+                                               Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                    <TextBlock Text="{Binding ForgeExpanded, Converter={StaticResource ExpandIconConverter}}"
+                                               FontSize="13" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center">
+                                        <TextBlock.RenderTransform>
+                                            <RotateTransform Angle="{Binding ForgeExpanded, Converter={StaticResource BoolToAngleConverter}}"/>
+                                        </TextBlock.RenderTransform>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+
+                        <Grid x:Name="ForgeExpandPanel" Visibility="{Binding ForgeExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
+                              RenderTransformOrigin="0.5,0">
+                            <Grid.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                    <TranslateTransform X="0" Y="0"/>
+                                </TransformGroup>
+                            </Grid.RenderTransform>
+                            <Border BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="0,1,0,0" Padding="4,8,4,8">
+                                <ListBox ItemsSource="{Binding ForgeVersions}"
+                                         SelectedItem="{Binding SelectedForgeItem}"
+                                         Style="{StaticResource LoaderListBox}"/>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Fabric -->
+                <Border CornerRadius="16" Background="{DynamicResource Surface3Brush}" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"
+                        Margin="0,0,0,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                                </Trigger>
+                                <DataTrigger Binding="{Binding FabricExpanded}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentGlassMediumBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <Button Command="{Binding ToggleFabricCommand}" HorizontalAlignment="Stretch"
+                                Style="{x:Null}" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                Padding="0" Margin="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <ContentPresenter/>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <Grid Margin="18,16,18,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" Grid.Column="0">
+                                    <Border Width="34" Height="34" CornerRadius="9" Background="{DynamicResource AccentGlassMediumBrush}" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <ui:SymbolIcon Symbol="DesignIdeas24" FontSize="17" Foreground="{DynamicResource AccentBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Fabric" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,1,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsFabricLoading}" Value="True">
+                                                            <Setter Property="Text" Value="获取中..."/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding FabricVersions.Count}" Value="0">
+                                                            <Setter Property="Text" Value="不可用"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding FabricSelectedVersion}" Value="">
+                                                            <Setter Property="Text" Value="可以添加"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                    <Setter Property="Text" Value="{Binding FabricSelectedVersion}"/>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="获取中…" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
+                                               Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                    <TextBlock Text="{Binding FabricExpanded, Converter={StaticResource ExpandIconConverter}}"
+                                               FontSize="13" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center">
+                                        <TextBlock.RenderTransform>
+                                            <RotateTransform Angle="{Binding FabricExpanded, Converter={StaticResource BoolToAngleConverter}}"/>
+                                        </TextBlock.RenderTransform>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+
+                        <Grid x:Name="FabricExpandPanel" Visibility="{Binding FabricExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
+                              RenderTransformOrigin="0.5,0">
+                            <Grid.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                    <TranslateTransform X="0" Y="0"/>
+                                </TransformGroup>
+                            </Grid.RenderTransform>
+                            <Border BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="0,1,0,0" Padding="4,8,4,8">
+                                <ListBox ItemsSource="{Binding FabricVersions}"
+                                         SelectedItem="{Binding SelectedFabricItem}"
+                                         Style="{StaticResource LoaderListBox}"/>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- OptiFine -->
+                <Border CornerRadius="16" Background="{DynamicResource Surface3Brush}" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"
+                        Margin="0,0,0,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                                </Trigger>
+                                <DataTrigger Binding="{Binding OptifineExpanded}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentGlassMediumBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <Button Command="{Binding ToggleOptifineCommand}" HorizontalAlignment="Stretch"
+                                Style="{x:Null}" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                Padding="0" Margin="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <ContentPresenter/>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <Grid Margin="18,16,18,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" Grid.Column="0">
+                                    <Border Width="34" Height="34" CornerRadius="9" Background="{DynamicResource AccentGlassMediumBrush}" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <ui:SymbolIcon Symbol="Sparkle24" FontSize="17" Foreground="{DynamicResource AccentBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="OptiFine" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,1,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsOptifineLoading}" Value="True">
+                                                            <Setter Property="Text" Value="获取中..."/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding OptiFineVersions.Count}" Value="0">
+                                                            <Setter Property="Text" Value="不可用"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding OptifineSelectedVersion}" Value="">
+                                                            <Setter Property="Text" Value="可以添加"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                    <Setter Property="Text" Value="{Binding OptifineSelectedVersion}"/>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="获取中…" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
+                                               Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                    <TextBlock Text="{Binding OptifineExpanded, Converter={StaticResource ExpandIconConverter}}"
+                                               FontSize="13" Foreground="{DynamicResource TextTertiaryBrush}" VerticalAlignment="Center">
+                                        <TextBlock.RenderTransform>
+                                            <RotateTransform Angle="{Binding OptifineExpanded, Converter={StaticResource BoolToAngleConverter}}"/>
+                                        </TextBlock.RenderTransform>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+
+                        <Grid x:Name="OptifineExpandPanel" Visibility="{Binding OptifineExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
+                              RenderTransformOrigin="0.5,0">
+                            <Grid.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                    <TranslateTransform X="0" Y="0"/>
+                                </TransformGroup>
+                            </Grid.RenderTransform>
+                            <Border BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="0,1,0,0" Padding="4,8,4,8">
+                                <ListBox ItemsSource="{Binding OptiFineVersions}"
+                                         SelectedItem="{Binding SelectedOptifineItem}"
+                                         Style="{StaticResource LoaderListBox}"/>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Bottom Action Bar -->
+        <Border Grid.Row="2" Margin="20,14,20,16">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
+                    <Button Content="📥 开始下载"
+                            Style="{StaticResource iOS26.CapsuleButton}"
+                            Foreground="{DynamicResource TextPrimaryBrush}" Background="{DynamicResource AccentBrush}"
+                            Height="44" FontSize="15" FontWeight="SemiBold"
+                            Padding="28,0" MinWidth="160"
+                            Command="{Binding StartDownloadCommand}"
+                            IsEnabled="{Binding IsDownloading, Converter={StaticResource InverseBoolConverter}}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Download Progress Capsule -->
+        <Border x:Name="DownloadCapsule" Grid.RowSpan="3" Panel.ZIndex="100"
+                VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                Margin="0,0,0,70"
+                Opacity="0"
+                CornerRadius="14" Background="{DynamicResource SurfaceFloatingBrush}" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1" Padding="16,10">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsDownloading}" Value="True">
+                            <DataTrigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                         From="0" To="1" Duration="0:0:0.18" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </DataTrigger.EnterActions>
+                            <DataTrigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                         From="1" To="0" Duration="0:0:0.4"
+                                                         BeginTime="0:0:1"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </DataTrigger.ExitActions>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel MinWidth="420">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="26" Height="26" CornerRadius="8" Background="{DynamicResource AccentGlassMediumBrush}" Margin="0,0,10,0">
+                        <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="14" Foreground="{DynamicResource AccentBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="正在安装" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <TextBlock Text="{Binding DownloadStatus}" FontSize="10.5" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,1,0,0"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding DownloadProgress, StringFormat={}{0:P0}}" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource AccentBrush}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- 步骤条 -->
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,8">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="7" Height="7" Fill="{Binding DownloadProgress, Converter={StaticResource StepDotBrushConverter}, ConverterParameter=0.05}"/>
+                        <TextBlock Text="准备" FontSize="10.5" Margin="5,0,0,0" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    </StackPanel>
+                    <Border Width="18" Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="8,0" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="7" Height="7" Fill="{Binding DownloadProgress, Converter={StaticResource StepDotBrushConverter}, ConverterParameter=0.2}"/>
+                        <TextBlock Text="版本 JSON" FontSize="10.5" Margin="5,0,0,0" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    </StackPanel>
+                    <Border Width="18" Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="8,0" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="7" Height="7" Fill="{Binding DownloadProgress, Converter={StaticResource StepDotBrushConverter}, ConverterParameter=0.4}"/>
+                        <TextBlock Text="运行库" FontSize="10.5" Margin="5,0,0,0" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    </StackPanel>
+                    <Border Width="18" Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="8,0" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="7" Height="7" Fill="{Binding DownloadProgress, Converter={StaticResource StepDotBrushConverter}, ConverterParameter=0.65}"/>
+                        <TextBlock Text="资源文件" FontSize="10.5" Margin="5,0,0,0" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    </StackPanel>
+                    <Border Width="18" Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="8,0" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="7" Height="7" Fill="{Binding DownloadProgress, Converter={StaticResource StepDotBrushConverter}, ConverterParameter=0.9}"/>
+                        <TextBlock Text="加载器" FontSize="10.5" Margin="5,0,0,0" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <ProgressBar Height="4" Background="{DynamicResource Surface4Brush}" Foreground="{DynamicResource AccentBrush}"
+                             BorderThickness="0" Value="{Binding DownloadProgress}" Maximum="1" Minimum="0"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>

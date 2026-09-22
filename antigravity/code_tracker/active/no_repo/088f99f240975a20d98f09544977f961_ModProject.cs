@@ -1,33 +1,0 @@
-êusing System.Collections.Generic;
-
-namespace GeminiLauncher.Models.Ecosystem
-{
-    public enum ProjectPlatform
-    {
-        Modrinth,
-        CurseForge
-    }
-
-    public enum ProjectType
-    {
-        Mod,
-        Modpack,
-        ResourcePack,
-        Shader,
-        DataPack
-    }
-
-    public class ModProject
-    {
-        public string Id { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public string Summary { get; set; } = string.Empty;
-        public string IconUrl { get; set; } = string.Empty;
-        public string Author { get; set; } = string.Empty;
-        public long Downloads { get; set; }
-        public ProjectPlatform Platform { get; set; }
-        public ProjectType Type { get; set; } = ProjectType.Mod;
-        public string WebUrl { get; set; } = string.Empty;
-    }
-}
-” *cascade08”§*cascade08§ê *cascade082Ofile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Models/Ecosystem/ModProject.cs

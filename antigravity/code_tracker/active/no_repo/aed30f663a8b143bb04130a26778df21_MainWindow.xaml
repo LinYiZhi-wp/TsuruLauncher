@@ -1,230 +1,0 @@
-ñ(<ui:FluentWindow x:Class="GeminiLauncher.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-        xmlns:local="clr-namespace:GeminiLauncher"
-        xmlns:vm="clr-namespace:GeminiLauncher.ViewModels"
-        xmlns:controls="clr-namespace:GeminiLauncher.Controls"
-        xmlns:views="clr-namespace:GeminiLauncher.Views"
-        mc:Ignorable="d"
-        Title="LinLaunch" Height="700" Width="1100"
-        WindowStartupLocation="CenterScreen"
-        WindowBackdropType="Mica"
-        ExtendsContentIntoTitleBar="True">
-
-    <Window.DataContext>
-        <vm:MainViewModel/>
-    </Window.DataContext>
-
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-
-        <!-- Cirno Background -->
-        <Image Grid.RowSpan="2" Source="Assets/cirno_bg.png" Stretch="UniformToFill" Opacity="0.5" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
-        
-        <!-- iOS 26 Background Layer (60% transparent) -->
-        <Rectangle Grid.RowSpan="2" Fill="{StaticResource iOS26.Background}" IsHitTestVisible="False" />
-
-        <!-- Window Controls -->
-        <ui:TitleBar Grid.Row="0" Title="LinLaunch" />
-
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-
-            <!-- Floating Sidebar (Capsule) -->
-            <Border Grid.Column="0" 
-                    Margin="16,16,8,16" 
-                    CornerRadius="20"
-                    Background="{StaticResource iOS26.SidebarLayer}"
-                    Effect="{StaticResource iOS26.Shadow.Default}">
-                <ui:NavigationView x:Name="RootNavigation"
-                                   PaneDisplayMode="Left"
-                                   IsPaneOpen="True"
-                                   OpenPaneLength="250"
-                                   MinWidth="250"
-                                   Background="Transparent"
-                                   Foreground="White"
-                                   IsBackButtonVisible="Visible"
-                                   BackRequested="RootNavigation_BackRequested"
-                                   SelectionChanged="RootNavigation_SelectionChanged"
-                                   ItemInvoked="RootNavigation_ItemInvoked">
-                    <ui:NavigationView.PaneHeader>
-                        <StackPanel VerticalAlignment="Center" Margin="20,20,0,20">
-                             <!-- Logo / Title -->
-                             <TextBlock Text="LinLaunch" FontSize="24" FontWeight="Bold" 
-                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                             <TextBlock Text="iOS 26 Edition" FontSize="12" Opacity="0.6" />
-                        </StackPanel>
-                    </ui:NavigationView.PaneHeader>
-
-                    <ui:NavigationView.MenuItems>
-                        <ui:NavigationViewItem Content="Home" Icon="{ui:SymbolIcon Home24}" Tag="home" PreviewMouseLeftButtonDown="NavItem_Click" />
-                        <ui:NavigationViewItem Content="Resources" Icon="{ui:SymbolIcon Library24}" Tag="resources" PreviewMouseLeftButtonDown="NavItem_Click" />
-                        <ui:NavigationViewItem Content="Download" Icon="{ui:SymbolIcon ArrowDownload24}" Tag="download" PreviewMouseLeftButtonDown="NavItem_Click" />
-                    </ui:NavigationView.MenuItems>
-
-                    <ui:NavigationView.FooterMenuItems>
-                        <ui:NavigationViewItem Content="Settings" Icon="{ui:SymbolIcon Settings24}" Tag="settings" PreviewMouseLeftButtonDown="NavItem_Click" />
-                    </ui:NavigationView.FooterMenuItems>
-                </ui:NavigationView>
-            </Border>
-
-            <!-- Manual Frame (restored) -->
-            <Border Grid.Column="1" Background="Transparent" Margin="8,16,16,16"
-                    CornerRadius="16" ClipToBounds="True">
-                <Frame x:Name="RootFrame" NavigationUIVisibility="Hidden" Background="Transparent"/>
-            </Border>
-        </Grid>
-        
-        <!-- Notification Overlay -->
-        <StackPanel x:Name="NotificationContainer" 
-                    VerticalAlignment="Top" 
-                    HorizontalAlignment="Right" 
-                    Margin="0,60,20,0" 
-                    Panel.ZIndex="2000"
-                    Width="360"/>
-
-        <!-- Global Download Manager Panel Overlay -->
-        <views:DownloadManagerPanel VerticalAlignment="Bottom" HorizontalAlignment="Right" Panel.ZIndex="1000"/>
-    </Grid>
-</ui:FluentWindow>
-ä äÑ
-Ñ• •¶
-¶® ®´
-´¨ ¨Æ
-Æ∏ ∏π
-πƒ ƒ∆
-∆˘ ˘ú
-ú≥ ≥Ì
-ÌÓ Óà
-àâ â¸
-¸˝ ˝ì	
-ì	î	 î	ô	
-ô	ö	 ö	∫	
-∫	ª	 ª	Ω	
-Ω	æ	 æ	…	
-…	 	  	À	
-À	Õ	 Õ	á
-
-á
-â
- â
-î
-
-î
-ï
- ï
-˙
-
-˙
-˚
- ˚
-«
-«» » 
- ‘ ‘∂
-∂Ã Ãå
-åç çí
-íì ìñ
-ñò ò—
-—“ “Ï
-ÏÔ ÔÛ
-Ûï ïö
-ö† †¶
-¶ß ß⁄
-⁄€ €‹
-‹ﬂ ﬂÁ
-ÁË Ë◊
-◊Â ÂÁ
-ÁÎ Î¯
-¯ò òú
-úß ßÆ
-Æ∫ ∫ª
-ª⁄ ⁄‚
-‚π πæ
-æø ø¡
-¡¬ ¬√
-√ƒ ƒ∆
-∆« «€
-€› ›‚
-‚„ „Ê
-ÊÁ ÁË
-ËÈ Èã
-ãå åñ
-ñö ö™
-™´ ´µ
-µ∂ ∂ø
-ø¿ ¿⁄
-⁄€ €‰
-‰Â ÂÅ
-ÅÇ ÇÖ
-ÖÜ Üç
-çì ìõ
-õÅ ÅÖ
-Öà àè
-èí íï
-ïñ ñ°
-°• •®
-®© ©¨
-¨≠ ≠¥
-¥∫ ∫¬
-¬ Ò
-Ò˝ ˝Ñ
-Ñ© ©±
-±ê  ê ì 
-ì ï  ï ò 
-ò ô  ô ö 
-ö õ  õ û 
-û ü  ü † 
-† £  £ ¶ 
-¶ ®  ® Æ 
-Æ ∞  ∞ ± 
-± ≤  ≤ π 
-π ∫  ∫ Ω 
-Ω æ  æ ≈ 
-≈ À  À ” 
-” ë! ë!©!
-©!∏! ∏!ÿ!
-ÿ!Ÿ! Ÿ!à"
-à"â" â"ó"
-ó"ò" ò"ö"
-ö"õ" õ"§"
-§"•" •"¨"
-¨"≠" ≠"≥"
-≥"¥" ¥"Ÿ"
-Ÿ"⁄" ⁄"€"
-€"‹" ‹"·"
-·"‚" ‚"Í"
-Í"Î" Î"Ò"
-Ò"Ú" Ú"Û"
-Û"Ù" Ù"˚"
-˚"¸" ¸"˝"
-˝"®# ®#·#
-·#Ù# Ù#â$
-â$ä$ 
-ä$•$ •$ÿ&*cascade08
-ÿ&‹& 
-‹&›& ›&‡&
-‡&‚& ‚&‰&
-‰&Â& Â&Í&
-Í&Î& Î&Ì&
-Ì&Ó& Ó&Ú&
-Ú&Û& Û&Ä'
-Ä'å' å'ç'
-ç'é' é'ë'
-ë'í' í'õ'
-õ'ú' ú'û'
-û'ü' ü'¢'
-¢'£' £'™'
-™'¨' ¨'«'
-«'…' …'Œ'
-Œ'œ' œ'“'
-“'”' ”'Ú'
-Ú'ñ( 2@file:///c:/Users/Linyizhi/.gemini/GeminiLauncher/MainWindow.xaml

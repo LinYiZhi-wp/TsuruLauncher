@@ -1,65 +1,0 @@
-ñusing System.Threading;
-using CommunityToolkit.Mvvm.ComponentModel;
-
-namespace GeminiLauncher.Models
-{
-    public partial class DownloadTask : ObservableObject
-    {
-        [ObservableProperty]
-        private string _name = string.Empty;
-
-        [ObservableProperty]
-        private string _status = "Waiting...";
-
-        [ObservableProperty]
-        private double _progress; // 0.0 to 1.0
-
-        [ObservableProperty]
-        private long _totalBytes;
-
-        [ObservableProperty]
-        private long _downloadedBytes;
-
-        [ObservableProperty]
-        private string _speedText = "0 KB/s";
-
-        [ObservableProperty]
-        private string _sizeText = "0 / 0 MB";
-
-        [ObservableProperty]
-        private bool _isCompleted;
-
-        [ObservableProperty]
-        private bool _isFailed;
-
-        [ObservableProperty]
-        private string _errorMessage = string.Empty;
-
-        // Sub-task Progress (for the new UI)
-        [ObservableProperty] private string _jsonStatus = "Waiting...";
-        [ObservableProperty] private string _jsonStatusText = "";
-        [ObservableProperty] private double _jsonProgress; // 0 or 1
-        
-        [ObservableProperty] private string _librariesStatus = "Waiting...";
-        [ObservableProperty] private string _librariesStatusText = "";
-        [ObservableProperty] private double _librariesProgress;
-        
-        [ObservableProperty] private string _assetsStatus = "Waiting...";
-        [ObservableProperty] private string _assetsStatusText = "";
-        [ObservableProperty] private double _assetsProgress;
-        
-        [ObservableProperty] private string _componentsStatus = "Waiting...";
-        [ObservableProperty] private string _componentsStatusText = "";
-        [ObservableProperty] private double _componentsProgress;
-
-        [ObservableProperty] private int _remainingFiles;
-
-        public long LastDownloadedBytes { get; set; }
-        public CancellationTokenSource Cts { get; set; } = new CancellationTokenSource();
-        
-        public string ProgressPercentageText => $"{(_progress * 100):F0}%";
-    }
-}
-© *cascade08©¾ *cascade08¾	*cascade08	ú	 *cascade08ú	Â
-*cascade08Â
-Ø *cascade08Ø*cascade08° *cascade08°ù*cascade08ù† *cascade08† *cascade08Ä*cascade08Äñ *cascade082Gfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Models/DownloadTask.cs

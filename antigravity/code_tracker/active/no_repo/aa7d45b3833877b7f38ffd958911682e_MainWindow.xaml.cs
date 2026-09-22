@@ -1,500 +1,0 @@
-@using System.Windows;
-using Wpf.Ui.Controls;
-using System.Windows.Controls; // For Frame logic if needed
-using GeminiLauncher.Views;
-using GeminiLauncher.Controls;
-using System.Windows.Threading;
-
-namespace GeminiLauncher
-{
-    public partial class MainWindow : FluentWindow
-    {
-        public MainWindow()
-        {
-            InitializeComponent();
-            
-            // Add page transition animation
-            RootFrame.Navigating += RootFrame_Navigating;
-            
-            // Hook into NavigationView's internal Frame navigation if possible or just the event
-            // WPF-UI NavView has a 'Navigated' event? Or we find the frame?
-            // Let's try to find the frame and attach animation.
-            this.Loaded += MainWindow_Loaded;
-            
-            var vm = this.DataContext as ViewModels.MainViewModel;
-            if (vm != null)
-            {
-                vm.RequestNavigation += (page) => RootFrame.Navigate(page);
-                vm.RequestGoBack += () => 
-                {
-                    if (RootFrame.CanGoBack) RootFrame.GoBack();
-                };
-
-                // Subscribe to notifications
-                vm.NotificationService.OnShowNotification += (msg) => 
-                {
-                    Dispatcher.Invoke(() => 
-                    {
-                        var toast = new NotificationToast(msg, () => 
-                        {
-                            // Remove from container when closed
-                             // We need a reference to remove it, or passed callback
-                        });
-                        
-                        // We need to modify NotificationToast constructor to accept the remove callback or handle it here
-                        // Actually, I defined OnClose in toast constructor.
-                        // Let's re-read NotificationToast constructor
-                        
-                        toast = new NotificationToast(msg, () => 
-                        {
-                            if (NotificationContainer.Children.Contains(toast))
-                                NotificationContainer.Children.Remove(toast);
-                        });
-
-                        NotificationContainer.Children.Add(toast);
-                    });
-                };
-            }
-        }
-
-        private void RootFrame_Navigating(object sender, System.Windows.Navigation.NavigatingCancelEventArgs e)
-        {
-            // iOSé£æ ¼é¡µé¢åˆ‡æ¢åŠ¨ç”»ï¼šæ»‘åŠ¨ + æ·¡å…¥æ·¡å‡º
-            if(e.Content is Page page)
-            {
-                page.Opacity = 0;
-                page.RenderTransform = new System.Windows.Media.TranslateTransform(30, 0);
-                
-                var storyboard = new System.Windows.Media.Animation.Storyboard();
-                
-                // æ·¡å…¥åŠ¨ç”»
-                var fadeIn = new System.Windows.Media.Animation.DoubleAnimation
-                {
-                    From = 0,
-                    To = 1,
-                    Duration = System.TimeSpan.FromSeconds(0.3),
-                    DecelerationRatio = 0.7
-                };
-                System.Windows.Media.Animation.Storyboard.SetTarget(fadeIn, page);
-                System.Windows.Media.Animation.Storyboard.SetTargetProperty(fadeIn, new PropertyPath("Opacity"));
-                
-                // æ»‘åŠ¨åŠ¨ç”»
-                var slideIn = new System.Windows.Media.Animation.DoubleAnimation
-                {
-                    From = 30,
-                    To = 0,
-                    Duration = System.TimeSpan.FromSeconds(0.3),
-                    DecelerationRatio = 0.8
-                };
-                System.Windows.Media.Animation.Storyboard.SetTarget(slideIn, page);
-                System.Windows.Media.Animation.Storyboard.SetTargetProperty(slideIn, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
-                
-                storyboard.Children.Add(fadeIn);
-                storyboard.Children.Add(slideIn);
-                storyboard.Begin();
-            }
-        }
-
-        private void RootNavigation_BackRequested(NavigationView sender, object args)
-        {
-            if (RootFrame.CanGoBack)
-            {
-                RootFrame.GoBack();
-            }
-        }
-
-
-        private void RootNavigation_SelectionChanged(NavigationView sender, RoutedEventArgs args)
-        {
-            System.Console.WriteLine("[Nav] SelectionChanged fired!");
-            try
-            {
-                if (sender.SelectedItem is NavigationViewItem item)
-                {
-                    var tag = item.Tag?.ToString()?.ToLower()?.Trim();
-                    System.Console.WriteLine($"[Nav] SelectionChanged: {tag}");
-
-                    NavigateToPage(tag);
-                }
-            }
-            catch (System.Exception ex)
-            {
-                System.Console.WriteLine($"[Nav] SelectionChanged Error: {ex}");
-                System.Windows.MessageBox.Show($"Navigation Error: {ex.Message}");
-            }
-        }
-
-        private void RootNavigation_ItemInvoked(NavigationView sender, RoutedEventArgs args)
-        {
-            System.Console.WriteLine($"[Nav] ItemInvoked fired!");
-            
-            try
-            {
-                // å°è¯•ä»senderè·å–é€‰ä¸­é¡¹
-                if (sender.SelectedItem is NavigationViewItem item)
-                {
-                    var tag = item.Tag?.ToString()?.ToLower()?.Trim();
-                    System.Console.WriteLine($"[Nav] ItemInvoked Tag: {tag}");
-                    NavigateToPage(tag);
-                }
-                else
-                {
-                    System.Console.WriteLine("[Nav] ItemInvoked: SelectedItem is not NavigationViewItem");
-                }
-            }
-            catch (System.Exception ex)
-            {
-                System.Console.WriteLine($"[Nav] ItemInvoked Error: {ex}");
-                System.Windows.MessageBox.Show($"Navigation Error (ItemInvoked): {ex.Message}");
-            }
-        }
-
-        private void NavigateToPage(string? tag)
-        {
-            System.Console.WriteLine($"[Nav] NavigateToPage called with tag: {tag}");
-            switch (tag)
-            {
-                case "home":
-                    RootFrame.Navigate(new Views.HomePage());
-                    System.Console.WriteLine("[Nav] Navigated to HomePage");
-                    break;
-                case "resources":
-                    RootFrame.Navigate(new Views.ResourcesPage());
-                    System.Console.WriteLine("[Nav] Navigated to ResourcesPage");
-                    break;
-                case "download":
-                    RootFrame.Navigate(new Views.DownloadPage());
-                    System.Console.WriteLine("[Nav] Navigated to DownloadPage");
-                    break;
-                case "settings":
-                    RootFrame.Navigate(new Views.SettingsPage());
-                    System.Console.WriteLine("[Nav] Navigated to SettingsPage");
-                    break;
-                default:
-                    System.Console.WriteLine($"[Nav] Unknown tag: {tag}");
-                    break;
-            }
-        }
-
-        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-             // Initial Navigation - Explicitly navigate the frame
-             RootFrame.Navigate(new Views.HomePage());
-        }
-
-        private void NavItem_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (sender is NavigationViewItem item)
-            {
-                var tag = item.Tag?.ToString()?.ToLower()?.Trim();
-                System.Console.WriteLine($"[Nav] å·¦é”®ç‚¹å‡»: {tag}");
-                NavigateToPage(tag);
-                e.Handled = true; // é˜»æ­¢äº‹ä»¶ç»§ç»­ä¼ æ’­
-            }
-        }
-        
-        // Let's try to add a resource style in App.xaml or MainWindow.resources to style the Frame
-        // <Style TargetType="Frame"> ... </Style>
-
-    }
-}
-/ /‰‰Ê*cascade08
-Êş şõ
-õŸ Ÿ„
-„† †“
-“ ¾
-¾¿ ¿Ì
-ÌÍ ÍÓ
-ÓÔ ÔÖ
-ÖÙ Ùñ
-ñó óı
-ış şµ
-µ¶ ¶·
-·¸ ¸Ä
-ÄÆ 
-Æß ß›*cascade08
-›Ù 
-ÙÚ Úâ
-âã ãå
-åç çê
-êë ëì
-ìí íø
-øˆ ˆŸ
-Ÿ   ¨
-¨© ©°
-°± ±²
-²Ú Ú›
-›œ œ¢
-¢£ £§
-§¨ ¨®
-®° °…
-…‡ ‡Œ
-Œ ‘
-‘’ ’“
-“” ”œ
-œ ¡
-¡¢ ¢¦
-¦§ §±
-±² ²Ï
-ÏĞ Ğç
-çé éì
-ìí íñ
-ñò òø
-øü ü„
-„… …‰
-‰Š Šî
-îğ ğô
-ôõ õû
-ûü ü
- ¡
-¡£ £Ö
-Ö× ×Ş
-Şì ìó
-óõ õ–
-–— —
-Ÿ Ÿ¤
-¤¥ ¥¶
-¶· ·Á
-ÁÂ ÂĞ
-ĞÑ ÑÜ
-Üİ İá
-áâ âæ
-æç ç£
-£¤ ¤³
-³µ µÂ
-ÂÃ ÃÙ
-ÙÚ Úæ
-æè è÷
-÷ø øú
-úû ûŒ
-Œ ’
-’” ”¢
-¢£ £§
-§¨ ¨®
-®¯ ¯±
-±² ²´
-´µ µ½
-½¾ ¾¿
-¿À ÀŒ
-Œ 
- •
-•– –
-   §
-§¨ ¨´
-´µ µ·
-·¸ ¸Å
-ÅØ Ø³
-³´ ´Ì
-ÌÍ Íì
-ìí íı
-ış şÿ
-ÿ€ €
-‚ ‚ƒ
-ƒ† †²
-²³ ³·
-·¸ ¸¼
-¼¾ ¾Ë
-ËÍ ÍÏ
-ÏĞ ĞÚ
-ÚÛ Ûé
-éê êë
-ëì ìí
-íî îƒ
-ƒ“ “ 
- ¢ ¢¤
-¤¥ ¥¦
-¦§ §©
-©ª ªß
-ßà àğ
-ğñ ñö
-ö÷ ÷½
-½¾ ¾Â
-ÂÃ ÃÏ
-ÏĞ ĞÔ
-ÔÕ ÕÜ
-Üİ İæ
-æç çé
-éê êí
-íî î 
- ‘  ‘ § 
-§ ¨  ¨ Ô 
-Ô Ö  Ö Ş 
-Ş ß  ß  !
- !ª! ª!­!
-­!²! ²!Æ!
-Æ!Ç! Ç!â!
-â!ã! ã!õ!
-õ!ö! ö!÷!
-÷!ù! ù!ø"
-ø"ú" ú"ı"
-ı"ş" ş"©#
-©#ª# ª#´#
-´#¶# ¶#¾#
-¾#¿# ¿#Ä#
-Ä#Å# Å#Æ#
-Æ#Ç# Ç#Ï#
-Ï#Ò# Ò#‘$
-‘$“$ “$¥$
-¥$´$ ´$Â$
-Â$Ã$ Ã$õ$
-õ$ö$ ö$ú$
-ú$û$ û$†%
-†%‡% ‡%™%
-™%›% ›%%
-%ª% ª%Ï%
-Ï%Ğ% Ğ%Ô%
-Ô%Ö% Ö%Û%
-Û%Ü% Ü%á%
-á%â% â%‰&
-‰&Š& Š&Å&
-Å&È& È&Ü&
-Ü&Ş& Ş&„'
-„'…' …'†'
-†'‡' ‡'¢'
-¢'£' £'¨'
-¨'©' ©'­'
-­'®' ®'±'
-±'²' ²'Ç'
-Ç'È' È'õ'
-õ'ü' ü'ˆ(
-ˆ(‰( ‰(Ç(
-Ç(É( É(Ú(
-Ú(Û( Û(‚)
-‚)†) †)•)
-•)–) –)±)
-±)²) ²)Ö)
-Ö)×) ×)ì*
-ì*û* û*ÿ*
-ÿ*+ +·+
-·+º+ º+Ó+
-Ó+Ô+ Ô+Û+
-Û+Ü+ Ü+ø+
-ø+ú+ ú+€,
-€,, ,„,
-„,…, …,°,
-°,¾, ¾,Ú,
-Ú,è, è,«-
-«-­- ­-±-
-±-²- ²-¸-
-¸-º- º-¼-
-¼-½- ½-×-
-×-Ù- Ù-ç-
-ç-è- è-ë-
-ë-í- í-ò-
-ò-ó- ó-ö-
-ö-÷- ÷-ø-
-ø-ù- ù-ş-
-ş-ÿ- ÿ-³.
-³.µ. µ.·.
-·.¸. ¸.¼.
-¼.½. ½.Ã.
-Ã.Ä. Ä.É.
-É.Ë. Ë.Ï.
-Ï.Ğ. Ğ.ö.
-ö.ø. ø.€/
-€/‚/ ‚/„/
-„/…/ …//
-/‘/ ‘/š/
-š/›/ ›//
-/Ÿ/ Ÿ/Ä/
-Ä/Å/ Å/Æ/
-Æ/Ç/ Ç/Î/
-Î/Ï/ Ï/æ/
-æ/ç/ ç/ê/
-ê/í/ í/ó/
-ó/ô/ ô/õ/
-õ/ö/ ö/û/
-û/ü/ ü/‹0
-‹0™0 ™0©0
-©0ª0 ª0³0
-³0´0 ´0÷0
-÷0ø0 ø0ş0
-ş0€1 €1…1
-…1†1 †1ˆ1
-ˆ1‰1 ‰1™1
-™1š1 š11
-1Ÿ1 Ÿ1«1
-«1¬1 ¬1Ë1
-Ë1Ì1 Ì1ı1
-ı1ş1 ş1«2
-«2¬2 ¬2®2
-®2¯2 ¯2¶2
-¶2·2 ·2Ö2
-Ö2×2 ×2ä2
-ä2å2 å2ç2
-ç2è2 è2ó2
-ó2ô2 ô2û2
-û2ü2 ü2ş2
-ş2ÿ2 ÿ2€3
-€3‚3 ‚3¦3
-¦3§3 §3¨3
-¨3©3 ©3¿3
-¿3À3 À3ñ3
-ñ3ò3 ò3ô3
-ô3õ3 õ3ü3
-ü3ı3 ı3„4
-„4…4 …4¦4
-¦4§4 §4±4
-±4²4 ²4µ4
-µ4¶4 ¶4Ï4
-Ï4Ñ4 Ñ4×4
-×4Ø4 Ø4ñ4
-ñ4ò4 ò4½5
-½5Â5 Â5Ï5
-Ï5Ğ5 Ğ5Ü5
-Ü5İ5 İ5á5
-á5â5 â5ş5
-ş5ÿ5 ÿ5†6
-†6‡6 ‡6Š6
-Š6‹6 ‹6¸6
-¸6Æ6 Æ6å6
-å6æ6 æ6é6
-é6ê6 ê6ï6
-ï6ğ6 ğ6ó6
-ó6ô6 ô6Š7
-Š7‹7 ‹7’7
-’7“7 “7§7
-§7¨7 ¨7°7
-°7±7 ±7½8
-½8¾8 ¾8Ü8
-Ü8İ8 İ8ä8
-ä8å8 å8÷8
-÷8ø8 ø8ı8
-ı8ş8 ş8¥9
-¥9¦9 ¦9¿9
-¿9À9 À9İ9
-İ9Ş9 Ş9ß9
-ß9à9 à9é9
-é9ê9 ê9ò9
-ò9ó9 ó9ù9
-ù9ú9 ú9‹:
-‹:: :Õ:
-Õ:Ş: Ş:â:
-â:ã: ã:ù:
-ù:û: û:ü:
-ü:ı: ı:ƒ;
-ƒ;„; „;;
-;; ;¨;
-¨;©; ©;±;
-±;²; ²;³;
-³;µ; µ;·;
-·;¸; ¸;¹;
-¹;º; º;¿;
-¿;À; À;Î;
-Î;Ï; Ï;Ñ;
-Ñ;Ò; Ò;Ü;
-Ü;İ; İ;ğ;
-ğ;ñ; ñ;£<
-£<¤< ¤<¦<
-¦<¨< ¨<©<
-©<«< «<²<
-²<³< ³<¼<
-¼<¿< ¿<ì<
-ì<î< î<ı<
-ı<ş< ş<ª=
-ª=¬= ¬=·=
-·=¸= ¸=½=
-½=¾= ¾=Ä=
-Ä=Å= Å=œ>
-œ>> >Ò>
-Ò>@ 2Cfile:///c:/Users/Linyizhi/.gemini/GeminiLauncher/MainWindow.xaml.cs

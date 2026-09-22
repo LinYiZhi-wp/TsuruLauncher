@@ -1,0 +1,892 @@
+<Page x:Class="TsuruLauncher.Views.ResourceDetailPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:anim="clr-namespace:TsuruLauncher.Services.Animation"
+        xmlns:motion="clr-namespace:TsuruLauncher.Services.Animation"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:ctl="clr-namespace:TsuruLauncher.Controls"
+      xmlns:vm="clr-namespace:TsuruLauncher.ViewModels"
+      xmlns:conv="clr-namespace:TsuruLauncher.Converters"
+      mc:Ignorable="d" 
+      d:DesignHeight="800" d:DesignWidth="900"
+      Title="ResourceDetail"
+      Background="Transparent">
+
+    <Page.DataContext>
+        <vm:ResourceDetailViewModel/>
+    </Page.DataContext>
+
+    <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
+        <conv:EmptyCollectionToVisibilityConverter x:Key="EmptyCollectionToVisibilityConverter"/>
+        <conv:ProgressBarWidthConverter x:Key="ProgressBarWidthConverter"/>
+        <conv:SelectedVersionConverter x:Key="SelectedVersionConverter"/>
+        <conv:SelectedVersionBorderConverter x:Key="SelectedVersionBorderConverter"/>
+        <conv:NullToBoolConverter x:Key="NullToBoolConverter"/>
+        <Storyboard x:Key="SkeletonPulse" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0.35" To="0.75" Duration="0:0:2" AutoReverse="True" EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+        </Storyboard>
+
+        <Storyboard x:Key="FadeIn">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.4" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                           From="12" To="0" Duration="0:0:0.5">
+                <DoubleAnimation.EasingFunction>
+                    <BackEase EasingMode="EaseOut" Amplitude="0.25"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!-- 资源详情的标签胶囊：选中态是 **accent 实心 + 白字**（Axolotl 那颗粉色胶囊），
+             悬停给一层浅底。之前用 SegTab 但没配 SegmentedIndicator 宿主，
+             选中态没有底色，看着像三个灰片。 -->
+        <Style x:Key="DetailTabStyle" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" CornerRadius="16" Padding="18,0"
+                                Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                    <Condition Property="IsChecked" Value="False"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StatCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource GlassLightBrush}"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMedium}"/>
+            <Setter Property="Padding" Value="14,12"/>
+        </Style>
+
+        <Style x:Key="VersionItem" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource GlassLightBrush}"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMedium}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassLightBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="16,14"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource GlassLightBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource GlassStrongBrush}"/>
+                </Trigger>
+                <DataTrigger Binding="{Binding SelectedVersion, Source={StaticResource ResourceKey}, FallbackValue={x:Null}}" Value="{x:Null}">
+                    <!-- Default state -->
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ModernButton" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                CornerRadius="{StaticResource RadiusMedium}" Padding="{TemplateBinding Padding}"
+                                BorderThickness="0">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#00C853"/>
+                                <Setter TargetName="bd" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="1.02" ScaleY="1.02"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource GlassStrongBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
+            <Setter Property="Background" Value="{DynamicResource GlassMediumBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+
+        <!-- ══ hero 右侧三颗操作按钮（美西螈 ProjectHeader 的 #actions 插槽）══
+             翻译（幽灵） / 安装（品牌色实心） / ⋮（圆形幽灵）。
+             统一点按反馈：按下缩到 0.97（Axolotl ButtonFrame 的 active:scale）。 -->
+
+        <Style x:Key="HeroGhostButton" TargetType="Button">
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="10" Padding="{TemplateBinding Padding}"
+                                Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassLightBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.97" ScaleY="0.97"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HeroPrimaryButton" TargetType="Button" BasedOn="{StaticResource HeroGhostButton}">
+            <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="10" Padding="{TemplateBinding Padding}"
+                                Background="{DynamicResource AccentBrush}" RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.97" ScaleY="0.97"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassStrongBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HeroIconButton" TargetType="Button" BasedOn="{StaticResource HeroGhostButton}">
+            <Setter Property="Width" Value="38"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+
+        <!-- 已生效筛选的胶囊（美西螈 TagItem：× + 文字，点掉即取消该项） -->
+        <Style x:Key="ActiveFilterChipStyle" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="13" Padding="9,0"
+                                Background="{DynamicResource GlassLightBrush}"
+                                BorderBrush="{DynamicResource GlassLightBrush}" BorderThickness="1">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassMediumBrush}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource GlassStrongBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Page.Resources>
+
+    <Page.Triggers>
+        <EventTrigger RoutedEvent="Page.Loaded">
+            <BeginStoryboard Storyboard="{StaticResource FadeIn}"/>
+        </EventTrigger>
+    </Page.Triggers>
+
+    <Grid RenderTransformOrigin="0.5,0.5">
+        <Grid.RenderTransform>
+            <TranslateTransform/>
+        </Grid.RenderTransform>
+
+        <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" Padding="0">
+            <StackPanel Margin="20,20,20,16">
+
+                <!-- HEADER -->
+                <Grid Margin="0,0,0,24">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource SecondaryButton}" Width="36" Height="36" Padding="0"
+                                Click="Back_Click" ToolTip="返回">
+                            <TextBlock Text="←" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Button>
+                        <TextBlock Text="资源详情" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Margin="14,0,0,0" VerticalAlignment="Center"/>
+                        <Border Background="{DynamicResource GlassBorderBrush}" CornerRadius="{StaticResource RadiusSmall}" Padding="8,4" Margin="12,0,0,0"
+                                Visibility="{Binding Resource.Type, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
+                            <TextBlock Text="{Binding Resource.Type}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <!-- 顶部不再放「打开网页」——美西螈的页面级操作全在 hero 的 #actions 里，
+                             这里重复一颗按钮会让「安装 / ⋮」的层次变乱。功能已并入 hero 的 ⋮ 菜单。 -->
+                    </StackPanel>
+                </Grid>
+
+                <!-- LOADING STATE：骨架屏（不用大转圈） -->
+                <StackPanel Visibility="{Binding IsLoadingDetails, Converter={StaticResource BoolToVis}}">
+                    <Border CornerRadius="{StaticResource RadiusLarge}" Background="{DynamicResource Surface4Brush}"
+                            BorderBrush="{DynamicResource GlassLightBrush}" BorderThickness="1" Padding="28,24" Margin="0,0,0,14">
+                        <Border.Triggers>
+                            <EventTrigger RoutedEvent="Border.Loaded">
+                                <BeginStoryboard Storyboard="{StaticResource SkeletonPulse}"/>
+                            </EventTrigger>
+                        </Border.Triggers>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Width="72" Height="72" CornerRadius="14" Background="{DynamicResource Surface5Brush}"/>
+                            <StackPanel Grid.Column="1" Margin="18,0,0,0" VerticalAlignment="Center">
+                                <Border Width="220" Height="20" CornerRadius="6" Background="{DynamicResource Surface5Brush}" HorizontalAlignment="Left"/>
+                                <Border Width="360" Height="12" CornerRadius="4" Background="{DynamicResource Surface5Brush}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                                <Border Width="140" Height="12" CornerRadius="4" Background="{DynamicResource Surface5Brush}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <ProgressBar IsIndeterminate="True" Height="3" Margin="0,0,0,14" Background="Transparent"
+                                 BorderThickness="0" Foreground="{DynamicResource AccentBrush}"/>
+
+                    <Border CornerRadius="{StaticResource RadiusLarge}" Background="{DynamicResource Surface3Brush}" Padding="22,18">
+                        <StackPanel>
+                            <Border Height="14" Width="170" CornerRadius="4" Background="{DynamicResource Surface5Brush}" HorizontalAlignment="Left"/>
+                            <Border Height="12" CornerRadius="4" Background="{DynamicResource Surface5Brush}" Margin="0,14,0,0"/>
+                            <Border Height="12" CornerRadius="4" Background="{DynamicResource Surface5Brush}" Margin="0,10,0,0"/>
+                            <Border Height="12" Width="420" CornerRadius="4" Background="{DynamicResource Surface5Brush}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- MAIN CONTENT -->
+                <Grid Visibility="{Binding IsLoadingDetails, Converter={StaticResource InverseBoolToVis}, FallbackValue=Visible}">
+
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>   <!-- 0 hero -->
+                        <RowDefinition Height="Auto"/>   <!-- 1 tab 条 -->
+                        <RowDefinition Height="Auto"/>   <!-- 2 描述 / 图库 -->
+                        <RowDefinition Height="Auto"/>   <!-- 3 版本选择 -->
+                        <RowDefinition Height="Auto"/>   <!-- 4 下载 -->
+                        <RowDefinition Height="Auto"/>   <!-- 5 依赖 -->
+                    </Grid.RowDefinitions>
+
+                    <!-- HERO SECTION -->
+                    <Border Grid.Row="0" Background="{DynamicResource Surface4Brush}" CornerRadius="{StaticResource RadiusLarge}" Padding="30,26"
+                            BorderBrush="{DynamicResource GlassLightBrush}" BorderThickness="1" Margin="0,0,0,16">
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Icon & Info -->
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <Border Width="80" Height="80" CornerRadius="16" Background="{DynamicResource GlassBorderBrush}"
+                                        ClipToBounds="True">
+                                    <Grid>
+                                        <!-- 图标没到位时给个首字母占位，别留一块空方块 -->
+                                        <TextBlock Text="{Binding Resource.Initial}" FontSize="30" FontWeight="Bold"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"
+                                                   Visibility="{Binding Resource.HasIcon, Converter={StaticResource InverseBoolToVis}}"/>
+                                        <Image Source="{Binding Resource.IconImage}"
+                                               Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    </Grid>
+                                </Border>
+
+                                <StackPanel Margin="18,0,0,0" VerticalAlignment="Center" MaxWidth="400">
+                                    <TextBlock Text="{Binding Resource.Name}" FontSize="22" FontWeight="Bold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                        <TextBlock Text="by " FontSize="13" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                        <TextBlock Text="{Binding Resource.Author}" FontSize="13"
+                                                   Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"/>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                        <Border Background="{DynamicResource AccentGlassLightBrush}" CornerRadius="6" Padding="8,3" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Resource.Platform}" FontSize="10" Foreground="{DynamicResource AccentBrush}" FontWeight="Medium"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Resource.Summary}" FontSize="12.5"
+                                               Foreground="{DynamicResource TextSecondaryBrush}" MaxWidth="380" TextWrapping="Wrap"
+                                               TextTrimming="CharacterEllipsis" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Stats + 操作按钮（美西螈 ProjectHeader：右侧 #actions 插槽） -->
+                            <StackPanel Grid.Column="2" Margin="20,0,0,0" VerticalAlignment="Center"
+                                        HorizontalAlignment="Right">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Border Style="{StaticResource StatCard}" Margin="0,0,8,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="⬇️" FontSize="16" VerticalAlignment="Center"/>
+                                            <StackPanel Margin="8,0,0,0">
+                                                <TextBlock Text="{Binding Resource.DownloadsFormatted}"
+                                                           FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                                <TextBlock Text="下载量" FontSize="9" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Style="{StaticResource StatCard}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="⭐" FontSize="16" VerticalAlignment="Center"/>
+                                            <StackPanel Margin="8,0,0,0">
+                                                <TextBlock Text="{Binding Resource.FollowersFormatted}"
+                                                           FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                                <TextBlock Text="关注者" FontSize="9" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- 翻译 / 安装 / ⋮ -->
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                                    <Button Style="{StaticResource HeroGhostButton}"
+                                            Click="Translate_Click" Margin="0,0,8,0"
+                                            ToolTip="把项目简介翻译成中文">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Translate24" FontSize="15" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding TranslateButtonText}" Margin="7,0,0,0"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Style="{StaticResource HeroPrimaryButton}"
+                                            Command="{Binding StartDownloadCommand}"
+                                            IsEnabled="{Binding Resource.SelectedVersion, Converter={StaticResource NullToBoolConverter}}"
+                                            Margin="0,0,8,0"
+                                            ToolTip="安装选中的版本">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="15" VerticalAlignment="Center"/>
+                                            <TextBlock Text="安装" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button x:Name="MoreBtn" Style="{StaticResource HeroIconButton}"
+                                            Click="More_Click" ToolTip="更多操作">
+                                        <ui:SymbolIcon Symbol="MoreVertical24" FontSize="16"/>
+                                    </Button>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- ══ 标签页（描述 / 版本 / 图库）—— 三个胶囊 tab，跟美西螈一致 ══ -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,14">
+                        <RadioButton x:Name="TabDesc" Content="描述" GroupName="DetailTab" IsChecked="True"
+                                     Click="DetailTab_Click" Tag="desc" Style="{StaticResource DetailTabStyle}"/>
+                        <RadioButton x:Name="TabVer" Content="版本" GroupName="DetailTab"
+                                     Click="DetailTab_Click" Tag="ver" Style="{StaticResource DetailTabStyle}"/>
+                        <RadioButton x:Name="TabGallery" Content="图库" GroupName="DetailTab"
+                                     Click="DetailTab_Click" Tag="gallery" Style="{StaticResource DetailTabStyle}"/>
+                    </StackPanel>
+
+                    <!-- DESCRIPTION & META
+                         ⚠ 之前这里套了一个 <ScrollViewer MaxHeight="360"> —— 外层页面本身
+                           就是 ScrollViewer，两层嵌套出**两个滚动条**（用户吐槽「两个滑动条没意义」）。
+                           删掉内层，让描述自然展开，整页只用一个滚动条。 -->
+                    <Grid x:Name="DescPanel" Grid.Row="2" Margin="0,0,0,16">
+
+                        <Border Background="{DynamicResource Surface4Brush}" CornerRadius="{StaticResource RadiusLarge}" Padding="24,20"
+                                BorderBrush="{DynamicResource GlassLightBrush}" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="📋 描述" FontSize="15" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,12"/>
+
+                                <!-- 正文：直接放 TextBlock，不再包 ScrollViewer（外层 Scroller 负责滚动） -->
+                                <TextBlock Text="{Binding Resource.Description}" FontSize="13.5"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" LineHeight="24"
+                                           TextWrapping="Wrap" Opacity="0.85" Margin="0,4,0,0"/>
+
+                                <!-- Tags / Categories -->
+                                <ItemsControl ItemsSource="{Binding Resource.Categories}" Margin="0,16,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{DynamicResource GlassMediumBrush}" CornerRadius="{StaticResource RadiusSmall}"
+                                                    Padding="10,5" Margin="0,0,6,6">
+                                                <TextBlock Text="{Binding}" FontSize="11"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- ══ 图库（第三个 tab，跟美西螈一致 —— 不在描述页里）══ -->
+                    <Border x:Name="GalleryPanel" Grid.Row="2" Visibility="Collapsed"
+                            Background="{DynamicResource Surface4Brush}" CornerRadius="{StaticResource RadiusLarge}"
+                            Padding="20" BorderBrush="{DynamicResource GlassLightBrush}" BorderThickness="1"
+                            Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="图库" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,12"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <TextBlock Text="这个项目没有上传图片" FontSize="12.5"
+                                       Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,4,0,8"
+                                       Visibility="{Binding Resource.GalleryImages.Count, Converter={StaticResource EmptyCollectionToVisibilityConverter}, FallbackValue=Collapsed}"/>
+                            <ItemsControl ItemsSource="{Binding Resource.GalleryImages}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Width="240" Height="135" CornerRadius="12" Margin="0,0,12,12"
+                                                Background="{DynamicResource Surface2Brush}" ClipToBounds="True">
+                                            <Grid>
+                                                <!-- 未加载完时给个占位（之前是纯白块，看起来像坏了） -->
+                                                <TextBlock Text="🖼️" FontSize="26" Opacity="0.35"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Visibility="{Binding HasImage, Converter={StaticResource InverseBoolToVis}}"/>
+                                                <Image Source="{Binding Image}" Stretch="UniformToFill"
+                                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- VERSION SELECTION & DOWNLOAD
+                         ⚠ 初始必须 Collapsed：XAML 里不写的话默认 Visible，首屏会和描述面板同时出现
+                           —— 用户报的「这下面怎么还有版本选择」就是这个（只有点过 tab 才会被
+                           DetailTab_Click 藏起来，没点过就一直露着）。 -->
+                    <Border x:Name="VersionPanel" Grid.Row="3" Visibility="Collapsed"
+                            Background="{DynamicResource Surface4Brush}" CornerRadius="{StaticResource RadiusLarge}" Padding="24,22"
+                            BorderBrush="{DynamicResource GlassLightBrush}" BorderThickness="1" Margin="0,0,0,16">
+
+                        <StackPanel>
+                            <Grid Margin="0,0,0,14">
+                                <TextBlock Text="📦 版本选择" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <!-- Sort -->
+                                    <ComboBox ItemsSource="{Binding VersionSortOptions}"
+                                              SelectedItem="{Binding SelectedVersionSort}"
+                                              Width="100" Height="32" FontSize="12"
+                                              Style="{StaticResource iOS26.GlassComboBox}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- ══ 筛选行（美西螈 ProjectPageVersions：`flex justify-between`
+                                 左边三颗筛选下拉、右边分页条，同一行）══ -->
+                            <Grid Margin="0,0,0,10">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                                    <ctl:MultiSelectFilter x:Name="PlatformFilterCtl" Label="平台" Margin="0,0,8,0"
+                                                           Options="{Binding PlatformFilters}"
+                                                           Visibility="{Binding ShowPlatformFilter, Converter={StaticResource BoolToVis}}"
+                                                           SelectionChanged="Filter_SelectionChanged"/>
+                                    <ctl:MultiSelectFilter x:Name="GameVersionFilterCtl" Label="游戏版本" Margin="0,0,8,0"
+                                                           Options="{Binding GameVersionFilters}"
+                                                           Visibility="{Binding ShowGameVersionFilter, Converter={StaticResource BoolToVis}}"
+                                                           SelectionChanged="Filter_SelectionChanged">
+                                        <ctl:MultiSelectFilter.Footer>
+                                            <!-- 美西螈游戏版本下拉底部的「Show all versions」 -->
+                                            <CheckBox Content="显示全部版本" FontSize="11.5"
+                                                      IsChecked="{Binding ShowAllGameVersions, Mode=TwoWay}"
+                                                      Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        </ctl:MultiSelectFilter.Footer>
+                                    </ctl:MultiSelectFilter>
+                                    <ctl:MultiSelectFilter x:Name="ChannelFilterCtl" Label="更新通道"
+                                                           Options="{Binding ChannelFilters}"
+                                                           Visibility="{Binding ShowChannelFilter, Converter={StaticResource BoolToVis}}"
+                                                           SelectionChanged="Filter_SelectionChanged"/>
+                                </StackPanel>
+
+                                <!-- 分页条（Axolotl：‹ 1 2 … 13 ›） -->
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <Button Content="‹" Width="30" Height="30" Padding="0" Cursor="Hand" Margin="0,0,6,0"
+                                            Style="{StaticResource iOS26.SecondaryButton}"
+                                            Command="{Binding PrevPageCommand}" IsEnabled="{Binding CanPrevPage}"/>
+                                    <ItemsControl ItemsSource="{Binding PageNumbers}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Content="{Binding Number}" MinWidth="30" Height="30" Padding="0" Margin="0,0,4,0"
+                                                        Cursor="Hand" FontSize="12"
+                                                        Click="PageButton_Click" Tag="{Binding Number}">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button" BasedOn="{StaticResource iOS26.SecondaryButton}">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                                                    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
+                                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Content="›" Width="30" Height="30" Padding="0" Cursor="Hand" Margin="2,0,0,0"
+                                            Style="{StaticResource iOS26.SecondaryButton}"
+                                            Command="{Binding NextPageCommand}" IsEnabled="{Binding CanNextPage}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- 已生效筛选的胶囊 + 一键清除 -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
+                                        Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVis}}">
+                                <ItemsControl ItemsSource="{Binding ActiveFilterChips}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Style="{StaticResource ActiveFilterChipStyle}"
+                                                    Command="{Binding RemoveCommand}"
+                                                    ToolTip="取消这个筛选">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="✕" FontSize="9" VerticalAlignment="Center"
+                                                               Margin="0,0,6,0"
+                                                               Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                                    <TextBlock Text="{Binding Label}" FontSize="11.5"
+                                                               VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Button Style="{StaticResource HeroGhostButton}" Height="26" Padding="10,0"
+                                        Command="{Binding ClearAllFiltersCommand}"
+                                        ToolTip="清除全部筛选">
+                                    <TextBlock Text="清除全部筛选" FontSize="11.5"
+                                               Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                </Button>
+                            </StackPanel>
+
+                            <!-- 表头（美西螈版本表：版本 / 游戏版本 / 平台 / 发布时间 / 下载量）
+                                 列宽必须和下面每行的 Grid 完全一致，否则表头对不上列。 -->
+                            <Grid Margin="14,0,14,6" Visibility="{Binding HasVersions, Converter={StaticResource BoolToVis}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="版本" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,0,12,0"/>
+                                <TextBlock Grid.Column="1" Text="游戏版本" FontSize="11" FontWeight="SemiBold" MinWidth="72"
+                                           Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,0,14,0"/>
+                                <TextBlock Grid.Column="2" Text="平台" FontSize="11" FontWeight="SemiBold" MinWidth="72"
+                                           Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,0,14,0"/>
+                                <TextBlock Grid.Column="3" Text="发布时间" FontSize="11" FontWeight="SemiBold" MinWidth="56"
+                                           TextAlignment="Right"
+                                           Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,0,14,0"/>
+                                <TextBlock Grid.Column="4" Text="下载量" FontSize="11" FontWeight="SemiBold" MinWidth="52"
+                                           TextAlignment="Right"
+                                           Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,0,14,0"/>
+                                <TextBlock Grid.Column="5" Text="" Width="66"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                            </Grid>
+
+                            <!-- Version List（260px 只露 5 行、分页 20 条形同虚设，抬到 460 让一屏能看到 9 行左右） -->
+                            <Border MaxHeight="460" ClipToBounds="True">
+                                <ListBox x:Name="VersionListBox" ItemsSource="{Binding PagedVersions}"
+                                         BorderThickness="0" Background="Transparent"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         VirtualizingPanel.IsVirtualizing="True"
+                                         VirtualizingPanel.VirtualizationMode="Recycling"
+                                         ScrollViewer.CanContentScroll="True">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <ContentPresenter/>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                            <!-- Axolotl 版本表的一行：
+                                 版本 | 游戏版本 | 平台 | 发布时间 | 下载量 | [下载][外链]
+                                 ⚠ 之前每行都是一张带背景+圆角+6px 间距的「卡片」，行高 ~66px，
+                                    一屏只能看到 4 行；美西螈是纯表格行（hover 才给底色），
+                                    这里改成透明底 + hover/选中高亮，行高降到 ~48px。 -->
+                            <Border Background="Transparent" CornerRadius="{StaticResource RadiusMedium}"
+                                    BorderBrush="Transparent" BorderThickness="1"
+                                    Cursor="Hand" Padding="14,8">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource GlassLightBrush}"/>
+                                            </Trigger>
+                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource AccentGlassLightBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                                <Grid>
+                                                    <!-- 列宽照美西螈的 table-layout="auto"：版本名吃掉剩余空间，
+                                                         其余按内容自适应。之前用 2*/1.2*/1*/1* 的星号比例，
+                                                         发布时间那列塞着完整时间戳，把别的列挤得东一块西一块。 -->
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>     <!-- 版本 -->
+                                                        <ColumnDefinition Width="Auto"/>  <!-- 游戏版本 -->
+                                                        <ColumnDefinition Width="Auto"/>  <!-- 平台 -->
+                                                        <ColumnDefinition Width="Auto"/>  <!-- 发布时间 -->
+                                                        <ColumnDefinition Width="Auto"/>  <!-- 下载量 -->
+                                                        <ColumnDefinition Width="Auto"/>  <!-- 按钮 -->
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- 通道圆点（美西螈版本表第一列 VersionChannelIndicator：
+                                                         正式版绿 / 测试版橙 / 内测版红） -->
+                                                    <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                                                VerticalAlignment="Center" Margin="0,0,12,0">
+                                                        <Ellipse Width="8" Height="8" Margin="0,0,8,0"
+                                                                 VerticalAlignment="Center"
+                                                                 ToolTip="{Binding ChannelLabel}">
+                                                            <Ellipse.Style>
+                                                                <Style TargetType="Ellipse">
+                                                                    <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding VersionType}" Value="beta">
+                                                                            <Setter Property="Fill" Value="{DynamicResource WarningBrush}"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding VersionType}" Value="alpha">
+                                                                            <Setter Property="Fill" Value="{DynamicResource DangerBrush}"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Ellipse.Style>
+                                                        </Ellipse>
+                                                        <TextBlock Text="{Binding FileName}" FontSize="12.5"
+                                                                   FontWeight="SemiBold" VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   ToolTip="{Binding FileName}"/>
+                                                    </StackPanel>
+
+                                                    <!-- 游戏版本：前两个 chip + 「+N」（美西螈 getDisplayGameVersions().slice(0,2)） -->
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                                                VerticalAlignment="Center" Margin="0,0,14,0">
+                                                        <ItemsControl ItemsSource="{Binding GameVersionChips}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Border Background="{DynamicResource Surface4Brush}" CornerRadius="6"
+                                                                            Padding="6,2" Margin="0,0,4,0">
+                                                                        <TextBlock Text="{Binding}" FontSize="10.5"
+                                                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <Border Background="{DynamicResource Surface4Brush}" CornerRadius="6"
+                                                                Padding="6,2" Margin="0,0,4,0"
+                                                                Visibility="{Binding HasExtraGameVersions, Converter={StaticResource BoolToVis}}">
+                                                            <TextBlock Text="{Binding ExtraGameVersionText}" FontSize="10.5"
+                                                                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                                        </Border>
+                                                    </StackPanel>
+
+                                                    <ItemsControl Grid.Column="2" ItemsSource="{Binding LoaderChips}"
+                                                                  VerticalAlignment="Center" Margin="0,0,14,0">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Background="{DynamicResource AccentGlassLightBrush}" CornerRadius="6"
+                                                                        Padding="6,2" Margin="0,0,4,0">
+                                                                    <TextBlock Text="{Binding}" FontSize="10.5"
+                                                                               Foreground="{DynamicResource AccentBrush}"/>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+
+                                                    <TextBlock Grid.Column="3" Text="{Binding ReleaseDateText}" FontSize="11"
+                                                               VerticalAlignment="Center" Margin="0,0,14,0"
+                                                               MinWidth="56" TextAlignment="Right"
+                                                               Foreground="{DynamicResource TextTertiaryBrush}"
+                                                               ToolTip="{Binding ReleaseDate}"/>
+
+                                                    <TextBlock Grid.Column="4" Text="{Binding DownloadsText}" FontSize="11.5"
+                                                               VerticalAlignment="Center" Margin="0,0,14,0"
+                                                               MinWidth="52" TextAlignment="Right"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+                                                    <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <!-- ⚠ iOS26.SecondaryButton 自带 Padding="20,0"，
+                                                             30px 宽的按钮留给内容的宽度是 30-40 = 负数 →
+                                                             ⬇ / ↗ 这两个字形直接被裁没了（实测截图里是两个空白灰块）。 -->
+                                                        <Button Content="⬇" Width="30" Height="30" FontSize="13" Padding="0"
+                                                                Cursor="Hand" ToolTip="选择并下载这个版本"
+                                                                Click="PickVersion_Click" Tag="{Binding}"
+                                                                Style="{StaticResource iOS26.SecondaryButton}"/>
+                                                        <Button Content="↗" Width="30" Height="30" FontSize="13" Padding="0"
+                                                                Margin="6,0,0,0"
+                                                                Cursor="Hand" ToolTip="在浏览器中打开该版本页面"
+                                                                Click="OpenVersionLink_Click" Tag="{Binding}"
+                                                                Style="{StaticResource iOS26.SecondaryButton}"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                                <Border.InputBindings>
+                                                    <MouseBinding MouseAction="LeftClick"
+                                                                  Command="{Binding DataContext.SelectVersionCommand,
+                                                                      RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                                  CommandParameter="{Binding}"/>
+                                                </Border.InputBindings>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Border>
+
+                            <TextBlock Text="没有找到匹配的版本，试试清除筛选条件" FontSize="13"
+                                       Foreground="{DynamicResource TextTertiaryBrush}"
+                                       HorizontalAlignment="Center" Margin="0,34,0,34"
+                                       Visibility="{Binding HasVersions, Converter={StaticResource InverseBoolToVis}}"/>
+                        </StackPanel>
+                    </Border>
+
+
+                    <!-- DEPENDENCIES PANEL (Collapsible) -->
+                    <Border Grid.Row="5" Background="{DynamicResource Surface4Brush}" CornerRadius="{StaticResource RadiusLarge}" Padding="22,18"
+                            BorderBrush="{DynamicResource GlassLightBrush}" BorderThickness="1" Margin="0,16,0,0"
+                            Visibility="{Binding ShowDependenciesPanel, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <TextBlock Text="🔗 依赖项" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,10"/>
+
+                            <TextBlock Text="这个版本没有声明依赖" FontSize="12"
+                                       Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,4,0,8"
+                                       Visibility="{Binding DependencyList.Count, Converter={StaticResource EmptyCollectionToVisibilityConverter}, FallbackValue=Collapsed}"/>
+
+                            <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding DependencyList}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{DynamicResource GlassLightBrush}" CornerRadius="{StaticResource RadiusSmall}" Padding="12,8"
+                                                Margin="0,0,0,6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{Binding DisplayName}" FontSize="12"
+                                                               Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="Medium"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding ProjectId}" FontSize="10"
+                                                               Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,2,0,0"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <Border CornerRadius="{StaticResource RadiusSmall}" Padding="8,3"
+                                                        Grid.Column="1" VerticalAlignment="Center">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsRequired}" Value="True">
+                                                                    <Setter Property="Background" Value="{DynamicResource AccentGlassLightBrush}"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsIncompatible}" Value="True">
+                                                                    <Setter Property="Background" Value="{DynamicResource WarningGlassBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding TypeLabel}" FontSize="10"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

@@ -1,789 +1,0 @@
-ñTusing System.Windows;
-using System.Windows.Controls;
-using Microsoft.Win32;
-using System.IO;
-using System.Linq;
-using GeminiLauncher.ViewModels;
-
-namespace GeminiLauncher.Views
-{
-    public partial class SettingsPage : Page
-    {
-        public SettingsPage()
-        {
-            InitializeComponent();
-            // Use MainViewModel from Application
-            this.DataContext = ((App)Application.Current).MainWindow.DataContext;
-            
-            // Initialize fields from Config
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                var cfg = vm.ConfigService.Settings;
-
-                if (!string.IsNullOrEmpty(cfg.GamePath))
-                    GamePathBox.Text = cfg.GamePath;
-
-                if (!string.IsNullOrEmpty(cfg.JavaPath))
-                {
-                   JavaPathBox.Text = cfg.JavaPath;
-                   UpdateJavaVersionInfo(cfg.JavaPath);
-                }
-
-                // Restore memory slider
-                MemorySlider.Value = cfg.MaxRam > 0 ? cfg.MaxRam : 4096;
-
-                // Restore version isolation toggle
-                VersionIsolationToggle.IsChecked = cfg.VersionIsolation;
-
-                // Restore language selection
-                if (cfg.Language == "zh-CN")
-                    ChineseRadio.IsChecked = true;
-                else
-                    EnglishRadio.IsChecked = true;
-            }
-            
-            // Initialize memory slider value display
-            UpdateMemoryValueText();
-        }
-
-        private void AddOfflineAccount_Click(object sender, RoutedEventArgs e)
-        {
-            var username = OfflineUsernameBox.Text;
-            if (!string.IsNullOrWhiteSpace(username))
-            {
-                var vm = DataContext as ViewModels.MainViewModel;
-                vm?.AccountManager.LoginOffline(username);
-                OfflineUsernameBox.Text = string.Empty;
-            }
-        }
-
-        private async void AddMicrosoftAccount_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var vm = DataContext as MainViewModel;
-                if (vm == null) return;
-                await vm.AccountManager.LoginMicrosoft();
-            }
-            catch (System.Exception ex)
-            {
-                MessageBox.Show($"Login Failed: {ex.Message}", "Error");
-            }
-        }
-
-        private void BrowseGamePath_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new Microsoft.Win32.OpenFileDialog
-            {
-                Title = "Select Minecraft folder (choose any file in the folder)",
-                ValidateNames = false,
-                CheckFileExists = false,
-                CheckPathExists = true,
-                FileName = "Folder Selection"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                var folderPath = Path.GetDirectoryName(dialog.FileName);
-                if (!string.IsNullOrEmpty(folderPath))
-                {
-                    GamePathBox.Text = folderPath;
-                    if (DataContext is ViewModels.MainViewModel vm)
-                    {
-                        vm.ConfigService.Settings.GamePath = folderPath;
-                        vm.ConfigService.SaveConfig();
-                    }
-                }
-            }
-        }
-
-        private void BrowseJavaPath_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new OpenFileDialog
-            {
-                Filter = "Java Executable (javaw.exe;java.exe)|javaw.exe;java.exe|All Files (*.*)|*.*",
-                Title = "Select Java Executable"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                string path = dialog.FileName;
-                JavaPathBox.Text = path;
-                UpdateJavaVersionInfo(path);
-                
-                if (DataContext is ViewModels.MainViewModel vm)
-                {
-                    vm.ConfigService.Settings.JavaPath = path;
-                    vm.ConfigService.SaveConfig();
-                }
-            }
-        }
-
-        private void AutoSearchJava_Click(object sender, RoutedEventArgs e)
-        {
-            var javaService = new GeminiLauncher.Services.JavaService();
-            var installations = javaService.FindInstallations();
-
-            if (installations.Any())
-            {
-                var best = installations.First();
-                
-                JavaPathBox.Text = best.Path;
-                UpdateJavaVersionInfo(best.Path);
-                
-                if (DataContext is ViewModels.MainViewModel vm)
-                {
-                    vm.ConfigService.Settings.JavaPath = best.Path;
-                    vm.ConfigService.SaveConfig();
-                }
-                
-                MessageBox.Show($"Auto-detected: {best.Version}\nPath: {best.Path}", "Java Found");
-            }
-            else
-            {
-                JavaVersionText.Text = "âŒ No Java installation found";
-                JavaVersionText.Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FF5252")!);
-                MessageBox.Show("Could not find any Java installations in common locations.", "Java Not Found");
-            }
-        }
-
-        private void UpdateJavaVersionInfo(string javaPath)
-        {
-            try
-            {
-                string lowerPath = javaPath.ToLower();
-                if (lowerPath.Contains("jdk-17") || lowerPath.Contains("jdk17") || lowerPath.Contains("1.17"))
-                    JavaVersionText.Text = "âœ“ Java 17 detected";
-                else if (lowerPath.Contains("jdk-21") || lowerPath.Contains("jdk21") || lowerPath.Contains("1.21"))
-                    JavaVersionText.Text = "âœ“ Java 21 detected";
-                else if (lowerPath.Contains("jdk-11") || lowerPath.Contains("jdk11") || lowerPath.Contains("1.11"))
-                    JavaVersionText.Text = "âœ“ Java 11 detected";
-                else if (lowerPath.Contains("jdk1.8") || lowerPath.Contains("jdk-8") || lowerPath.Contains("jre1.8"))
-                    JavaVersionText.Text = "âœ“ Java 8 detected";
-                else
-                    JavaVersionText.Text = "âœ“ Java detected";
-
-                JavaVersionText.Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#00E676")!);
-            }
-            catch
-            {
-                JavaVersionText.Text = "âš ï¸ Unable to detect version";
-                JavaVersionText.Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFC107")!);
-            }
-        }
-
-        private void MemorySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            UpdateMemoryValueText();
-
-            // Persist memory setting
-            if (IsLoaded && DataContext is ViewModels.MainViewModel vm)
-            {
-                vm.ConfigService.Settings.MaxRam = (int)MemorySlider.Value;
-                vm.ConfigService.SaveConfig();
-            }
-        }
-
-        private void UpdateMemoryValueText()
-        {
-            if (MemoryValueText != null && MemorySlider != null)
-            {
-                int valueMB = (int)MemorySlider.Value;
-                MemoryValueText.Text = $"{valueMB} MB";
-
-                // Smart memory warning
-                if (MemoryWarningText != null)
-                {
-                    try
-                    {
-                        var gcInfo = System.GC.GetGCMemoryInfo();
-                        long totalPhysicalMB = gcInfo.TotalAvailableMemoryBytes / (1024 * 1024);
-                        double ratio = (double)valueMB / totalPhysicalMB;
-
-                        if (valueMB < 1024)
-                        {
-                            MemoryWarningText.Text = "âš ï¸ åˆ†é…è¿‡ä½ï¼Œå¯èƒ½å¯¼è‡´æ¸¸æˆå´©æºƒ";
-                            MemoryWarningText.Foreground = new System.Windows.Media.SolidColorBrush(
-                                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FF5252")!);
-                        }
-                        else if (ratio > 0.8)
-                        {
-                            MemoryWarningText.Text = $"âš ï¸ è¶…è¿‡ç‰©ç†å†…å­˜ 80%ï¼ˆ{totalPhysicalMB} MBï¼‰ï¼Œå¯èƒ½å¯¼è‡´å¡æ­»";
-                            MemoryWarningText.Foreground = new System.Windows.Media.SolidColorBrush(
-                                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FF5252")!);
-                        }
-                        else
-                        {
-                            MemoryWarningText.Text = "âœ“ æ¨èèŒƒå›´";
-                            MemoryWarningText.Foreground = new System.Windows.Media.SolidColorBrush(
-                                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#00E676")!);
-                        }
-                    }
-                    catch
-                    {
-                        MemoryWarningText.Text = "";
-                    }
-                }
-            }
-        }
-
-        private void VersionIsolationToggle_Changed(object sender, RoutedEventArgs e)
-        {
-            if (!IsLoaded) return;
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                vm.ConfigService.Settings.VersionIsolation = VersionIsolationToggle.IsChecked == true;
-                vm.ConfigService.SaveConfig();
-                
-                // Reload versions to update game directories
-                vm.LoadVersions();
-            }
-        }
-
-        private void Language_Changed(object sender, System.Windows.RoutedEventArgs e)
-        {
-            if (!IsLoaded) return;
-            
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                if (EnglishRadio.IsChecked == true)
-                {
-                    App.SwitchLanguage("en-US");
-                    vm.ConfigService.Settings.Language = "en-US";
-                }
-                else if (ChineseRadio.IsChecked == true)
-                {
-                    App.SwitchLanguage("zh-CN");
-                    vm.ConfigService.Settings.Language = "zh-CN";
-                }
-                vm.ConfigService.SaveConfig();
-            }
-        }
-    }
-}
-= ={	{Î ÎÕ
-ÕÖ Öß
-ßà àë
-ëì ìö
-ö÷ ÷¦
-¦¨ ¨ç
-çé éì
-ìí íş
-şÿ ÿ™
-™š š®
-®¯ ¯±
-±² ²ß
-ßà àá
-áâ âä
-äå åë
-ëì ìÿ
-ÿ€ €—
-—˜ ˜š
-šœ œ¤
-¤¥ ¥«
-«¬ ¬å
-åæ æí
-íî îø
-øù ù
-‘ ‘¡
-¡¢ ¢«
-«¬ ¬Å
-ÅÆ Æİ
-İß ßä
-äå åç
-çè è–
-–— —š
-š› ›Û
-ÛÜ Ü
-‚ ‚„
-„… …Š
-ŠŒ Œ
-‘ ‘™
-™š š»
-»É ÉÍ
-ÍĞ ĞÔ
-ÔÖ Ö×
-×Ø ØŞ
-Şß ßâ
-âã ãé
-éê êï
-ïğ ğı
-ış şœ	
-œ		 		
-	 	  	­	
-­	®	 ®	³	
-³	´	 ´	Ğ	
-Ğ	Ñ	 Ñ	ß	
-ß	á	 á	ç	
-ç	è	 è	ü	
-ü	ş	 ş	ÿ	
-ÿ	€
- €
-‚
-
-‚
-ƒ
- ƒ
-º
-
-º
-»
- »
-Ç
-
-Ç
-É
- É
-â
-
-â
-ã
- ã
-é
-
-é
-ê
- ê
-
-‚ ‚ƒ
-ƒ„ „Æ
-ÆÈ ÈÏ
-ÏĞ ĞÓ
-ÓÕ ÕÖ
-Ö× ×Ü
-Üİ İâ
-âã ãü
-üÿ ÿ–
-–— —¬
-¬­ ­´
-´µ µ½
-½¿ ¿Ó
-ÓÔ Ôİ
-İŞ Şå
-åæ æì
-ìí íõ
-õö öù
-ù‡ ‡Š
-ŠŒ Œ“
-“” ”š
-š› ›Ÿ
-Ÿ   ¢
-¢£ £¶
-¶· ·Â
-ÂÃ ÃÑ
-ÑÒ ÒÔ
-ÔÕ Õ
-› ›Ÿ
-Ÿ   §
-§¨ ¨«
-«­ ­®
-®° °³
-³´ ´Â
-ÂÃ ÃĞ
-ĞÑ ÑÚ
-ÚÛ Ûı
-ış ş
- ›
-› ª
-ª« «±
-±² ²×
-×Ú Úİ
-İŞ Şà
-àá áâ
-âã ã÷
-÷ø øû
-ûü üÿ
-ÿ€ €ˆ
-ˆ‰ ‰ 
- ª ª­
-­² ²¸
-¸¹ ¹º
-º¼ ¼Â
-ÂÃ Ãå
-åò ò÷
-÷ù ùÿ
-ÿ€ €•
-•– –Ÿ
-Ÿ   ¤
-¤¥ ¥ª
-ª« «®
-®¯ ¯Ç
-ÇÈ ÈÎ
-ÎÏ ÏÖ
-Ö× ×é
-éê ê…
-…† †
- 
-‘ ‘˜
-˜™ ™š
-š› ›Å
-ÅÆ Æ×
-×Ø ØÚ
-ÚÛ Ûç
-çè è
-Ÿ Ÿ¢
-¢£ £¯
-¯° °Ç
-ÇÉ ÉÊ
-ÊË ËÎ
-ÎÏ ÏÔ
-ÔÕ Õ‚
-‚ƒ ƒ‰
-‰Š Š—
-—˜ ˜š
-š› ›©
-©· ·ã
-ãä äå
-åæ æ
-‚ ‚‡
-‡‰ ‰‹
-‹Œ Œ¿
-¿À ÀË
-ËÌ Ìƒ
-ƒ„ „
-¢ ¢´
-´µ µÜ
-Üİ İ—
-—˜ ˜±
-±² ²Ã
-ÃÄ ÄÊ
-ÊË Ëç
-çè èé
-éë ëî
-îï ïğ
-ğó óù
-ùú úŸ
-Ÿ   Å
-ÅÆ ÆÇ
-ÇÈ ÈÊ
-ÊË Ëá
-áâ âè
-èó ó
-‚ ‚
- “
-“• •–
-–¢ ¢º
-º¼ ¼É
-ÉÊ ÊÎ
-ÎÏ ÏÓ
-ÓÔ Ô×
-×Ø ØÜ
-Üİ İá
-áâ âä
-äå åæ
-æç çñ
-ñó ó
-  
- ¡ ¡£
-£¦ ¦
-„ „…
-…† †ˆ
-ˆ‰ ‰•
-•— —¡
-¡¢ ¢¤
-¤¦ ¦ª
-ª« «±
-±³ ³¼
-¼½ ½Ù
-ÙÚ Úİ
-İŞ Şå
-åè èğ
-ğñ ñô
-ôõ õ÷
-÷… …†
-†ˆ ˆŠ
-Š– –›
-›œ œß
-ßà àâ
-âã ãæ
-æç çĞ
-ĞÑ ÑÒ
-ÒÓ ÓÜ
-Üİ İŠ
-Š‹ ‹”
-”• •¸
-¸¹ ¹¿
-¿Å Åñ
-ñó óö
-ö÷ ÷œ
-œ ¡
-¡£ £¥
-¥§ §¨
-¨© ©ª
-ª« «¹
-¹¾ ¾¿
-¿À ÀÄ
-ÄÅ Åø
-øù ù„ 
-„ …  … “ 
-“ •  • š 
-š ›  › · 
-· º  º ¾ 
-¾ ¿  ¿ Ñ 
-Ñ Ô  Ô ö 
-ö ™! ™!!
-!! ! !
- !¡! ¡!¦!
-¦!ç! ç!é!
-é!ê! ê!ó!
-ó!ô! ô!ù!
-ù!ú! ú!ü!
-ü!ı! ı!…"
-…"†" †"“"
-“"”" ”"š"
-š"œ" œ"¶"
-¶"·" ·"¼"
-¼"½" ½"Â"
-Â"Å" Å"ö"
-ö"÷" ÷"ş"
-ş"ÿ" ÿ"‚#
-‚#ƒ# ƒ#„#
-„#…# …#³#
-³#´# ´#»#
-»#¼# ¼#É#
-É#Ê# Ê#ô#
-ô#õ# õ#û#
-û#ƒ$ ƒ$$
-$$ $ç$
-ç$ë$ ë$ø$
-ø$ù$ ù$Ê%
-Ê%Ë% Ë%Ô%
-Ô%×% ×%Ø%
-Ø%Ù% Ù%æ%
-æ%ç% ç%ì%
-ì%í% í%‹&
-‹&Œ& Œ&&
-&& &•&
-•&–& –&İ&
-İ&Ş& Ş&ß&
-ß&à& à&è&
-è&é& é&ì&
-ì&í& í&ı&
-ı&ş& ş&'
-'ƒ' ƒ'‰'
-‰'Š' Š'‹'
-‹'Œ' Œ'’'
-’'“' “'ª'
-ª'«' «'ì'
-ì'í' í'ô'
-ô'õ' õ'ú'
-ú'û' û'ü'
-ü'ı' ı'¡(
-¡(£( £(¥(
-¥(¨( ¨(ş(
-ş(Œ) Œ)“)
-“)•) •)¨)
-¨)©) ©)³)
-³)´) ´)Ã)
-Ã)Ä) Ä)Ê)
-Ê)Í) Í)Ğ)
-Ğ)Ò) Ò)*
-** **
-*Ÿ* Ÿ*­*
-­*¯* ¯*°*
-°*±* ±*¾*
-¾*¿* ¿*É*
-É*Ê* Ê*Ë*
-Ë*Ì* Ì*Í*
-Í*Î* Î*+
-++ +‘+
-‘+’+ ’+”+
-”+•+ •+–+
-–+—+ —+£+
-£+¤+ ¤+´+
-´+µ+ µ+·+
-·+¸+ ¸+½+
-½+È+ È+ä+
-ä+û+ û+,
-,‘, ‘,À,
-À,Á, Á,Â,
-Â,Æ, Æ,Ç,
-Ç,È, È,İ,
-İ,Ş, Ş,ù,
-ù,û, û,ÿ,
-ÿ,€- €--
--‚- ‚-¯-
-¯-°- °-±-
-±-²- ²-í-
-í-î- î-ğ-
-ğ-ñ- ñ-ÿ-
-ÿ-. .“.
-“.”. ”.¢.
-¢.£. £.À.
-À.Á. Á.å.
-å.ç. ç.ê.
-ê.ë. ë.ı.
-ı.ş. ş.…/
-…/†/ †//
-/ /  /¦/
-¦/§/ §/©/
-©/ª/ ª/¸/
-¸/º/ º/Ì/
-Ì/Í/ Í/Ú/
-Ú/Û/ Û/ë/
-ë/í/ í/ô/
-ô/õ/ õ/ö/
-ö/÷/ ÷/0
-0Ÿ0 Ÿ0¢0
-¢0£0 £0¦0
-¦0§0 §0¨0
-¨0±0 ±0Å0
-Å0Õ0 Õ0¾1
-¾1È1 È12
-2ƒ2 ƒ2—2
-—2™2 ™22
-2¦2 ¦2³2
-³2´2 ´2µ2
-µ2¶2 ¶2Ë2
-Ë2Í2 Í2Ğ2
-Ğ2Ò2 Ò2Ü2
-Ü2İ2 İ2ï2
-ï2ğ2 ğ2ó2
-ó2ô2 ô23
-33 3–3
-–3—3 —3Ä4
-Ä4Å4 Å4Ó4
-Ó4Ô4 Ô4ì4
-ì4í4 í4ó4
-ó4ô4 ô45
-5Ÿ5 Ÿ5Î5
-Î5Ğ5 Ğ5à5
-à5á5 á5ç5
-ç5è5 è5¡6
-¡6¢6 ¢6¤6
-¤6¥6 ¥6«6
-«6¬6 ¬6¸6
-¸6¹6 ¹6º6
-º6»6 »6Ã6
-Ã6Ä6 Ä6Í6
-Í6Î6 Î6Ò6
-Ò6Ô6 Ô6×6
-×6Ø6 Ø6ç6
-ç6è6 è6ª7
-ª7¬7 ¬7¼7
-¼7Ò7 Ò7á7
-á7ê7 ê7ò7
-ò78 8”8
-”8–8 –8¼8
-¼8½8 ½8¾8
-¾8¿8 ¿8å8
-å8æ8 æ8ç8
-ç8è8 è8ò8
-ò8ó8 ó8ö8
-ö8÷8 ÷8†9
-†9‡9 ‡9Â9
-Â9Ã9 Ã9Ü9
-Ü9İ9 İ9á9
-á9â9 â9é9
-é9ê9 ê9ì9
-ì9í9 í9Š:
-Š:‹: ‹:œ:
-œ:: ::
-:Ÿ: Ÿ:Ï:
-Ï:Ğ: Ğ:Ñ:
-Ñ:Ò: Ò:Ó:
-Ó:Õ: Õ:Ö:
-Ö:×: ×:ˆ;
-ˆ;‰; ‰;“;
-“;”; ”;©;
-©;ª; ª;Û;
-Û;İ; İ;é;
-é;ê; ê;ì;
-ì;í; í;ò;
-ò;ó; ó;§<
-§<©< ©<²<
-²<³< ³<Ö<
-Ö<Ø< Ø<ù<
-ù<ú< ú<’=
-’=•= •=Á=
-Á=Â= Â=Ç=
-Ç=È= È=ø=
-ø=ù= ù=ü=
-ü=ı= ı=–>
-–>—> —>¸>
-¸>¹> ¹>á>
-á>â> â>ê>
-ê>ì> ì>˜?
-˜?™? ™??
-?Ÿ? Ÿ?¡?
-¡?¢? ¢?£?
-£?¥? ¥?¦?
-¦?¨? ¨?µ?
-µ?¶? ¶?º?
-º?»? »?Á?
-Á?Â? Â?í?
-í?î? î?µ@
-µ@¶@ ¶@·@
-·@¸@ ¸@¿@
-¿@À@ À@£A
-£A¤A ¤A¹A
-¹A¼A ¼AÚA
-ÚAÛA ÛA”B
-”B•B •B–B
-–B—B —BB
-BB B£B
-£B¤B ¤B©B
-©BªB ªBŞB
-ŞBßB ßB©C
-©CªC ªCÿC
-ÿC€D €D†D
-†D‡D ‡DÌD
-ÌDÍD ÍDïD
-ïDğD ğDüD
-üDıD ıDˆE
-ˆE‰E ‰E”E
-”E•E •E¦E
-¦E§E §EÛE
-ÛEİE İEçE
-çEèE èEûE
-ûEüE üE‚F
-‚F„F „F°F
-°F²F ²F´F
-´FÃF ÃFìG
-ìGíG íGòG
-òGóG óG…H
-…H‡H ‡HH
-HH H’H
-’H“H “H˜H
-˜H™H ™H»H
-»H¼H ¼HèH
-èHéH éHòH
-òHôH ôHI
-I‚I ‚IJ
-J„J „J»K
-»K¼K ¼KÅK
-ÅKÆK ÆKŒL
-ŒLL L“L
-“L”L ”LÄL
-ÄLÅL ÅLÍL
-ÍLÏL ÏL‘M
-‘M’M ’MåM
-åMéM éMôM
-ôMõM 
-õM’N ’N‡O*cascade08
-‡OÁO 
-ÁOÂO ÂOÜO
-ÜOŞO ŞOäO
-äOæO æOÖP
-ÖPØP ØPÙP
-ÙPÚP ÚP”Q
-”Q•Q •Q Q
- Q¡Q ¡Q§Q
-§Q¨Q ¨Q×Q
-×QØQ ØQŞQ
-ŞQßQ ßQŠR
-ŠR‹R ‹RR
-RR R›R
-›RR RİR
-İRŞR ŞRóR
-óRôR ôRüR
-üRıR ıRßS
-ßSàS àSóS
-óSôS ôS±T
-±T²T ²TÅT
-ÅTÆT ÆTÈT
-ÈTËT ËTÚT
-ÚTñT 2Kfile:///c:/Users/Linyizhi/.gemini/GeminiLauncher/Views/SettingsPage.xaml.cs

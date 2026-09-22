@@ -1,0 +1,269 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:anim="clr-namespace:TsuruLauncher.Services.Animation"
+                    xmlns:motion="clr-namespace:TsuruLauncher.Services.Animation">
+
+    <!-- 从 Views/ResourcesPage.xaml 抽出的共享样式 —— 资源页与右栏筛选卡片
+         （Controls/ResourcesFilterPanel）两处都要用，所以放到 App 级字典，避免各写一份。 -->
+
+        <!-- 工具按钮 -->
+        <Style x:Key="ToolButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="MinWidth" Value="36"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="8" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface5Brush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 筛选面板里的小胶囊（8px 圆角）。选中底色 = 容器里的滑动指示块：
+             chips 自己的底色是不透明的，会挡住身后的胶囊，所以底色单独抽成 ChipBg 一层，
+             选中时 150ms 淡出（把胶囊让出来）—— 位移/宽度由指示块承担。 -->
+        <Style x:Key="FilterChip" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,6,6"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid>
+                            <Border x:Name="ChipBg" CornerRadius="8" BorderThickness="1" BorderBrush="Transparent"
+                                    Background="{DynamicResource Surface4Brush}"/>
+                            <Border x:Name="HoverLayer" CornerRadius="8" Opacity="0"
+                                    Background="{DynamicResource Surface5Brush}"/>
+                            <Border x:Name="Bd" CornerRadius="8" Padding="9,4" BorderThickness="1"
+                                    Background="Transparent" BorderBrush="Transparent">
+                                <Grid>
+                                    <ContentPresenter x:Name="TextNormal" VerticalAlignment="Center"
+                                                      TextElement.FontWeight="SemiBold"/>
+                                    <ContentPresenter x:Name="TextAccent" VerticalAlignment="Center" Opacity="0"
+                                                      IsHitTestVisible="False"
+                                                      TextElement.Foreground="{DynamicResource AccentForegroundBrush}"
+                                                      TextElement.FontWeight="SemiBold"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                    <Condition Property="IsChecked" Value="False"/>
+                                </MultiTrigger.Conditions>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                                <MultiTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverLayer" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </MultiTrigger.EnterActions>
+                                <MultiTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverLayer" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </MultiTrigger.ExitActions>
+                            </MultiTrigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <!-- 自己的不透明底色先让位（否则会挡住身后滑过来的胶囊） -->
+                                            <DoubleAnimation Storyboard.TargetName="ChipBg" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ChipBg" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 次按钮：透明 / 浅底描边胶囊 -->
+        <Style x:Key="GhostPill" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="16" Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface4Brush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FilterSectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- 右信息面板的小标题（原在 MainWindow.xaml；资源筛选卡片也要用，故上移到全局）。 -->
+        <Style x:Key="PanelSectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>        <!-- 分段胶囊的「选项卡」档（比 FilterChip 大一号，用于版本设置的内容分类行）。
+             与 FilterChip 同一套机制：圆角 + HoverLayer + 选中时自身底色 150ms 淡出让位给
+             容器里的滑动指示块。所以它**必须**和 seg:SegmentedIndicator.Host 一起用，
+             否则选中态会没有底色（这个坑在资源页已经踩过一次）。 -->
+        <Style x:Key="SegTab" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid>
+                            <Border x:Name="ChipBg" CornerRadius="10" BorderThickness="1"
+                                    BorderBrush="{DynamicResource GlassBorderBrush}"
+                                    Background="{DynamicResource Surface4Brush}"/>
+                            <Border x:Name="HoverLayer" CornerRadius="10" Opacity="0"
+                                    Background="{DynamicResource Surface5Brush}"/>
+                            <Border x:Name="Bd" CornerRadius="10" Padding="16,0" Background="Transparent">
+                                <Grid>
+                                    <ContentPresenter x:Name="TextNormal" VerticalAlignment="Center"
+                                                      HorizontalAlignment="Center" TextElement.FontWeight="SemiBold"/>
+                                    <ContentPresenter x:Name="TextAccent" VerticalAlignment="Center"
+                                                      HorizontalAlignment="Center" Opacity="0" IsHitTestVisible="False"
+                                                      TextElement.Foreground="{DynamicResource AccentForegroundBrush}"
+                                                      TextElement.FontWeight="SemiBold"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ChipBg" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ChipBg" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                    <Condition Property="IsChecked" Value="False"/>
+                                </MultiTrigger.Conditions>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                                <MultiTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverLayer" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </MultiTrigger.EnterActions>
+                                <MultiTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverLayer" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </MultiTrigger.ExitActions>
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+</ResourceDictionary>

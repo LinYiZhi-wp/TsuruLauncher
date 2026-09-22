@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "Plan to fix the runtime crash in DownloadPage. Includes adding the missing 'conv' namespace, declaring necessary converters (BooleanToVisibilityConverter, StringMatchToBoolConverter, ProgressToIconConverter) in the page resources, and ensuring visual consistency with the iOS 26 theme.",
-  "updatedAt": "2026-02-11T17:09:29.757425800Z"
-}

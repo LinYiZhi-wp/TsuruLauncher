@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_WALKTHROUGH",
-  "summary": "Documents Phase 7 featured/trending sections implementation and iOS26.xaml style expansion. Covers ModrinthService API methods, ViewModel auto-loading, XAML layout changes, new converter, and comprehensive iOS26 styles including jelly animations and page transitions.",
-  "updatedAt": "2026-02-11T15:23:09.860386900Z"
-}

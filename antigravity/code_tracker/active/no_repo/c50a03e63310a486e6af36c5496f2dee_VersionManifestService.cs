@@ -1,93 +1,0 @@
-§using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
-using GeminiLauncher.Models;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-namespace GeminiLauncher.Services.Network
-{
-    public class VersionManifestService
-    {
-        private static readonly Dictionary<string, string> Sources = new()
-        {
-            { "BMCLAPI", "https://bmclapi2.bangbang93.com/mc/game/version_manifest.json" },
-            { "Official", "https://piston-meta.mojang.com/mc/game/version_manifest.json" },
-            { "FastMirror", "https://download.fastmirror.net/mc/game/version_manifest.json" },
-            { "MCMirror", "https://mirrors.mcfx.net/mc/game/version_manifest.json" }
-        };
-
-        public static List<string> AvailableSources => Sources.Keys.ToList();
-
-        private readonly HttpClient _httpClient;
-        
-        // Simple memory cache
-        private static List<DownloadableVersion>? _cachedVersions;
-        private static DateTime _lastFetchTime = DateTime.MinValue;
-        private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(30);
-
-        public VersionManifestService()
-        {
-            _httpClient = new HttpClient();
-            _httpClient.Timeout = TimeSpan.FromSeconds(5); // Lower timeout for faster fallback
-        }
-
-        public async Task<List<DownloadableVersion>> GetVersionsAsync(string source = "BMCLAPI")
-        {
-            // Check cache
-            if (_cachedVersions != null && (DateTime.Now - _lastFetchTime) < CacheDuration)
-            {
-                return _cachedVersions;
-            }
-
-            // Try the requested source first
-            var versions = await TryFetchAsync(source);
-            if (versions != null) return versions;
-
-            // Fallback: try all other sources in order
-            foreach (var s in Sources.Keys.Where(k => k != source))
-            {
-                versions = await TryFetchAsync(s);
-                if (versions != null) return versions;
-            }
-
-            return new List<DownloadableVersion>();
-        }
-
-        private async Task<List<DownloadableVersion>?> TryFetchAsync(string sourceName)
-        {
-            if (!Sources.ContainsKey(sourceName)) return null;
-            string url = Sources[sourceName];
-
-            try
-            {
-                var json = await _httpClient.GetStringAsync(url);
-                var jObject = JObject.Parse(json);
-                var versions = jObject["versions"]?.ToObject<List<DownloadableVersion>>();
-                
-                if (versions != null && versions.Any())
-                {
-                    _cachedVersions = versions;
-                    _lastFetchTime = DateTime.Now;
-                    return versions;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Failed to fetch from {sourceName}: {ex.Message}");
-            }
-            return null;
-        }
-    }
-}
-¿ *cascade08¿≈*cascade08≈∆ *cascade08∆À*cascade08ÀÕ *cascade08Õ€*cascade08€› *cascade08›‚*cascade08‚È *cascade08ÈÍ*cascade08ÍÎ *cascade08Îñ*cascade08ñù *cascade08ùü*cascade08üﬂ *cascade08ﬂÄ*cascade08ÄÅ *cascade08Å‘*cascade08‘Ö *cascade08Öå	*cascade08å	©
- *cascade08©
-™
-*cascade08™
-¨
- *cascade08¨
-—
-*cascade08—
-¶ *cascade08¶ø*cascade08øŸ *cascade08Ÿ®*cascade08®© *cascade08©Ω*cascade08Ωæ *cascade08æƒ*cascade08ƒ’ *cascade08’Â *cascade08ÂÁ*cascade08ÁË *cascade08ËÈ*cascade08ÈÍ *cascade08Í˜*cascade08˜¯ *cascade08¯˘*cascade08˘˙ *cascade08˙•*cascade08•¶ *cascade08¶≤*cascade08≤¥ *cascade08¥÷*cascade08÷Ÿ *cascade08ŸÌ*cascade08ÌÛ *cascade08Ûè*cascade08èê *cascade08êë*cascade08ëí *cascade08íò*cascade08òô *cascade08ô§*cascade08§• *cascade08•¬*cascade08¬√ *cascade08√ *cascade08 Ã *cascade08ÃÕ*cascade08ÕŒ *cascade08Œ‰*cascade08‰Ú *cascade08Ú∫*cascade08∫¬ *cascade08¬‘*cascade08‘’ *cascade08’Ÿ*cascade08Ÿ⁄ *cascade08⁄‡*cascade08‡· *cascade08·Ö*cascade08Öá *cascade08áâ*cascade08âä *cascade08äñ*cascade08ñó *cascade08ó†*cascade08†¢ *cascade08¢ƒ*cascade08ƒ∆ *cascade08∆‘*cascade08‘’ *cascade08’÷*cascade08÷◊ *cascade08◊ÿ*cascade08ÿŸ *cascade08Ÿ€*cascade08€‹ *cascade08‹ﬁ*cascade08ﬁﬂ *cascade08ﬂ‡*cascade08‡Ê *cascade08ÊÖ*cascade08ÖÜ *cascade08Üå*cascade08åç *cascade08çï*cascade08ïñ *cascade08ñ¶*cascade08¶ß *cascade08ß®*cascade08®© *cascade08©µ*cascade08µ∂ *cascade08∂æ*cascade08æø *cascade08ø¬*cascade08¬√ *cascade08√ƒ*cascade08ƒ≈ *cascade08≈–*cascade08–⁄ *cascade08⁄›*cascade08›È *cascade08ÈÎ*cascade08ÎÏ *cascade08Ïˆ*cascade08ˆ˜ *cascade08˜à*cascade08àâ *cascade08â∂*cascade08∂∑ *cascade08∑…*cascade08…Ã *cascade08ÃÏ*cascade08ÏÓ *cascade08Ó™ *cascade08™≠*cascade08≠„ *cascade08„Ë*cascade08ËÍ *cascade08ÍÌ*cascade08ÌÓ *cascade08Ó˙*cascade08˙É *cascade08Éå*cascade08åç *cascade08çè*cascade08èê *cascade08ê¿*cascade08¿¡ *cascade08¡∆*cascade08∆« *cascade08«ﬂ*cascade08ﬂ‡ *cascade08‡Á*cascade08ÁÈ *cascade08Èı*cascade08ıˆ *cascade08ˆˇ*cascade08ˇÅ *cascade08Åô*cascade08ôö *cascade08ö†*cascade08†¶ *cascade08¶ß*cascade08ß® *cascade08®ª*cascade08ª¬ *cascade08¬√*cascade08√∆ *cascade08∆œ*cascade08œ– *cascade08–—*cascade08—“ *cascade08“”*cascade08”Ú *cascade08Ú˝*cascade08˝â *cascade08âä*cascade08ä§ *cascade082[file:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Services/Network/VersionManifestService.cs

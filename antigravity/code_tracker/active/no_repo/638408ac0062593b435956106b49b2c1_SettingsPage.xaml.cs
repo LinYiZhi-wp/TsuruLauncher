@@ -1,418 +1,0 @@
-‰{using System.Windows;
-using System.Windows.Controls;
-using Microsoft.Win32;
-using System.IO;
-using System.Linq;
-using GeminiLauncher.ViewModels;
-
-namespace GeminiLauncher.Views
-{
-    public partial class SettingsPage : Page
-    {
-        public SettingsPage()
-        {
-            InitializeComponent();
-            // Use MainViewModel from Application
-            this.DataContext = ((App)Application.Current).MainWindow.DataContext;
-            
-            // Initialize fields from Config
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                var cfg = vm.ConfigService.Settings;
-
-                if (!string.IsNullOrEmpty(cfg.GamePath))
-                    GamePathBox.Text = cfg.GamePath;
-
-                if (!string.IsNullOrEmpty(cfg.JavaPath))
-                {
-                   JavaPathBox.Text = cfg.JavaPath;
-                   UpdateJavaVersionInfo(cfg.JavaPath);
-                }
-
-                // Restore memory slider
-                MemorySlider.Value = cfg.MaxRam > 0 ? cfg.MaxRam : 4096;
-
-                // Restore version isolation toggle
-                VersionIsolationToggle.IsChecked = cfg.VersionIsolation;
-
-                // Restore language selection
-                if (cfg.Language == "zh-CN")
-                    ChineseRadio.IsChecked = true;
-                else
-                    EnglishRadio.IsChecked = true;
-
-                // Restore Download Source
-                foreach (ComboBoxItem item in DownloadSourceCombo.Items)
-                {
-                    if (item.Tag?.ToString() == cfg.DownloadSource)
-                    {
-                        DownloadSourceCombo.SelectedItem = item;
-                        break;
-                    }
-                }
-
-                // Restore Hidden Pages
-                if (cfg.HiddenPageKeys.Contains("download")) HideDownloadCheck.IsChecked = true;
-                if (cfg.HiddenPageKeys.Contains("settings")) HideSettingsCheck.IsChecked = true;
-            }
-            
-            // Initialize memory slider value display
-            UpdateMemoryValueText();
-        }
-
-        private void AddOfflineAccount_Click(object sender, RoutedEventArgs e)
-        {
-            var username = OfflineUsernameBox.Text;
-            if (!string.IsNullOrWhiteSpace(username))
-            {
-                var vm = DataContext as ViewModels.MainViewModel;
-                vm?.AccountManager.LoginOffline(username);
-                OfflineUsernameBox.Text = string.Empty;
-            }
-        }
-
-        private async void AddMicrosoftAccount_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var vm = DataContext as MainViewModel;
-                if (vm == null) return;
-                await vm.AccountManager.LoginMicrosoft();
-            }
-            catch (System.Exception ex)
-            {
-                MessageBox.Show($"Login Failed: {ex.Message}", "Error");
-            }
-        }
-
-        private void RemoveAccount_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button btn && btn.Tag is GeminiLauncher.Models.Account account)
-            {
-                if (MessageBox.Show($"Are you sure you want to remove account '{account.Username}'?", 
-                    "Confirm Removal", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
-                {
-                    if (DataContext is MainViewModel vm)
-                    {
-                        vm.AccountManager.RemoveAccount(account);
-                    }
-                }
-            }
-        }
-
-        private void BrowseGamePath_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new Microsoft.Win32.OpenFileDialog
-            {
-                Title = "Select Minecraft folder (choose any file in the folder)",
-                ValidateNames = false,
-                CheckFileExists = false,
-                CheckPathExists = true,
-                FileName = "Folder Selection"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                var folderPath = Path.GetDirectoryName(dialog.FileName);
-                if (!string.IsNullOrEmpty(folderPath))
-                {
-                    GamePathBox.Text = folderPath;
-                    if (DataContext is ViewModels.MainViewModel vm)
-                    {
-                        vm.ConfigService.Settings.GamePath = folderPath;
-                        vm.ConfigService.SaveConfig();
-                    }
-                }
-            }
-        }
-
-        private void BrowseJavaPath_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new OpenFileDialog
-            {
-                Filter = "Java Executable (javaw.exe;java.exe)|javaw.exe;java.exe|All Files (*.*)|*.*",
-                Title = "Select Java Executable"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                string path = dialog.FileName;
-                JavaPathBox.Text = path;
-                UpdateJavaVersionInfo(path);
-                
-                if (DataContext is ViewModels.MainViewModel vm)
-                {
-                    vm.ConfigService.Settings.JavaPath = path;
-                    vm.ConfigService.SaveConfig();
-                }
-            }
-        }
-
-        private void AutoSearchJava_Click(object sender, RoutedEventArgs e)
-        {
-            var javaService = new GeminiLauncher.Services.JavaService();
-            var installations = javaService.FindInstallations();
-
-            if (installations.Any())
-            {
-                var best = installations.First();
-                
-                JavaPathBox.Text = best.Path;
-                UpdateJavaVersionInfo(best.Path);
-                
-                if (DataContext is ViewModels.MainViewModel vm)
-                {
-                    vm.ConfigService.Settings.JavaPath = best.Path;
-                    vm.ConfigService.SaveConfig();
-                }
-                
-                MessageBox.Show($"Auto-detected: {best.Version}\nPath: {best.Path}", "Java Found");
-            }
-            else
-            {
-                JavaVersionText.Text = "‚ùå No Java installation found";
-                JavaVersionText.Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FF5252")!);
-                MessageBox.Show("Could not find any Java installations in common locations.", "Java Not Found");
-            }
-        }
-
-        private void UpdateJavaVersionInfo(string javaPath)
-        {
-            try
-            {
-                string lowerPath = javaPath.ToLower();
-                if (lowerPath.Contains("jdk-17") || lowerPath.Contains("jdk17") || lowerPath.Contains("1.17"))
-                    JavaVersionText.Text = "‚úì Java 17 detected";
-                else if (lowerPath.Contains("jdk-21") || lowerPath.Contains("jdk21") || lowerPath.Contains("1.21"))
-                    JavaVersionText.Text = "‚úì Java 21 detected";
-                else if (lowerPath.Contains("jdk-11") || lowerPath.Contains("jdk11") || lowerPath.Contains("1.11"))
-                    JavaVersionText.Text = "‚úì Java 11 detected";
-                else if (lowerPath.Contains("jdk1.8") || lowerPath.Contains("jdk-8") || lowerPath.Contains("jre1.8"))
-                    JavaVersionText.Text = "‚úì Java 8 detected";
-                else
-                    JavaVersionText.Text = "‚úì Java detected";
-
-                JavaVersionText.Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#00E676")!);
-            }
-            catch
-            {
-                JavaVersionText.Text = "‚ö†Ô∏è Unable to detect version";
-                JavaVersionText.Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFC107")!);
-            }
-        }
-
-        private void MemorySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            UpdateMemoryValueText();
-
-            // Persist memory setting
-            if (IsLoaded && DataContext is ViewModels.MainViewModel vm)
-            {
-                vm.ConfigService.Settings.MaxRam = (int)MemorySlider.Value;
-                vm.ConfigService.SaveConfig();
-            }
-        }
-
-        private void UpdateMemoryValueText()
-        {
-            if (MemoryValueText != null && MemorySlider != null)
-            {
-                int valueMB = (int)MemorySlider.Value;
-                MemoryValueText.Text = $"{valueMB} MB";
-
-                // Smart memory warning
-                if (MemoryWarningText != null)
-                {
-                    try
-                    {
-                        var gcInfo = System.GC.GetGCMemoryInfo();
-                        long totalPhysicalMB = gcInfo.TotalAvailableMemoryBytes / (1024 * 1024);
-                        double ratio = (double)valueMB / totalPhysicalMB;
-
-                        if (valueMB < 1024)
-                        {
-                            MemoryWarningText.Text = "‚ö†Ô∏è ÂàÜÈÖçËøá‰ΩéÔºåÂèØËÉΩÂØºËá¥Ê∏∏ÊàèÂ¥©Ê∫É";
-                            MemoryWarningText.Foreground = new System.Windows.Media.SolidColorBrush(
-                                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FF5252")!);
-                        }
-                        else if (ratio > 0.8)
-                        {
-                            MemoryWarningText.Text = $"‚ö†Ô∏è Ë∂ÖËøáÁâ©ÁêÜÂÜÖÂ≠ò 80%Ôºà{totalPhysicalMB} MBÔºâÔºåÂèØËÉΩÂØºËá¥Âç°Ê≠ª";
-                            MemoryWarningText.Foreground = new System.Windows.Media.SolidColorBrush(
-                                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FF5252")!);
-                        }
-                        else
-                        {
-                            MemoryWarningText.Text = "‚úì Êé®ËçêËåÉÂõ¥";
-                            MemoryWarningText.Foreground = new System.Windows.Media.SolidColorBrush(
-                                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#00E676")!);
-                        }
-                    }
-                    catch
-                    {
-                        MemoryWarningText.Text = "";
-                    }
-                }
-            }
-        }
-
-        private void VersionIsolationToggle_Changed(object sender, RoutedEventArgs e)
-        {
-            if (!IsLoaded) return;
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                vm.ConfigService.Settings.VersionIsolation = VersionIsolationToggle.IsChecked == true;
-                vm.ConfigService.SaveConfig();
-                
-                // Reload versions to update game directories
-                vm.LoadVersions();
-            }
-        }
-
-        private void Language_Changed(object sender, System.Windows.RoutedEventArgs e)
-        {
-            if (!IsLoaded) return;
-            
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                if (EnglishRadio.IsChecked == true)
-                {
-                    App.SwitchLanguage("en-US");
-                    vm.ConfigService.Settings.Language = "en-US";
-                }
-                else if (ChineseRadio.IsChecked == true)
-                {
-                    App.SwitchLanguage("zh-CN");
-                    vm.ConfigService.Settings.Language = "zh-CN";
-                }
-                vm.ConfigService.SaveConfig();
-            }
-        }
-
-        private void BrowseBackgroundImage_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                vm.PickBackgroundImageCommand.Execute(null);
-            }
-        }
-
-        private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            if (!IsLoaded) return;
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                // ViewModel property bound TwoWay, just need to sync to config and save
-                vm.ConfigService.Settings.BackgroundOpacity = vm.BackgroundOpacity;
-                vm.ConfigService.SaveConfig();
-            }
-        }
-
-        private void BlurSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            if (!IsLoaded) return;
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                vm.ConfigService.Settings.BlurEffectRadius = vm.BlurEffectRadius;
-                vm.ConfigService.SaveConfig();
-            }
-        }
-
-        private void LauncherVisibility_Changed(object sender, SelectionChangedEventArgs e)
-        {
-            if (!IsLoaded) return;
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                vm.ConfigService.SaveConfig();
-            }
-        }
-
-        private void ProcessPriority_Changed(object sender, SelectionChangedEventArgs e)
-        {
-            if (!IsLoaded) return;
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                vm.ConfigService.SaveConfig();
-            }
-        }
-        private void DownloadSource_Changed(object sender, SelectionChangedEventArgs e)
-        {
-            if (!IsLoaded) return;
-            if (DataContext is ViewModels.MainViewModel vm && DownloadSourceCombo.SelectedItem is ComboBoxItem item)
-            {
-                vm.ConfigService.Settings.DownloadSource = item.Tag?.ToString() ?? "Official";
-                vm.ConfigService.SaveConfig();
-            }
-        }
-
-        private void MaxThreads_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            if (!IsLoaded) return;
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                vm.ConfigService.SaveConfig();
-            }
-        }
-        private void AdvancedSetting_Changed(object sender, TextChangedEventArgs e)
-        {
-            if (!IsLoaded) return;
-            if (DataContext is ViewModels.MainViewModel vm)
-            {
-                vm.ConfigService.SaveConfig();
-            }
-        }
-
-        private void HidePage_Changed(object sender, RoutedEventArgs e)
-        {
-            if (!IsLoaded) return;
-            if (DataContext is ViewModels.MainViewModel vm && sender is CheckBox chk && chk.Tag is string key)
-            {
-                if (chk.IsChecked == true)
-                {
-                    if (!vm.ConfigService.Settings.HiddenPageKeys.Contains(key))
-                        vm.ConfigService.Settings.HiddenPageKeys.Add(key);
-                }
-                else
-                {
-                    vm.ConfigService.Settings.HiddenPageKeys.Remove(key);
-                }
-                
-                vm.ConfigService.SaveConfig();
-                
-                // Notify MainWindow to refresh visibility
-                if (Application.Current.MainWindow is MainWindow window)
-                {
-                    window.RefreshNavigationVisibility();
-                }
-            }
-        }
-    }
-}
-*cascade087 *cascade087= *cascade08={*cascade08{ó *cascade08óπ *cascade08πÀ *cascade08ÀÉ*cascade08ÉÑ*cascade08ÑÖ *cascade08ÖÜ*cascade08Üá *cascade08áà*cascade08àâ *cascade08âä*cascade08äå *cascade08åç*cascade08çé *cascade08éê*cascade08êë *cascade08ë°*cascade08°¢*cascade08¢ß*cascade08ß® *cascade08®©*cascade08©™ *cascade08™Æ*cascade08Æ∞ *cascade08∞±*cascade08±≤ *cascade08≤µ*cascade08µ∂ *cascade08∂º*cascade08ºΩ *cascade08Ωø*cascade08ø¿ *cascade08¿¬*cascade08¬— *cascade08—‚ *cascade08‚„*cascade08„‰ *cascade08‰Ì *cascade08Ì› *cascade08›ï*cascade08ï∞ *cascade08∞±*cascade08±Ê *cascade08ÊÁ*cascade08Á¢ *cascade08¢£*cascade08£Í *cascade08ÍÎ*cascade08Î¢ *cascade08¢®*cascade08®© *cascade08©‚*cascade08‚„ *cascade08„ç*cascade08çé *cascade08é›*cascade08›ﬂ *cascade08ﬂÊ*cascade08ÊÁ *cascade08ÁÏ*cascade08ÏÌ *cascade08ÌÉ	*cascade08É	Ö	 *cascade08Ö	è	*cascade08è	ê	 *cascade08ê	û	*cascade08û	ü	 *cascade08ü	†	*cascade08†	°	 *cascade08°	®	*cascade08®	©	 *cascade08©	™	*cascade08™	´	 *cascade08´	µ	*cascade08µ	∂	 *cascade08∂	Á	*cascade08Á	È	 *cascade08È	Í	*cascade08Í	Î	 *cascade08Î	É
-*cascade08É
-Ö
- *cascade08Ö
-Ü
-*cascade08Ü
-á
- *cascade08á
-ä
-*cascade08ä
-ã
- *cascade08ã
-∑
-*cascade08∑
-∏
- *cascade08∏
-ø
-*cascade08ø
-¿
- *cascade08¿
-Ã
-*cascade08Ã
-ﬂ
- *cascade08ﬂ
-ó*cascade08óô *cascade08ôä *cascade08ä˘*cascade08˘á *cascade08á≤ *cascade08≤µ *cascade08µ∂ *cascade08∂∏*cascade08∏π *cascade08πΩ*cascade08Ωæ *cascade08æø*cascade08ø¿ *cascade08¿¡*cascade08¡¬ *cascade08¬«*cascade08«» *cascade08» *cascade08 À *cascade08ÀÃ*cascade08ÃÕ *cascade08Õÿ*cascade08ÿŸ *cascade08ŸÌ*cascade08ÌÓ *cascade08ÓÔ*cascade08Ô *cascade08¯*cascade08¯˘ *cascade08˘å*cascade08åç *cascade08çè*cascade08èê *cascade08êë*cascade08ëí *cascade08íì*cascade08ìî *cascade08îñ*cascade08ñó *cascade08óß*cascade08ß® *cascade08®≤*cascade08≤≥ *cascade08≥µ*cascade08µ∂ *cascade08∂∏*cascade08∏∫ *cascade08∫Ω*cascade08Ωæ *cascade08æø*cascade08ø¿ *cascade08¿ *cascade08 À *cascade08À“*cascade08“” *cascade08”Î*cascade08ÎÏ *cascade08ÏÔ*cascade08Ô *cascade08Ú*cascade08ÚÛ *cascade08ÛÙ*cascade08Ùˆ *cascade08ˆ˜*cascade08˜¯ *cascade08¯˝*cascade08˝ˇ *cascade08ˇÉ*cascade08ÉÑ *cascade08ÑÜ*cascade08Üá *cascade08áê*cascade08êû *cascade08û†*cascade08†° *cascade08°§*cascade08§• *cascade08•¶*cascade08¶ß *cascade08ßÆ*cascade08Æ∞ *cascade08∞≥*cascade08≥¥ *cascade08¥∂*cascade08∂∑ *cascade08∑*cascade08˝ *cascade08˝Ä *cascade08Äá*cascade08áà *cascade08àç*cascade08çé *cascade08éè *cascade08è¶*cascade08¶ß *cascade08ß∏*cascade08∏π *cascade08πª*cascade08ªΩ *cascade08Ωæ *cascade08æ√*cascade08√« *cascade08«» *cascade08»  *cascade08 Õ*cascade08ÕŒ *cascade08Œ‹*cascade08‹› *cascade08›ﬁ*cascade08ﬁﬂ *cascade08ﬂÔ*cascade08ÔÒ *cascade08Ò˝*cascade08˝ˇ *cascade08ˇå*cascade08åç *cascade08ç≤*cascade08≤≥ *cascade08≥π*cascade08πΩ *cascade08Ω¬*cascade08¬√ *cascade08√ƒ*cascade08ƒ≈ *cascade08≈Ÿ*cascade08Ÿ⁄ *cascade08⁄›*cascade08›ﬁ *cascade08ﬁ·*cascade08·‚ *cascade08‚Í*cascade08ÍÎ *cascade08ÎÇ*cascade08Çå *cascade08åè*cascade08èî *cascade08îò*cascade08òô *cascade08ôõ *cascade08õ◊*cascade08◊ÿ *cascade08ÿ›*cascade08›ﬁ *cascade08ﬁê *cascade08êó *cascade08óò *cascade08ò¨*cascade08¨≠ *cascade08≠Ú*cascade08ÚÛ *cascade08Û˙*cascade08˙˚ *cascade08˚¸*cascade08¸˝ *cascade08˝ù*cascade08ùû *cascade08û≠*cascade08≠Æ *cascade08ÆØ*cascade08Ø∞ *cascade08∞µ*cascade08µ∂ *cascade08∂∏*cascade08∏π *cascade08π◊*cascade08◊ÿ*cascade08ÿ⁄ *cascade08⁄È*cascade08Èˇ *cascade08ˇÅ *cascade08ÅÑ*cascade08ÑÖ *cascade08Öç *cascade08çï*cascade08ïô *cascade08ôö *cascade08ö±*cascade08±≥ *cascade08≥¥*cascade08¥µ *cascade08µ∏*cascade08∏π *cascade08πæ*cascade08æø *cascade08ø¬*cascade08¬√ *cascade08√÷*cascade08÷‰ *cascade08‰Á*cascade08ÁË *cascade08ËÏ*cascade08ÏÌ *cascade08ÌÛ*cascade08ÛÙ *cascade08Ùı *cascade08ı˙*cascade08˙˚ *cascade08˚˝*cascade08˝˛ *cascade08˛Ç *cascade08ÇÑ*cascade08ÑÖ *cascade08Öâ*cascade08âä *cascade08äã*cascade08ãç *cascade08çò*cascade08òô *cascade08ô¥ *cascade08¥µ*cascade08µ∑ *cascade08∑π*cascade08πæ *cascade08æø *cascade08ø√*cascade08√ƒ *cascade08ƒ∆*cascade08∆« *cascade08« *cascade08 À *cascade08ÀŒ*cascade08Œ›*cascade08›ﬁ *cascade08ﬁÎ*cascade08ÎÛ *cascade08ÛÙ*cascade08Ùà *cascade08à±*cascade08±≥ *cascade08≥µ*cascade08µ∂ *cascade08∂∑*cascade08∑π *cascade08πΩ*cascade08Ωæ *cascade08æ·*cascade08·‚ *cascade08‚È*cascade08ÈÍ *cascade08ÍÓ*cascade08ÓÔ *cascade08Ô *cascade08† *cascade08† ∆  *cascade08∆ »  *cascade08» “ *cascade08“ ”  *cascade08” ◊ *cascade08◊ ÿ  *cascade08ÿ ‹  *cascade08‹ ﬁ *cascade08ﬁ ﬂ  *cascade08ﬂ Ü!*cascade08Ü!á! *cascade08á!ñ!*cascade08ñ!ó! *cascade08ó!†!*cascade08†!°! *cascade08°!¢! *cascade08¢!•!*cascade08•!¶!*cascade08¶!©!*cascade08©!™!*cascade08™!´! *cascade08´!Æ! *cascade08Æ!≤!*cascade08≤!≥! *cascade08≥!–!*cascade08–!—! *cascade08—!“! *cascade08“!÷!*cascade08÷!◊! *cascade08◊!›!*cascade08›!ﬁ! *cascade08ﬁ!!*cascade08!Û! *cascade08Û!˜!*cascade08˜!ñ" *cascade08ñ"ö"*cascade08ö"õ" *cascade08õ"ú" *cascade08ú"£" *cascade08£"§" *cascade08§"ß"*cascade08ß"™" *cascade08™"≠" *cascade08≠"Æ"*cascade08Æ"Ø" *cascade08Ø"∞" *cascade08∞"±"*cascade08±"≤" *cascade08≤"≥"*cascade08≥"∏" *cascade08∏"∫" *cascade08∫"Ø$*cascade08Ø$¿$ *cascade08¿$Õ$ *cascade08Õ$Œ$ *cascade08Œ$œ$*cascade08œ$Ÿ$ *cascade08Ÿ$·$*cascade08·$Ê$ *cascade08Ê$Ï$*cascade08Ï$Ó$ *cascade08Ó$Ò$*cascade08Ò$Û$ *cascade08Û$ˇ$*cascade08ˇ$Ä% *cascade08Ä%à%*cascade08à%â% *cascade08â%é%*cascade08é%ë% *cascade08ë%ö%*cascade08ö%õ% *cascade08õ%°%*cascade08°%¢% *cascade08¢%ß%*cascade08ß%®% *cascade08®%∞%*cascade08∞%±% *cascade08±%√%*cascade08√%ƒ% *cascade08ƒ%»%*cascade08»%…% *cascade08…% %*cascade08 %À% *cascade08À%œ%*cascade08œ%—% *cascade08—%“%*cascade08“%”% *cascade08”%ﬂ%*cascade08ﬂ%‡% *cascade08‡%Ï%*cascade08Ï%Ì% *cascade08Ì%Ö&*cascade08Ö&á& *cascade08á&à&*cascade08à&â& *cascade08â&ó&*cascade08ó&ò& *cascade08ò&ö&*cascade08ö&ú& *cascade08ú&æ&*cascade08æ&ø& *cascade08ø&…&*cascade08…& & *cascade08 &Ï&*cascade08Ï&Ì& *cascade08Ì&Ô&*cascade08Ô&& *cascade08&Ç'*cascade08Ç'É' *cascade08É'à'*cascade08à'â' *cascade08â'ã'*cascade08ã'ô' *cascade08ô'ù'*cascade08ù'¨' *cascade08¨'µ'*cascade08µ'∂' *cascade08∂'∫'*cascade08∫'ª' *cascade08ª'º'*cascade08º'Ω' *cascade08Ω'∆'*cascade08∆'«' *cascade08«'Ï' *cascade08Ï'Ù'*cascade08Ù'˜' *cascade08˜'˙' *cascade08˙'˚'*cascade08˚'˝' *cascade08˝'˛'*cascade08˛'ˇ' *cascade08ˇ'Ä(*cascade08Ä(Å( *cascade08Å(à(*cascade08à(â( *cascade08â(ú( *cascade08ú(∆(*cascade08∆( ( *cascade08 (À( *cascade08À(œ(*cascade08œ(–( *cascade08–(‘(*cascade08‘(’( *cascade08’(÷(*cascade08÷(◊( *cascade08◊(ÿ(*cascade08ÿ(Ÿ( *cascade08Ÿ(‹(*cascade08‹(›(*cascade08›(ﬁ( *cascade08ﬁ(‡(*cascade08‡(·(*cascade08·(‚( *cascade08‚(‰( *cascade08‰(Ê(*cascade08Ê(Ú( *cascade08Ú(Ù(*cascade08Ù(á) *cascade08á)ã)*cascade08ã)ç) *cascade08ç)í)*cascade08í)ì) *cascade08ì)ï)*cascade08ï)ó) *cascade08ó)ò)*cascade08ò)ô) *cascade08ô)û)*cascade08û)ü) *cascade08ü)†)*cascade08†)°) *cascade08°)•)*cascade08•)¶) *cascade08¶)®) *cascade08®)™)*cascade08™)´) *cascade08´)≠)*cascade08≠)∞) *cascade08∞)±)*cascade08±)≤) *cascade08≤)¥)*cascade08¥)«) *cascade08«) )*cascade08 )Œ) *cascade08Œ)“) *cascade08“)ﬂ) *cascade08ﬂ)È)*cascade08È)Í) *cascade08Í)˘)*cascade08˘)Ä* *cascade08Ä*É* *cascade08É*à**cascade08à*û* *cascade08û*°**cascade08°*¢* *cascade08¢*£* *cascade08£*¶**cascade08¶*ß* *cascade08ß*©**cascade08©*™* *cascade08™*´**cascade08´*¨* *cascade08¨*≠**cascade08≠*Æ* *cascade08Æ*∞**cascade08∞*≤* *cascade08≤*≥**cascade08≥*µ* *cascade08µ*∑**cascade08∑*∏* *cascade08∏*π**cascade08π*ª* *cascade08ª*º**cascade08º*Œ* *cascade08Œ*œ**cascade08œ*›* *cascade08›*ﬁ**cascade08ﬁ*Ë* *cascade08Ë*Ì**cascade08Ì*Ú* *cascade08Ú*ı* *cascade08ı*ˆ**cascade08ˆ*˜* *cascade08˜*˙**cascade08˙*˚* *cascade08˚*¸* *cascade08¸*˛**cascade08˛*ˇ* *cascade08ˇ*Ä+*cascade08Ä+Å+ *cascade08Å+á+*cascade08á+à+ *cascade08à+â+*cascade08â+ä+ *cascade08ä+ç+*cascade08ç+é+ *cascade08é+è+ *cascade08è+ì+*cascade08ì+î+ *cascade08î+ó+*cascade08ó+ò+ *cascade08ò+ö+*cascade08ö+õ+ *cascade08õ+ú+*cascade08ú+ù+ *cascade08ù+ü+*cascade08ü+†+ *cascade08†+°+*cascade08°+¢+ *cascade08¢+§+ *cascade08§+ß+*cascade08ß+®+ *cascade08®+©+*cascade08©+™+ *cascade08™+Ø+*cascade08Ø+∞+ *cascade08∞+±+ *cascade08±+≤+*cascade08≤+≥+ *cascade08≥+µ+ *cascade08µ+∂+ *cascade08∂+∏+*cascade08∏+¬+ *cascade08¬+√+*cascade08√+—+ *cascade08—+Í+*cascade08Í+Î+*cascade08Î+Ï+ *cascade08Ï+Ô+*cascade08Ô+Ò+ *cascade08Ò+ˇ+*cascade08ˇ+É, *cascade08É,å,*cascade08å,è, *cascade08è,ü, *cascade08ü,°,*cascade08°,¢, *cascade08¢,¶,*cascade08¶,©, *cascade08©,™,*cascade08™,´, *cascade08´,Æ,*cascade08Æ,≥, *cascade08≥,∆,*cascade08∆,», *cascade08»,À,*cascade08À,Ã, *cascade08Ã,Õ,*cascade08Õ,Œ, *cascade08Œ,œ,*cascade08œ,—, *cascade08—,ﬂ, *cascade08ﬂ,„, *cascade08„,‰, *cascade08‰,Â,*cascade08Â,Ë, *cascade08Ë,Í,*cascade08Í,Ï, *cascade08Ï,ı,*cascade08ı,à- *cascade08à-î- *cascade08î-ï- *cascade08ï-ò- *cascade08ò-ö-*cascade08ö-õ- *cascade08õ-ù-*cascade08ù-ü- *cascade08ü-§-*cascade08§-•- *cascade08•-¨-*cascade08¨-≠- *cascade08≠-Æ-*cascade08Æ-Ø- *cascade08Ø-∂-*cascade08∂-∏- *cascade08∏-π-*cascade08π-À- *cascade08À-Õ-*cascade08Õ-›- *cascade08›-Ì-*cascade08Ì-Ó- *cascade08Ó-Ô-*cascade08Ô-- *cascade08-Ú-*cascade08Ú-Ù- *cascade08Ù-ˆ-*cascade08ˆ-¯- *cascade08¯-˘-*cascade08˘-å. *cascade08å.ö.*cascade08ö.õ. *cascade08õ.ü.*cascade08ü.†. *cascade08†.°.*cascade08°.¢. *cascade08¢.®.*cascade08®.©. *cascade08©.´.*cascade08´.¨. *cascade08¨.≠.*cascade08≠.—. *cascade08—.”.*cascade08”.‘. *cascade08‘.‡.*cascade08‡.·. *cascade08·.„.*cascade08„.‰. *cascade08‰.È.*cascade08È.Í. *cascade08Í.Ú.*cascade08Ú.Û. *cascade08Û.˘.*cascade08˘.˙. *cascade08˙.¸.*cascade08¸.˛. *cascade08˛.Ä/*cascade08Ä/í/ *cascade08í/ì/*cascade08ì/©/ *cascade08©/À/*cascade08À/Ã/ *cascade08Ã/Õ/*cascade08Õ/Œ/ *cascade08Œ/ÿ/*cascade08ÿ/Ó/ *cascade08Ó/Ú/*cascade08Ú/Ù/ *cascade08Ù/˙/*cascade08˙/˚/ *cascade08˚/Ä0*cascade08Ä0Å0 *cascade08Å0Ö0*cascade08Ö0Ü0 *cascade08Ü0ä0*cascade08ä0ã0 *cascade08ã0å0*cascade08å0û0 *cascade08û0°0*cascade08°0≠0 *cascade08≠0Ø0 *cascade08Ø0±0*cascade08±0√0 *cascade08√0⁄0*cascade08⁄0€0 *cascade08€0‹0*cascade08‹0›0 *cascade08›0ﬁ0 *cascade08ﬁ0Í0*cascade08Í00*cascade080Ò0 *cascade08Ò0Û0*cascade08Û0Ù0 *cascade08Ù0â1*cascade08â1å1 *cascade08å1ç1 *cascade08ç1î1*cascade08î1›1*cascade08›1ﬂ1 *cascade08ﬂ1Á1*cascade08Á1Ë1 *cascade08Ë1ı1*cascade08ı1ˆ1 *cascade08ˆ1¸1*cascade08¸1˛1 *cascade08˛1Å2*cascade08Å2Ç2 *cascade08Ç2Ö2*cascade08Ö2Ü2 *cascade08Ü2á2*cascade08á2à2 *cascade08à2ã2*cascade08ã2å2 *cascade08å2©2*cascade08©2™2 *cascade08™2Æ2*cascade08Æ2Ø2 *cascade08Ø2∑2*cascade08∑2∏2 *cascade08∏2∫2*cascade08∫2ª2 *cascade08ª2»2*cascade08»2…2 *cascade08…2”2*cascade08”2‘2 *cascade08‘2Ë2*cascade08Ë2˙2 *cascade08˙2ñ3*cascade08ñ3ó3 *cascade08ó3¢3*cascade08¢3§3 *cascade08§3ß3*cascade08ß3®3 *cascade08®3™3*cascade08™3´3 *cascade08´3≥3*cascade08≥3¥3 *cascade08¥3∂3*cascade08∂3∑3 *cascade08∑3ª3*cascade08ª3º3 *cascade08º3Ω3*cascade08Ω3æ3 *cascade08æ3¬3*cascade08¬3√3 *cascade08√3 3*cascade08 3À3 *cascade08À3–3*cascade08–3—3 *cascade08—3ÿ3*cascade08ÿ3Ÿ3 *cascade08Ÿ3‹3*cascade08‹3ﬂ3 *cascade08ﬂ3—4*cascade08—4˝4 *cascade08˝4Ö5*cascade08Ö5Ü5 *cascade08Ü5è5*cascade08è5ê5 *cascade08ê5√5*cascade08√5ƒ5 *cascade08ƒ5’5 *cascade08’5Â5 *cascade08Â5Ë5*cascade08Ë5È5 *cascade08È5˜5*cascade08˜5˛5 *cascade08˛5ˇ5 *cascade08ˇ5Å6 *cascade08Å6´6*cascade08´6¨6 *cascade08¨6Ø6 *cascade08Ø6¡6 *cascade08¡6∆6*cascade08∆6À6 *cascade08À6Ã6 *cascade08Ã6–6*cascade08–6—6 *cascade08—6◊6*cascade08◊6ÿ6 *cascade08ÿ6ˆ6*cascade08ˆ6ö7 *cascade08ö7õ7 *cascade08õ7ù7*cascade08ù7û7 *cascade08û7§7*cascade08§7¶7 *cascade08¶7∏7*cascade08∏7π7 *cascade08π7º7*cascade08º7Ω7 *cascade08Ω7—7 *cascade08—7“7 *cascade08“7’7*cascade08’7÷7 *cascade08÷7⁄7 *cascade08⁄7ﬂ7*cascade08ﬂ7Â7 *cascade08Â7Ê7 *cascade08Ê7Á7*cascade08Á7Ë7 *cascade08Ë7Ô7*cascade08Ô77 *cascade087˙7 *cascade08˙7ˇ7*cascade08ˇ7Ü8 *cascade08Ü8à8 *cascade08à8ã8*cascade08ã8å8 *cascade08å8ï8*cascade08ï8≥8*cascade08≥8¬8 *cascade08¬8À8*cascade08À8Ã8 *cascade08Ã8œ8*cascade08œ8–8 *cascade08–8”8*cascade08”8‘8 *cascade08‘8◊8*cascade08◊8ÿ8 *cascade08ÿ8Ÿ8*cascade08Ÿ8⁄8 *cascade08⁄8ì9 *cascade08ì9ò9*cascade08ò9õ9 *cascade08õ9ú9 *cascade08ú9û9*cascade08û9ü9 *cascade08ü9•9*cascade08•9ß9 *cascade08ß9≥9 *cascade08≥9∏9*cascade08∏9¬9 *cascade08¬9√9 *cascade08√9Œ9 *cascade08Œ9Ï9*cascade08Ï9â: *cascade08â:ã: *cascade08ã:å:*cascade08å:ç: *cascade08ç:ë:*cascade08ë:í: *cascade08í:≥: *cascade08≥:Ã: *cascade08Ã:—:*cascade08—:◊: *cascade08◊:ÿ: *cascade08ÿ:€:*cascade08€:›: *cascade08›:Ë:*cascade08Ë:È: *cascade08È:Î:*cascade08Î:Ï: *cascade08Ï:Ò:*cascade08Ò:˚: *cascade08˚:¸: *cascade08¸:˝:*cascade08˝:˛: *cascade08˛:Ñ; *cascade08Ñ;§;*cascade08§;±; *cascade08±;≤; *cascade08≤;«;*cascade08«;»; *cascade08»;—;*cascade08—;”; *cascade08”;‚;*cascade08‚;‰; *cascade08‰;Û; *cascade08Û;Ù; *cascade08Ù;˛;*cascade08˛;ˇ; *cascade08ˇ;É< *cascade08É<Ñ< *cascade08Ñ<†<*cascade08†<¢< *cascade08¢<ª<*cascade08ª<¿< *cascade08¿<…< *cascade08…< < *cascade08 <‰<*cascade08‰<Â< *cascade08Â<Á<*cascade08Á<Ë< *cascade08Ë<<*cascade08<Ò< *cascade08Ò<ˆ<*cascade08ˆ<˜< *cascade08˜<ñ=*cascade08ñ=ò= *cascade08ò=æ=*cascade08æ=¡= *cascade08¡=√=*cascade08√=ƒ= *cascade08ƒ=Ã=*cascade08Ã=Õ= *cascade08Õ=’=*cascade08’=÷= *cascade08÷=ﬁ=*cascade08ﬁ=ﬂ= *cascade08ﬂ=‡=*cascade08‡=·= *cascade08·=Ô=*cascade08Ô=Ò= *cascade08Ò=ˆ=*cascade08ˆ=˜= *cascade08˜=Ä>*cascade08Ä>Å> *cascade08Å>⁄>*cascade08⁄>€> *cascade08€>‡>*cascade08‡>·> *cascade08·>„>*cascade08„>‰> *cascade08‰>Î>*cascade08Î>Ï> *cascade08Ï>Ú>*cascade08Ú>Û> *cascade08Û>ã?*cascade08ã?å? *cascade08å?®?*cascade08®?©? *cascade08©?≠?*cascade08≠?Æ? *cascade08Æ?ª?*cascade08ª?º? *cascade08º?≈?*cascade08≈?∆? *cascade08∆?‹?*cascade08‹?›? *cascade08›?Ä@*cascade08Ä@Ç@ *cascade08Ç@Ö@*cascade08Ö@Ü@ *cascade08Ü@ö@*cascade08ö@ú@ *cascade08ú@°@*cascade08°@¢@ *cascade08¢@’@*cascade08’@◊@ *cascade08◊@Ÿ@*cascade08Ÿ@Ë@ *cascade08Ë@åA*cascade08åAçA *cascade08çAéA*cascade08éAèA *cascade08èAëA*cascade08ëAíA *cascade08íA™A*cascade08™A´A *cascade08´A≠A*cascade08≠AÆA *cascade08ÆAØA*cascade08ØA∞A *cascade08∞AµA*cascade08µA∂A *cascade08∂A∑A*cascade08∑AπA *cascade08πAªA*cascade08ªAºA *cascade08ºA∆A*cascade08∆A«A *cascade08«AŸA*cascade08ŸA⁄A *cascade08⁄AÒA*cascade08ÒAÚA *cascade08ÚA˚A*cascade08˚A¸A *cascade08¸AÖB*cascade08ÖBÜB *cascade08ÜBíB *cascade08íBüD*cascade08üD∂D *cascade08∂D∑D *cascade08∑DπD*cascade08πD∫D *cascade08∫DªD*cascade08ªDΩD *cascade08ΩD…D*cascade08…DÀD *cascade08ÀD–D*cascade08–D—D *cascade08—D’D*cascade08’D÷D *cascade08÷DıD*cascade08ıDˆD *cascade08ˆD¸D*cascade08¸D˝D *cascade08˝DàE*cascade08àEâE *cascade08âEëE*cascade08ëEíE *cascade08íEîE*cascade08îEïE *cascade08ïEòE*cascade08òEôE *cascade08ôE†E*cascade08†E°E *cascade08°E∆E*cascade08∆E˛E*cascade08˛EˇE *cascade08ˇEÇF*cascade08ÇFÉF *cascade08ÉFëF*cascade08ëFíF *cascade08íFòF*cascade08òFÂF*cascade08ÂFÊF *cascade08ÊFF*cascade08FÚF *cascade08ÚFˆF*cascade08ˆF˜F *cascade08˜FˇF*cascade08ˇFÄG *cascade08ÄG˘G*cascade08˘GˇG *cascade08ˇG¶K*cascade08¶KßK *cascade08ßKΩK*cascade08ΩK¿K *cascade08¿K™L*cascade08™L≠L *cascade08≠LéN*cascade08éNêN *cascade08êNÔN*cascade08ÔNN *cascade08NˆN*cascade08ˆN˜N *cascade08˜NπP*cascade08πP∫P *cascade08∫PêQ*cascade08êQíQ *cascade08íQùR*cascade08ùRûR *cascade08ûRºT*cascade08ºTΩT *cascade08ΩTæT *cascade08æTËT*cascade08ËTÌW *cascade08ÌWÓW *cascade08ÓW¸W *cascade08¸WÒXÒXÚX *cascade08ÚXˇX *cascade08ˇXâY *cascade08âY€Z*cascade08€Z‚Z *cascade08‚Z‚Z*cascade08‚ZˆZ *cascade08ˆZ˜Z *cascade08˜Z˘Z *cascade08˘Z˛Z*cascade08˛ZˇZ *cascade08ˇZá[*cascade08á[à[ *cascade08à[å[*cascade08å[ç[ *cascade08ç[£[ *cascade08£[ß[*cascade08ß[™[ *cascade08™[≠[*cascade08≠[Ω[ *cascade08Ω[æ[*cascade08æ[√[ *cascade08√[∆[ *cascade08∆[»[ *cascade08»[ [*cascade08 [Ã[ *cascade08Ã[Œ[*cascade08Œ[œ[ *cascade08œ[‹[*cascade08‹[ﬁ[ *cascade08ﬁ[Á[*cascade08Á[Ë[ *cascade08Ë[Ø\*cascade08Ø\≤\ *cascade08≤\∂\*cascade08∂\√\ *cascade08√\ƒ\ *cascade08ƒ\≈\*cascade08≈\«\ *cascade08«\»\ *cascade08»\…\*cascade08…\ \ *cascade08 \œ\*cascade08œ\“\ *cascade08“\‘\*cascade08‘\’\*cascade08’\÷\ *cascade08÷\›\*cascade08›\ﬁ\ *cascade08ﬁ\Â\*cascade08Â\Ê\ *cascade08Ê\Á\*cascade08Á\Ë\*cascade08Ë\È\ *cascade08È\Í\*cascade08Í\¯\ *cascade08¯\¸\*cascade08¸\ˇ\ *cascade08ˇ\É]*cascade08É]é] *cascade08é]ë] *cascade08ë]í] *cascade08í]ì] *cascade08ì]ö]*cascade08ö]õ] *cascade08õ]ú]*cascade08ú]ù] *cascade08ù]§]*cascade08§]•] *cascade08•]≠] *cascade08≠]Ö^ *cascade08Ö^Ãj *cascade08Ãj±p*cascade08±pØq *cascade08Øq›q *cascade08›qÁq *cascade08ÁqËq *cascade08ËqÓq*cascade08Óq˚q *cascade08˚qˇq *cascade08ˇq˘s *cascade08˘sæ{*cascade08æ{ﬁ{ *cascade08ﬁ{‰{ *cascade082Kfile:///C:/Users/Linyizhi/.gemini/GeminiLauncher/Views/SettingsPage.xaml.cs

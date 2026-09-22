@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>TsuruLauncher</AssemblyName>
+    <Product>Tsuru Launcher</Product>
+    <Company>Tsuru</Company>
+    <Title>Tsuru Launcher</Title>
+    <Version>2.0.0</Version>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
+    <ApplicationIcon />
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\Images\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3719.77" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="WPF-UI" Version="3.0.4" />
+  </ItemGroup>
+
+</Project>

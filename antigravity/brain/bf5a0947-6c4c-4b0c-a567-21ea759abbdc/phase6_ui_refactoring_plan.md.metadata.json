@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "Refactor SettingsPage to use iOS 26 Grouped List style. Extend iOS26.xaml with new styles for Settings Groups and Items.",
-  "updatedAt": "2026-02-11T13:54:18.057684300Z"
-}

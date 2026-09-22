@@ -1,0 +1,175 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================ -->
+    <!-- iOS 26 磨砂玻璃滚动条 (Glass ScrollBar)       -->
+    <!-- 4px 细条，hover 展开 8px，半透明，自动淡出      -->
+    <!-- ============================================ -->
+
+    <!-- Thumb (拖拽条) -->
+    <Style x:Key="GlassScrollBarThumb" TargetType="Thumb">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="ThumbBorder"
+                            Background="{DynamicResource ScrollBarBrush}"
+                            CornerRadius="3"
+                            Margin="1"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource ScrollBarHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource ScrollBarHoverBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- RepeatButton (track 背景，不可见) -->
+    <Style x:Key="GlassScrollBarPageButton" TargetType="RepeatButton">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 竖向 ScrollBar -->
+    <ControlTemplate x:Key="GlassVerticalScrollBar" TargetType="ScrollBar">
+        <Grid x:Name="Root" Width="6">
+            <Border Background="{DynamicResource Surface4Brush}" CornerRadius="3"/>
+            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource GlassScrollBarPageButton}"
+                                  Command="ScrollBar.PageUpCommand"/>
+                </Track.DecreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource GlassScrollBarThumb}" MinHeight="30"/>
+                </Track.Thumb>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource GlassScrollBarPageButton}"
+                                  Command="ScrollBar.PageDownCommand"/>
+                </Track.IncreaseRepeatButton>
+            </Track>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Root" Property="Width" Value="10"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- 横向 ScrollBar -->
+    <ControlTemplate x:Key="GlassHorizontalScrollBar" TargetType="ScrollBar">
+        <Grid x:Name="Root" Height="6">
+            <Border Background="{DynamicResource Surface4Brush}" CornerRadius="3"/>
+            <Track x:Name="PART_Track" IsDirectionReversed="False">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource GlassScrollBarPageButton}"
+                                  Command="ScrollBar.PageLeftCommand"/>
+                </Track.DecreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource GlassScrollBarThumb}" MinWidth="30"/>
+                </Track.Thumb>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource GlassScrollBarPageButton}"
+                                  Command="ScrollBar.PageRightCommand"/>
+                </Track.IncreaseRepeatButton>
+            </Track>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Root" Property="Height" Value="10"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- ScrollViewer 模板（供 ResourceDetailPage / 右栏 / 筛选下拉等引用）
+
+         ⚠⚠ 这里曾经是「滚动条跑到容器正中间」的根因：
+         原来的 Grid **没有 RowDefinitions / ColumnDefinitions**，于是竖向 ScrollBar 和横向
+         ScrollBar 全被塞进同一个默认单元格（占满整个宽高）。而全局 ScrollBar 样式给竖向条
+         写死了 `Width="10"`，`HorizontalAlignment` 又是默认的 Stretch —— 在 WPF 里
+         「显式 Width + Stretch 对齐」= **在可用空间里水平居中**，所以那条 6~10px 的
+         滑块就笔直地出现在内容正中间（描述卡片、右栏、筛选下拉里都是）。
+
+         正确写法就是 WPF 默认模板那样：两行两列，内容占 [0,0]，竖条占 [0,1]，横条占 [1,0]。 -->
+    <ControlTemplate x:Key="GlassScrollViewer" TargetType="ScrollViewer">
+        <Grid Background="{TemplateBinding Background}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                    Grid.Row="0" Grid.Column="0"
+                                    CanContentScroll="{TemplateBinding CanContentScroll}"
+                                    CanHorizontallyScroll="False"
+                                    CanVerticallyScroll="False"
+                                    Content="{TemplateBinding Content}"
+                                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                                    Margin="{TemplateBinding Padding}"/>
+
+            <!-- 滚动条**不显示**，但滚动功能保留。
+                 ⚠ 两个 ScrollBar 必须留着（ScrollViewer 靠 PART_VerticalScrollBar /
+                 PART_HorizontalScrollBar 这两个命名部件驱动），只是把 Visibility 钉死为 Collapsed：
+                   * Auto 列宽会自动塌成 0，内容区拿到完整宽度，不会留一条空白边
+                   * 滚动逻辑走的是 ScrollContentPresenter（IScrollInfo），跟 ScrollBar 的可视与否无关，
+                     所以滚轮 / 触控板 / PageUp-PageDown / 方向键全部照常工作
+                 想换成「hover 才淡入」的覆盖式滚动条，只要把这两个 Visibility 改回
+                 {TemplateBinding Computed*ScrollBarVisibility} 即可。 -->
+            <ScrollBar x:Name="PART_VerticalScrollBar"
+                       Grid.Row="0" Grid.Column="1"
+                       Orientation="Vertical"
+                       HorizontalAlignment="Right"
+                       ViewportSize="{TemplateBinding ViewportHeight}"
+                       Maximum="{TemplateBinding ScrollableHeight}"
+                       Visibility="Collapsed"
+                       Cursor="Arrow"
+                       AutomationProperties.AutomationId="VerticalScrollBar"/>
+
+            <ScrollBar x:Name="PART_HorizontalScrollBar"
+                       Grid.Row="1" Grid.Column="0"
+                       Orientation="Horizontal"
+                       VerticalAlignment="Bottom"
+                       ViewportSize="{TemplateBinding ViewportWidth}"
+                       Maximum="{TemplateBinding ScrollableWidth}"
+                       Visibility="Collapsed"
+                       Cursor="Arrow"
+                       AutomationProperties.AutomationId="HorizontalScrollBar"/>
+        </Grid>
+    </ControlTemplate>
+
+    <!-- 全局 ScrollBar 覆盖样式 -->
+    <Style TargetType="ScrollBar">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Width" Value="10"/>
+                <Setter Property="Height" Value="Auto"/>
+                <Setter Property="Template" Value="{StaticResource GlassVerticalScrollBar}"/>
+            </Trigger>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto"/>
+                <Setter Property="Height" Value="10"/>
+                <Setter Property="Template" Value="{StaticResource GlassHorizontalScrollBar}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+</ResourceDictionary>

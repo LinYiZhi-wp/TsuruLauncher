@@ -1,5 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_WALKTHROUGH",
-  "summary": "记录Phase 5资源页开发成果，包括Modrinth API集成、瀑布流UI设计、模组搜索与递归下载、整合包导入(.mrpack)功能。",
-  "updatedAt": "2026-02-11T13:43:45.496493Z"
-}

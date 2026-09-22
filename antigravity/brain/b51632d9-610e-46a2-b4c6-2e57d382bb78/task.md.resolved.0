@@ -1,6 +1,0 @@
-# Task: Fix Minecraft Launch for 1.19.1+
-
-- [ ] Analyze [LaunchService.cs](file:///c:/Users/Linyizhi/.gemini/GeminiLauncher/Services/LaunchService.cs) to understand launch logic <!-- id: 0 -->
-- [ ] Identify the cause of failure for 1.19.1+ <!-- id: 1 -->
-- [ ] Implement a fix for the launch issue <!-- id: 2 -->
-- [ ] Verify the fix <!-- id: 3 -->
