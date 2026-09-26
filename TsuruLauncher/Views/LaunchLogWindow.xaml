@@ -1,6 +1,7 @@
 <Window x:Class="TsuruLauncher.Views.LaunchLogWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:anim="clr-namespace:TsuruLauncher.Services.Animation"
         Title="启动日志 · Tsuru Launcher"
         Height="580" Width="960"
         MinHeight="360" MinWidth="640"
@@ -19,12 +20,34 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="Bd" CornerRadius="8" Background="#1A212C" Padding="{TemplateBinding Padding}">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
+                            <Grid>
+                                <Border x:Name="Bd" CornerRadius="8" Background="#1A212C"/>
+
+                                <!-- 悬停高亮：叠加层动画（原来 Setter 改 Background 是硬切） -->
+                                <Border x:Name="HoverBd" CornerRadius="8" Background="#232C3A"
+                                        Opacity="0" IsHitTestVisible="False"/>
+
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Margin="{TemplateBinding Padding}"/>
+                            </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#232C3A"/>
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                                 To="1" Duration="0:0:0.14" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                                 To="0" Duration="0:0:0.12" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -37,12 +60,34 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="Bd" CornerRadius="8" Background="#4ADE80" Padding="{TemplateBinding Padding}">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
+                            <Grid>
+                                <Border x:Name="Bd" CornerRadius="8" Background="#4ADE80"/>
+
+                                <!-- 悬停高亮：叠加层动画（原来 Setter 改 Background 是硬切） -->
+                                <Border x:Name="HoverBd" CornerRadius="8" Background="#6EE79A"
+                                        Opacity="0" IsHitTestVisible="False"/>
+
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Margin="{TemplateBinding Padding}"/>
+                            </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#6EE79A"/>
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                                 To="1" Duration="0:0:0.14" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                                 To="0" Duration="0:0:0.12" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

@@ -49,9 +49,12 @@ namespace TsuruLauncher.Views
             // TSURU_SELFTEST=resourcespage：把「两边收起 / 展开全部 / 切分类是否会退出展开」这一套
             // 全部按一次打日志 + 截图，方便定位 bug（用户的四个反馈都集中在这一页）。
             // TSURU_SELFTEST=collapsonly：只跑「收起 → 截图」，不污染其他步骤。
+            // TSURU_SELFTEST=resourceslayout：网格列数（按分类）+ 网格/列表切换。
             string selfTest = Environment.GetEnvironmentVariable("TSURU_SELFTEST");
             if (selfTest == "resourcespage" || selfTest == "collapsonly")
                 Loaded += async (_, __) => { await Task.Delay(2500).ConfigureAwait(true); Dispatcher.BeginInvoke(RunResourcesSelfTest, DispatcherPriority.Background); };
+            else if (selfTest == "resourceslayout")
+                Loaded += async (_, __) => { await Task.Delay(3500).ConfigureAwait(true); Dispatcher.BeginInvoke(RunLayoutSelfTest, DispatcherPriority.Background); };
         }
 
         #region 内容切换动效（类别切换 / 搜索结果出现）
@@ -242,8 +245,21 @@ namespace TsuruLauncher.Views
         {
             try
             {
-                if (SearchGridResults != null) SearchGridResults.Visibility = list ? Visibility.Collapsed : Visibility.Visible;
-                if (SearchListResults != null) SearchListResults.Visibility = list ? Visibility.Visible : Visibility.Collapsed;
+                // ⚠ 精选区（热门 / 最新）也要一起切！
+                //   之前只切了 SearchGridResults / SearchListResults —— 那两块只在**搜索结果**
+                //   状态下可见，而用户看的是「热门 / 最新」的精选页，所以点切换按钮「没反应」。
+                Apply(SearchGridResults, !list);
+                Apply(SearchListResults, list);
+
+                Apply(FeaturedTrendingGrid, !list);
+                Apply(FeaturedTrendingList, list);
+                Apply(FeaturedNewestGrid, !list);
+                Apply(FeaturedNewestList, list);
+
+                static void Apply(UIElement? el, bool visible)
+                {
+                    if (el != null) el.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                }
             }
             catch (Exception ex)
             {
@@ -1055,7 +1071,139 @@ namespace TsuruLauncher.Views
             }
         }
 
+        /// <summary>
+        /// 量第一张网格卡片：底部行「下载量」和「+ 安装」按钮有没有重叠。
+        /// 纯看截图容易看走眼，这里直接算坐标区间。
+        /// </summary>
+        private void MeasureFirstCard()
+        {
+            try
+            {
+                var host = FeaturedTrendingGrid ?? (DependencyObject?)SearchGridResults;
+                if (host == null) return;
+
+                var card = FindVisualChildren<Border>(host)
+                    .FirstOrDefault(b => b.ActualWidth > 1 && FindVisualChildren<Button>(b).Any());
+                if (card == null) { Log("[LayoutSelfTest] 没找到卡片"); return; }
+
+                // 下载量用的是 <Run>，TextBlock.Text 是空的 —— 得从 Inlines 里找
+                // （📥 是代理对，不能写成 char 字面量，用 string.Contains）
+                var dl = FindVisualChildren<TextBlock>(card).FirstOrDefault(t =>
+                    t.Inlines.OfType<System.Windows.Documents.Run>().Any(r => (r.Text ?? "").Contains("📥")));
+                var btn = FindVisualChildren<Button>(card).FirstOrDefault();
+                if (dl == null || btn == null) { Log("[LayoutSelfTest] 卡片里没找到下载量 / 按钮"); return; }
+
+                double dlX = dl.TransformToAncestor(card).Transform(new Point(0, 0)).X;
+                double btnX = btn.TransformToAncestor(card).Transform(new Point(0, 0)).X;
+                double dlRight = dlX + dl.ActualWidth;
+                bool overlap = dlRight > btnX + 0.5;
+
+                Log($"[LayoutSelfTest]   卡片宽={card.ActualWidth:F0} 下载量=[{dlX:F0},{dlRight:F0}] " +
+                    $"按钮=[{btnX:F0},{btnX + btn.ActualWidth:F0}] " +
+                    $"{(overlap ? "❌ 重叠" : "✅ 不重叠")}");
+            }
+            catch (Exception ex) { Log($"[LayoutSelfTest] MeasureFirstCard 异常: {ex.Message}"); }
+        }
+
         #region 自检（TSURU_SELFTEST=resourcespage）
+
+        /// <summary>
+        /// 网格布局自检：逐个分类看 ResponsiveWrapPanel 实际算出多少列、列宽多少，
+        /// 最后再验一次网格 / 列表切换是否真的换了可见性。
+        /// </summary>
+        private void RunLayoutSelfTest()
+        {
+            string shotDir = Environment.GetEnvironmentVariable("TSURU_SHOT_DIR") ?? string.Empty;
+            var cats = new (string Id, string Label)[]
+            {
+                ("mod", "模组"), ("modpack", "整合包"), ("resourcepack", "资源包"),
+                ("shader", "光影"), ("datapack", "数据包"),
+            };
+
+            var t = new System.Windows.Threading.DispatcherTimer(
+                TimeSpan.FromMilliseconds(2200),   // 慢一点，等分类数据真的加载完再截图（否则拍到骨架屏）
+                DispatcherPriority.Background, (a, b) => { }, Dispatcher);
+
+            int step = 0;
+            bool infoPanelClosed = false;
+            bool toggleTested = false;
+            t.Tick += (s, e) =>
+            {
+                try
+                {
+                    if (DataContext is not ViewModels.ResourcesViewModel vm) { t.Stop(); return; }
+
+                    // 先收起右侧「筛选」面板 —— 用户截图里它是关着的，
+                    // 网格可用宽度才是他实际看到的那个（开着只剩 535px，列数自然少）
+                    if (!infoPanelClosed)
+                    {
+                        infoPanelClosed = true;
+                        if (Application.Current.MainWindow is MainWindow mw)
+                        {
+                            mw.ToggleInfoPanelForSelfTest();
+                            Log("[LayoutSelfTest] 已收起右侧筛选面板");
+                        }
+                        return;   // 等下一拍让布局稳定再开始量
+                    }
+
+                    // 头两拍先验切换（此时预加载的模组数据还在，能看到真实列表行）
+                    if (!toggleTested)
+                    {
+                        if (step == 0)
+                        {
+                            Log($"[LayoutSelfTest] 切换前：IsListView={vm.IsListView} " +
+                                $"精选网格={FeaturedTrendingGrid?.Visibility} 精选列表={FeaturedTrendingList?.Visibility} " +
+                                $"搜索网格={SearchGridResults?.Visibility} 搜索列表={SearchListResults?.Visibility}");
+                            vm.ToggleDisplayModeCommand.Execute(null);
+                        }
+                        else
+                        {
+                            bool l = vm.IsListView;
+                            Log($"[LayoutSelfTest] 切换后：IsListView={l} " +
+                                $"精选网格={FeaturedTrendingGrid?.Visibility} 精选列表={FeaturedTrendingList?.Visibility} " +
+                                $"{(l && FeaturedTrendingList?.Visibility == Visibility.Visible ? "✅ 精选区也切到列表了" : "❌ 精选区没跟着切")}");
+                            Shot(shotDir, "20-列表模式");
+                            // 切回网格继续量列数
+                            vm.ToggleDisplayModeCommand.Execute(null);
+                            toggleTested = true;
+                            step = -1;   // 下面 step++ 后归零，分类循环从「模组」重新开始
+                        }
+                        step++;
+                        return;
+                    }
+
+                    int idx = step / 2;
+
+                    if (idx >= cats.Length)
+                    {
+                        Log("[LayoutSelfTest] ✅ 完成");
+                        t.Stop();
+                        return;
+                    }
+
+                    if (step % 2 == 0)
+                    {
+                        // 奇数拍：切分类（下一拍布局已稳定，再读数）
+                        vm.SelectedCategory = cats[idx].Id;
+                    }
+                    else
+                    {
+                        var p = FindVisualChildren<Controls.ResponsiveWrapPanel>(this).FirstOrDefault();
+                        Log($"[LayoutSelfTest] {cats[idx].Label}：目标宽={vm.GridTargetItemWidth} " +
+                            $"面板可用宽={p?.ActualWidth:F0} → 列数={p?.ActualColumns} 实际列宽={p?.ActualItemWidth:F0}");
+                        Shot(shotDir, $"1{idx}-{cats[idx].Label}");
+                        MeasureFirstCard();
+                    }
+                    step++;
+                }
+                catch (Exception ex)
+                {
+                    Log($"[LayoutSelfTest] 异常: {ex.GetType().Name} {ex.Message}");
+                    t.Stop();
+                }
+            };
+            t.Start();
+        }
 
         private void RunResourcesSelfTest()
         {

@@ -28,7 +28,10 @@
         <Style x:Key="NavRailButton" TargetType="RadioButton">
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+            <!-- ⚠ 未选中态原来用 TextDimBrush（= 最淡的 T4，本来是给「禁用」用的），
+                 浅色模式下和背景几乎同色，导航栏根本看不清。
+                 换成 TextSecondary（T2）：两个主题下都清晰，又比选中的强调色弱一档。 -->
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
@@ -195,7 +198,9 @@
 
         <Style x:Key="PanelMiniLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="10"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+            <!-- ⚠ TextDimBrush 是最淡的一层（给「禁用」用的），浅色模式下基本看不清。
+                 小标签用 TextTertiary 就够弱了，但还读得出来。 -->
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
         </Style>
 
         <Style x:Key="PanelMiniValue" TargetType="TextBlock">
@@ -486,7 +491,8 @@
                             BorderBrush="{DynamicResource AccentBorderBrush}" BorderThickness="1"
                             CornerRadius="{StaticResource RadiusSmall}" Padding="6,1" Margin="10,0,0,0"
                             VerticalAlignment="Center">
-                        <TextBlock Text="v2.0.0" FontSize="10" Foreground="{DynamicResource AccentBrush}"/>
+                        <!-- 版本号由代码从程序集读取，别再写死（写死过一次：v2.1.0 的包里还显示 v2.0.0） -->
+                        <TextBlock x:Name="VersionText" FontSize="10" Foreground="{DynamicResource AccentBrush}"/>
                     </Border>
 
                     <Border Width="1" Height="18" Margin="12,0,8,0" VerticalAlignment="Center"
@@ -508,7 +514,7 @@
                 </StackPanel>
 
                 <TextBlock x:Name="TopBarStatus" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource TextDimBrush}"
+                           Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"
                            TextTrimming="CharacterEllipsis" Margin="12,0"/>
 
                 <!-- right: bell + reload + instance state + window chrome -->
@@ -626,6 +632,13 @@
                                 <StackPanel>
                                     <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="18" HorizontalAlignment="Center"/>
                                     <TextBlock Text="下载" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton Style="{StaticResource NavRailButton}" Tag="skin" Checked="NavRail_Checked" Click="NavRail_Click"
+                                         motion:PageAnimation.NavItemIn="True">
+                                <StackPanel>
+                                    <TextBlock Text="&#128085;" FontSize="17" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="皮肤" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/>
                                 </StackPanel>
                             </RadioButton>
                             <RadioButton Style="{StaticResource NavRailButton}" Tag="lab" Checked="NavRail_Checked" Click="NavRail_Click"
@@ -1244,7 +1257,7 @@
                     </Border>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock x:Name="PreloadNotifTitle" Text="正在预加载资源..." FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                        <TextBlock x:Name="PreloadNotifDetail" Text="" FontSize="10" Foreground="{DynamicResource TextDimBrush}" Margin="0,1,0,0"/>
+                        <TextBlock x:Name="PreloadNotifDetail" Text="" FontSize="10" Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,1,0,0"/>
                     </StackPanel>
                     <ProgressBar x:Name="PreloadNotifProgress" Width="60" Height="3" Background="{DynamicResource Surface5Brush}" Foreground="{DynamicResource AccentBrush}"
                                  BorderThickness="0" VerticalAlignment="Center" Margin="12,0,0,0" Maximum="100" Minimum="0"/>

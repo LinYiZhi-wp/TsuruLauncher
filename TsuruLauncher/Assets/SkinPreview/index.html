@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Skin Preview</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background: transparent;
+  }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+</style>
+</head>
+<body>
+<script type="module">
+import * as THREE from './three.module.js';
+
+// ══════════════════════════════════════════════════════════════════
+//  Minecraft 皮肤 3D 预览（three.js 版）
+//
+//  为什么改用网页渲染：WPF 的 Viewport3D 采样贴图**只有双线性插值**、
+//  没有最近邻选项，而且透明层（第二层）没有逐像素深度排序 ——
+//  手搓永远追不上 WebGL。这里用 three.js 就三行搞定：
+//    magFilter = NearestFilter      → 像素锐利
+//    transparent + depthWrite=false → 第二层正确叠上去
+//
+//  模型布局、光照、相机全部照抄 Axolotl 源码：
+//    · 环境光 : 方向光 = 2 : 1.2，只有一盏方向光
+//    · FOV 35、相机水平不俯视
+//    · 默认旋转 15.75°
+// ══════════════════════════════════════════════════════════════════
+
+const TEX = 64;                       // 皮肤贴图固定 64×64
+const HEAD = 8, BODY_W = 8, BODY_H = 12, BODY_D = 4;
+const LIMB_W = 4, LIMB_H = 12, LIMB_D = 4;
+const OVERLAY_GROW = 0.5;             // 第二层每边外扩 0.25
+
+// ── 场景 ──────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setClearAlpha(0);
+renderer.setPixelRatio(window.devicePixelRatio || 1);
+document.body.appendChild(renderer.domElement);
+
+// 相机：FOV 35、水平（position 和 target 同 y），比模型中心略低一点
+const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 500);
+const CAM_DIST = 74, CAM_Y = -2;
+camera.position.set(0, CAM_Y, CAM_DIST);
+camera.lookAt(0, CAM_Y, 0);
+
+// 光照：环境 2 + 单盏方向光 1.2（Axolotl 的配比）
+scene.add(new THREE.AmbientLight(0xffffff, 2));
+const key = new THREE.DirectionalLight(0xffffff, 1.2);
+key.position.set(-3, 4, -2);
+scene.add(key);
+
+// ── 皮肤方块 ──────────────────────────────────────────────────────
+const model = new THREE.Group();
+model.rotation.y = THREE.MathUtils.degToRad(15.75);
+scene.add(model);
+
+let skinMaterial = null;
+let capeMaterial = null;
+
+/**
+ * 一个面：4 个顶点（从外面看逆时针）+ 4 个 UV（贴图左上角为原点）。
+ * 顶点按 (dx, dy, dz) 相对方块的 0/1 比例给出，乘上尺寸再加原点。
+ */
+function faceGeometry(w, h, d, x, y, z, corners, uvRect) {
+  const [u, v, fw, fh] = uvRect;
+  const pos = [], uvs = [];
+  // ⚠ 顶点顺序是「左下 → 右下 → 右上 → 左上」，所以 UV 也必须按这个顺序：
+  //   贴图的 (u,v) 是**左上角**，左下角对应的 v 要 +fh。
+  //   这里之前写反了（左下角配了左上角的 UV），整个模型贴图上下颠倒 ——
+  //   表现是裤子颜色上灰下棕（正常应该反过来）。
+  const uv4 = [
+    [u / TEX, (v + fh) / TEX],
+    [(u + fw) / TEX, (v + fh) / TEX],
+    [(u + fw) / TEX, v / TEX],
+    [u / TEX, v / TEX],
+  ];
+  corners.forEach((c, i) => {
+    pos.push(x + c[0] * w, y + c[1] * h, z + c[2] * d);
+    uvs.push(uv4[i][0], uv4[i][1]);
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  g.computeVertexNormals();
+  return g;
+}
+
+// 六个面的顶点顺序（从外面看逆时针）—— 顺序对应 UV 的 左上/右上/右下/左下
+const F = {
+  front:  [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]],
+  back:   [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]],
+  left:   [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]],
+  right:  [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]],
+  top:    [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]],
+  bottom: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]],
+};
+
+/**
+ * 加一个方块（6 个面各自从贴图上取一块 UV）。
+ * uv = { top:[u,v,w,h], bottom, right, left, front, back }
+ * 顺序和 WPF 版一致：top, bottom, right, left, front, back
+ */
+function addBox(group, w, h, d, x, y, z, uv, material) {
+  const order = ['front', 'back', 'left', 'right', 'top', 'bottom'];
+  const map = {
+    front: 'front', back: 'back', left: 'left', right: 'right', top: 'top', bottom: 'bottom',
+  };
+  for (const name of order) {
+    const rect = uv[map[name]];
+    if (!rect) continue;
+    const [u, v, fw, fh] = rect;
+    group.add(new THREE.Mesh(
+      faceGeometry(w, h, d, x, y, z, F[name], [u, v, fw, fh]),
+      material || skinMaterial
+    ));
+  }
+}
+
+/**
+ * 建整个角色。
+ * slim = 纤细模型（手臂 3 格宽）
+ * 每个部件是一个 Group，四肢各自挂在一个「关节」子节点上，方便做 idle 动画。
+ */
+let joints = null;
+
+function buildCharacter(slim) {
+  // 清掉旧的
+  while (model.children.length) {
+    const c = model.children.pop();
+    c.traverse?.(o => { if (o.geometry) o.geometry.dispose(); });
+  }
+
+  const armW = slim ? 3 : LIMB_W;
+  const g = new THREE.Group();
+  model.add(g);
+
+  // ── 头（绕脖子）──
+  const headJoint = new THREE.Group();
+  headJoint.position.set(0, LIMB_H + BODY_H, 0);
+  g.add(headJoint);
+  const head = new THREE.Group();
+  head.position.set(0, -(LIMB_H + BODY_H), 0);
+  headJoint.add(head);
+
+  addBox(head, HEAD, HEAD, HEAD, -HEAD / 2, LIMB_H + BODY_H, -HEAD / 2, {
+    top: [8, 0, 8, 8], bottom: [16, 0, 8, 8], right: [0, 8, 8, 8],
+    left: [16, 8, 8, 8], front: [8, 8, 8, 8], back: [24, 8, 8, 8],
+  });
+  addBox(head, HEAD + OVERLAY_GROW, HEAD + OVERLAY_GROW, HEAD + OVERLAY_GROW,
+    -HEAD / 2 - 0.25, LIMB_H + BODY_H - 0.25, -HEAD / 2 - 0.25, {
+    top: [40, 0, 8, 8], bottom: [48, 0, 8, 8], right: [32, 8, 8, 8],
+    left: [48, 8, 8, 8], front: [40, 8, 8, 8], back: [56, 8, 8, 8],
+  });
+
+  // ── 身体 ──
+  const body = new THREE.Group();
+  g.add(body);
+  addBox(body, BODY_W, BODY_H, BODY_D, -BODY_W / 2, LIMB_H, -BODY_D / 2, {
+    top: [20, 16, 8, 4], bottom: [28, 16, 8, 4], right: [16, 20, 4, 12],
+    left: [28, 20, 4, 12], front: [20, 20, 8, 12], back: [32, 20, 8, 12],
+  });
+  addBox(body, BODY_W + OVERLAY_GROW, BODY_H + OVERLAY_GROW, BODY_D + OVERLAY_GROW,
+    -BODY_W / 2 - 0.25, LIMB_H - 0.25, -BODY_D / 2 - 0.25, {
+    top: [20, 32, 8, 4], bottom: [28, 32, 8, 4], right: [16, 36, 4, 12],
+    left: [28, 36, 4, 12], front: [20, 36, 8, 12], back: [32, 36, 8, 12],
+  });
+
+  // ── 手臂（绕肩）──
+  function arm(side) {
+    const sign = side === 'right' ? -1 : 1;
+    const ax = sign < 0 ? -BODY_W / 2 - armW : BODY_W / 2;
+    const jointX = ax + armW / 2;
+
+    const joint = new THREE.Group();
+    joint.position.set(jointX, LIMB_H + BODY_H, 0);
+    g.add(joint);
+    const grp = new THREE.Group();
+    grp.position.set(-jointX, -(LIMB_H + BODY_H), 0);
+    joint.add(grp);
+
+    const base = side === 'right'
+      ? { top: [44, 16, armW, 4], bottom: [44 + armW, 16, armW, 4], right: [40, 20, 4, 12],
+          left: [44 + armW, 20, 4, 12], front: [44, 20, armW, 12], back: [48 + armW, 20, armW, 12] }
+      : { top: [36, 48, armW, 4], bottom: [36 + armW, 48, armW, 4], right: [32, 52, 4, 12],
+          left: [36 + armW, 52, 4, 12], front: [36, 52, armW, 12], back: [40 + armW, 52, armW, 12] };
+
+    addBox(grp, armW, LIMB_H, LIMB_D, ax, LIMB_H, -LIMB_D / 2, base);
+
+    const ov = side === 'right'
+      ? { top: [44, 32, armW, 4], bottom: [44 + armW, 32, armW, 4], right: [40, 36, 4, 12],
+          left: [44 + armW, 36, 4, 12], front: [44, 36, armW, 12], back: [48 + armW, 36, armW, 12] }
+      : { top: [52, 48, armW, 4], bottom: [52 + armW, 48, armW, 4], right: [48, 52, 4, 12],
+          left: [52 + armW, 52, 4, 12], front: [52, 52, armW, 12], back: [56 + armW, 52, armW, 12] };
+
+    addBox(grp, armW + OVERLAY_GROW, LIMB_H + OVERLAY_GROW, LIMB_D + OVERLAY_GROW,
+      ax - 0.25, LIMB_H - 0.25, -LIMB_D / 2 - 0.25, ov);
+
+    return joint;
+  }
+
+  // ── 腿（绕髋）──
+  function leg(side) {
+    const lx = side === 'right' ? -LIMB_W : 0;
+    const jointX = lx + LIMB_W / 2;
+
+    const joint = new THREE.Group();
+    joint.position.set(jointX, LIMB_H, 0);
+    g.add(joint);
+    const grp = new THREE.Group();
+    grp.position.set(-jointX, -LIMB_H, 0);
+    joint.add(grp);
+
+    const base = side === 'right'
+      ? { top: [4, 16, 4, 4], bottom: [8, 16, 4, 4], right: [0, 20, 4, 12],
+          left: [8, 20, 4, 12], front: [4, 20, 4, 12], back: [12, 20, 4, 12] }
+      : { top: [20, 48, 4, 4], bottom: [24, 48, 4, 4], right: [16, 52, 4, 12],
+          left: [24, 52, 4, 12], front: [20, 52, 4, 12], back: [28, 52, 4, 12] };
+
+    addBox(grp, LIMB_W, LIMB_H, LIMB_D, lx, 0, -LIMB_D / 2, base);
+
+    const ov = side === 'right'
+      ? { top: [0, 32, 4, 4], bottom: [4, 32, 4, 4], right: [0, 36, 4, 12],
+          left: [4, 36, 4, 12], front: [4, 36, 4, 12], back: [8, 36, 4, 12] }
+      : { top: [0, 48, 4, 4], bottom: [4, 48, 4, 4], right: [0, 52, 4, 12],
+          left: [4, 52, 4, 12], front: [4, 52, 4, 12], back: [8, 52, 4, 12] };
+
+    addBox(grp, LIMB_W + OVERLAY_GROW, LIMB_H + OVERLAY_GROW, LIMB_D + OVERLAY_GROW,
+      lx - 0.25, -0.25, -LIMB_D / 2 - 0.25, ov);
+
+    return joint;
+  }
+
+  const armR = arm('right');
+  const armL = arm('left');
+  const legR = leg('right');
+  const legL = leg('left');
+
+  // ── 披风 ──
+  // 10×16×1 的方块，挂在肩膀后面（本体背面在 z=-2，所以披风占 z -3..-2）。
+  // 贴图布局（披风贴图左上角 22×17 那块）：
+  //   标准方块展开（w=10,h=16,d=1，贴图原点 (0,0)）：
+  //     top(1,0)10×1  bottom(11,0)10×1  right(0,1)1×16  front(1,1)10×16  left(11,1)1×16  back(12,1)10×16
+  //   ⚠ 我之前把 front/back 写反了、top/bottom 也取错，披风看起来几乎全透明。
+  // 挂在一个 Joint 上，做轻微摆动（Minecraft 里披风会飘）。
+  const capeJoint = new THREE.Group();
+  capeJoint.position.set(0, LIMB_H + BODY_H, 0);   // 肩部
+  g.add(capeJoint);
+  const capeGrp = new THREE.Group();
+  capeGrp.position.set(0, -(LIMB_H + BODY_H), 0);
+  capeJoint.add(capeGrp);
+
+  if (capeMaterial) {
+    addBox(capeGrp, 10, 16, 1, -5, 8, -3, {
+      top: [1, 0, 10, 1], bottom: [11, 0, 10, 1], right: [0, 1, 1, 16],
+      left: [11, 1, 1, 16], front: [1, 1, 10, 16], back: [12, 1, 10, 16],
+    }, capeMaterial);
+  }
+
+  // 让模型中心落在原点（模型自身 y 范围 0..32）
+  g.position.y = -(LIMB_H + BODY_H + HEAD) / 2;
+
+  joints = { head: headJoint, armR, armL, legR, legL, cape: capeJoint };
+}
+
+/**
+ * 自检用：**直接读 WebGL 画布**，证明实际渲染出来的是什么。
+ * （不能靠 WebView2 的 CapturePreviewAsync —— 它抓到的是合成器的缓存帧，
+ *   页面没重绘时给的是旧画面，会误判成"皮肤没换"。）
+ */
+function canvasSignature() {
+  renderer.render(scene, camera);
+  const gl = renderer.getContext();
+  const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+  const px = new Uint8Array(w * h * 4);
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] > 8) { r += px[i]; g += px[i + 1]; b += px[i + 2]; n++; }
+  }
+  return n ? `画布平均色(${Math.round(r / n)},${Math.round(g / n)},${Math.round(b / n)}) 像素${n}` : '画布空白';
+}
+
+// 把状态回报给 C#（排查用）
+function report(msg) {
+  try { window.chrome?.webview?.postMessage('skinpreview: ' + msg); } catch (e) { }
+}
+
+// ── 贴图 ──────────────────────────────────────────────────────────
+let lastSlim = false;
+function applySkin(dataUrl, slim) {
+  lastSlim = !!slim;
+  report(`applySkin 收到 len=${dataUrl.length} slim=${slim}`);
+
+  const loader = new THREE.TextureLoader();
+  loader.load(dataUrl, (tex) => {
+    // ⚠ 两个关键设置，也是换到 WebGL 的根本原因：
+    //   flipY = false        → UV(0,0) 对应贴图**左上角**，方块 UV 可以直接按像素写
+    //   NearestFilter        → 像素风锐利。WPF 的 Viewport3D **只有双线性插值**，没有这个选项
+    tex.flipY = false;
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    tex.colorSpace = THREE.SRGBColorSpace;
+
+    const old = skinMaterial;
+    skinMaterial = new THREE.MeshLambertMaterial({
+      map: tex,
+      transparent: true,
+      // 完全透明的像素直接丢弃 —— 否则第二层的大方块会和本体抢深度
+      alphaTest: 0.02,
+      side: THREE.FrontSide,
+    });
+    if (old) { old.map?.dispose(); old.dispose(); }
+
+    buildCharacter(slim);
+
+    // 贴图指纹：算一下当前材质的平均色，确认换的是哪张图
+    let sig = 'n/a';
+    try {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(tex.image, 0, 0);
+      const d = ctx.getImageData(0, 0, 64, 64).data;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] > 8) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+      }
+      sig = n ? `平均色(${Math.round(r / n)},${Math.round(g / n)},${Math.round(b / n)}) 不透明${n}px` : '全透明';
+    } catch (e) { sig = '算指纹失败 ' + e.message; }
+
+    report(`贴图加载成功 ${tex.image?.width}×${tex.image?.height} 贴图指纹=${sig} ${canvasSignature()}`);
+    if (typeof onModelReady === 'function') onModelReady();
+  },
+  undefined,
+  (err) => report(`⚠ 贴图加载失败 ${err?.message || err}`));
+}
+
+// ── 交互：拖动只转左右 ────────────────────────────────────────────
+let yaw = 15.75;
+let dragging = false, lastX = 0;
+const el = renderer.domElement;
+
+el.addEventListener('pointerdown', (e) => {
+  dragging = true; lastX = e.clientX;
+  el.classList.add('dragging');
+  el.setPointerCapture(e.pointerId);
+});
+el.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  yaw += (e.clientX - lastX) * 0.6;
+  lastX = e.clientX;
+  model.rotation.y = THREE.MathUtils.degToRad(yaw);
+});
+el.addEventListener('pointerup', (e) => {
+  dragging = false;
+  el.classList.remove('dragging');
+  el.releasePointerCapture?.(e.pointerId);
+});
+
+// ── idle 动画（对应 Axolotl 的 baseAnimation: 'idle'）─────────────
+const IDLE_PERIOD = 2.6;
+const clock = new THREE.Clock();
+
+function tick() {
+  requestAnimationFrame(tick);
+  const t = clock.getElapsedTime();
+  const swing = Math.sin((t / IDLE_PERIOD) * Math.PI * 2);
+
+  if (joints) {
+    joints.armR.rotation.x = swing * THREE.MathUtils.degToRad(5);
+    joints.armL.rotation.x = -swing * THREE.MathUtils.degToRad(5);
+    joints.legR.rotation.x = -swing * THREE.MathUtils.degToRad(2.5);
+    joints.legL.rotation.x = swing * THREE.MathUtils.degToRad(2.5);
+    joints.head.rotation.x = Math.sin((t / IDLE_PERIOD) * Math.PI) * THREE.MathUtils.degToRad(1.2);
+    // 披风轻轻飘（比身体慢一点、幅度小一点）
+    joints.cape.rotation.x = Math.sin((t / IDLE_PERIOD) * Math.PI * 0.75) * THREE.MathUtils.degToRad(1.8);
+  }
+  renderer.render(scene, camera);
+}
+tick();
+
+// ── 尺寸自适应 ────────────────────────────────────────────────────
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(h, 1);
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── 给 C# 调的接口 ────────────────────────────────────────────────
+let onModelReady = null;
+
+window.skinPreview = {
+  /** 设置皮肤。dataUrl 是 "data:image/png;base64,..." */
+  setSkin(dataUrl, slim) {
+    applySkin(dataUrl, !!slim);
+  },
+  /** 设置披风。dataUrl 传空字符串 = 没有披风。 */
+  setCape(dataUrl) {
+    const oldMat = capeMaterial;
+    if (!dataUrl) {
+      capeMaterial = null;
+    } else {
+      const loader = new THREE.TextureLoader();
+      loader.load(dataUrl, (tex) => {
+        tex.flipY = false;
+        tex.magFilter = THREE.NearestFilter;
+        tex.minFilter = THREE.NearestFilter;
+        tex.generateMipmaps = false;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        capeMaterial = new THREE.MeshLambertMaterial({
+          map: tex, transparent: true, alphaTest: 0.02, side: THREE.FrontSide,
+        });
+        if (oldMat) { oldMat.map?.dispose(); oldMat.dispose(); }
+        buildCharacter(lastSlim);          // 重建一次把披风带上
+        report('披风已加载');
+      }, undefined, (e) => report('⚠ 披风加载失败 ' + (e?.message || e)));
+      return;
+    }
+    if (oldMat) { oldMat.map?.dispose(); oldMat.dispose(); }
+    buildCharacter(lastSlim);
+    report('已清除披风');
+  },
+  setYaw(deg) {
+    yaw = deg;
+    model.rotation.y = THREE.MathUtils.degToRad(yaw);
+  },
+  /** 渲染完成回调（C# 用它知道可以截图了） */
+  onReady(fn) { onModelReady = fn; },
+  /**
+   * 把当前画布导出成 PNG data URL。
+   * ⚠ 必须**先渲染一帧再取**，否则 WebGL 的 drawingBuffer 已被清空，导出是空白。
+   * （WebView2 自己的 CapturePreviewAsync 抓的是合成器缓存帧，会拿到旧画面。）
+   */
+  capturePng() {
+    renderer.render(scene, camera);
+    return renderer.domElement.toDataURL('image/png');
+  },
+  /** 调试用 */
+  stats() {
+    let meshes = 0;
+    model.traverse(o => { if (o.isMesh) meshes++; });
+    return { meshes, yaw };
+  },
+};
+</script>
+</body>
+</html>

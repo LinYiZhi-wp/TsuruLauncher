@@ -14,6 +14,27 @@ namespace TsuruLauncher.Views
         private double _probeScrollable;
         /// <summary>自检用：删除确认弹框实例（验证按钮可点）。</summary>
         private Window? _testDlg;
+
+        /// <summary>自检用：切换前的指示块 X。</summary>
+        private double _indicatorBefore;
+
+        /// <summary>
+        /// 读胶囊指示块当前的视觉 X（Canvas.Left + TranslateX 动画中的值）。
+        /// 只读 Canvas.Left 不够 —— 滑动是 TranslateTransform 在动。
+        /// </summary>
+        private double ReadIndicatorX()
+        {
+            if (DetailTabIndicator == null) return double.NaN;
+            double left = System.Windows.Controls.Canvas.GetLeft(DetailTabIndicator);
+            if (double.IsNaN(left)) left = 0;
+            double tx = 0;
+            if (DetailTabIndicator.RenderTransform is System.Windows.Media.TranslateTransform tt)
+            {
+                // 动画中的当前值要用 GetAnimationBaseValue 之外的途径取：直接读 X
+                tx = tt.X;
+            }
+            return left + tx;
+        }
         private double _probeBefore;
 
         public ResourceDetailPage(ModProject project, string? gameVersion = null)
@@ -241,6 +262,30 @@ namespace TsuruLauncher.Views
                             break;
 
                         case 19:
+                            // 胶囊滑动指示块：三个 tab 逐一切过去，读指示块的 Canvas.Left
+                            // —— 如果它一直不变，说明指示块没跟着滑（用户报的问题）。
+                            if (TabDesc != null) TabDesc.IsChecked = true;
+                            _indicatorBefore = ReadIndicatorX();
+                            Log($"[DetailSelfTest] 19 描述选中：指示块 Left={_indicatorBefore:F1} 宽={DetailTabIndicator?.ActualWidth:F0} 不透明度={DetailTabIndicator?.Opacity:F1}");
+                            if (TabVer != null) TabVer.IsChecked = true;
+                            break;
+
+                        case 20:
+                            double xVer = ReadIndicatorX();
+                            Log($"[DetailSelfTest] 20 切到版本：指示块 Left={xVer:F1} " +
+                                $"{(Math.Abs(xVer - _indicatorBefore) > 1 ? "✅ 滑动生效" : "❌ 没动")}");
+                            Shot(shotDir, "08-版本tab指示块");
+                            if (TabGallery != null) TabGallery.IsChecked = true;
+                            break;
+
+                        case 21:
+                            double xGal = ReadIndicatorX();
+                            Log($"[DetailSelfTest] 21 切到图库：指示块 Left={xGal:F1} " +
+                                $"{(Math.Abs(xGal - _indicatorBefore) > 1 ? "✅ 滑动生效" : "❌ 没动")}");
+                            Shot(shotDir, "09-图库tab指示块");
+                            break;
+
+                        case 22:
                             Log("[DetailSelfTest] ✅ 完成");
                             t.Stop();
                             break;
@@ -258,14 +303,12 @@ namespace TsuruLauncher.Views
             t.Start();
         }
 
-        /// <summary>切到「版本」标签（自检里模拟点击）。</summary>
+        /// <summary>切到「版本」标签（自检里模拟点击）。
+        /// 只设 IsChecked 就够 —— DetailTab_Checked 会负责切面板，
+        /// 指示块也由 IsChecked 驱动，三者自动一致。</summary>
         private void SwitchToVersionsTab()
         {
-            // 同步把 RadioButton 也设上（让 tab 视觉对得上当前面板）
             if (TabVer != null) TabVer.IsChecked = true;
-            ShowPanel(DescPanel, false);
-            ShowPanel(VersionPanel, true);
-            ShowPanel(GalleryPanel, false);
         }
 
         private static void Shot(string dir, string name)
@@ -372,13 +415,10 @@ namespace TsuruLauncher.Views
         }
 
                 /// <summary>描述 / 版本 / 图库 三个标签。切换带淡入 + translateY。</summary>
-        private void DetailTab_Click(object sender, RoutedEventArgs e)
+        private void DetailTab_Checked(object sender, RoutedEventArgs e)
         {
             if (sender is not FrameworkElement fe || fe.Tag is not string tag) return;
             bool desc = tag == "desc", ver = tag == "ver", gal = tag == "gallery";
-
-            // 用户点 tab：把对应的 RadioButton 标上 checked（让它视觉对得上当前面板）
-            if (sender is System.Windows.Controls.RadioButton rb) rb.IsChecked = true;
 
             ShowPanel(DescPanel, desc);
             ShowPanel(VersionPanel, ver);

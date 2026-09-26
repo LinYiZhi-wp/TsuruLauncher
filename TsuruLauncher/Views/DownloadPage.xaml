@@ -15,6 +15,8 @@
       Background="Transparent">
 
     <Page.Resources>
+        <!-- 缓动曲线统一从 AxolotlMotion 取 -->
+        <x:Static x:Key="EaseOutCubic" Member="anim:AxolotlMotion.EaseOut"/>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
         <conv:StringMatchToBoolConverter x:Key="StringMatchToBool"/>
@@ -67,16 +69,54 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="20" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid>
+                            <Border x:Name="Bd" CornerRadius="20" Background="{TemplateBinding Background}"/>
+
+                            <!-- 悬停高亮：叠加层动画（改 Background 是硬切） -->
+                            <Border x:Name="HoverBd" CornerRadius="20"
+                                    Background="{DynamicResource AccentHoverBrush}" Opacity="0" IsHitTestVisible="False"/>
+
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentHoverBrush}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.14" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.12" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <!-- 禁用态原来 Setter 改 Opacity 也是硬切 -->
+                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity"
+                                                             To="0.4" Duration="0:0:0.16" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -96,17 +136,57 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="10" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid>
+                            <Border x:Name="Bd" CornerRadius="10" Background="{TemplateBinding Background}"/>
+
+                            <!-- 悬停底色：叠加层 + Opacity 动画（改 Background 是硬切） -->
+                            <Border x:Name="HoverBd" CornerRadius="10"
+                                    Background="{DynamicResource Surface5Brush}" Opacity="0" IsHitTestVisible="False"/>
+
+                            <!-- ⚠⚠ 这里**不能**用「两层 ContentPresenter + TextElement.Foreground」那套！
+                                 实测在 Button 模板里 ContentPresenter 上的 TextElement.Foreground
+                                 不会传到内容里的 TextBlock（文字直接看不见）。
+                                 悬停只改底色，文字色交给 Button 自己的 Foreground（继承下去）。 -->
+                            <ContentPresenter x:Name="Content" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface5Brush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.14" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.12" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity"
+                                                             To="0.4" Duration="0:0:0.15" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -136,14 +216,25 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Bd" CornerRadius="14" Padding="15,7" Background="Transparent">
+                        <Border x:Name="Bd" CornerRadius="14" Background="Transparent">
                             <Grid>
-                                <ContentPresenter x:Name="TextNormal" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                  TextElement.FontWeight="SemiBold"/>
-                                <ContentPresenter x:Name="TextAccent" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                  Opacity="0" IsHitTestVisible="False"
-                                                  TextElement.Foreground="{DynamicResource AccentForegroundBrush}"
-                                                  TextElement.FontWeight="SemiBold"/>
+                                <!-- 悬停底色：叠加层动画（原来改 Bd.Background 是硬切） -->
+                                <Border x:Name="HoverBd" CornerRadius="14"
+                                        Background="{DynamicResource Surface4Brush}" Opacity="0" IsHitTestVisible="False"/>
+
+                                <Grid Margin="15,7">
+                                    <ContentPresenter x:Name="TextNormal" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      TextElement.Foreground="{DynamicResource TextSecondaryBrush}"
+                                                      TextElement.FontWeight="SemiBold"/>
+                                    <ContentPresenter x:Name="TextHover" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      Opacity="0" IsHitTestVisible="False"
+                                                      TextElement.Foreground="{DynamicResource TextPrimaryBrush}"
+                                                      TextElement.FontWeight="SemiBold"/>
+                                    <ContentPresenter x:Name="TextAccent" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      Opacity="0" IsHitTestVisible="False"
+                                                      TextElement.Foreground="{DynamicResource AccentForegroundBrush}"
+                                                      TextElement.FontWeight="SemiBold"/>
+                                </Grid>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -153,8 +244,30 @@
                                     <Condition Property="IsMouseOver" Value="True"/>
                                     <Condition Property="IsChecked" Value="False"/>
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface4Brush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                                <MultiTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.14" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextHover" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </MultiTrigger.EnterActions>
+                                <MultiTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.12" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextHover" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.14" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.14" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </MultiTrigger.ExitActions>
                             </MultiTrigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Trigger.EnterActions>
@@ -183,9 +296,25 @@
                                 </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.55"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <!-- ⚠ 原来这里还 Setter Foreground=TextDimBrush（硬切）。
+                                                 改成整体淡出：视觉等价，而且是动画。 -->
+                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity"
+                                                             To="0.55" Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -208,28 +337,85 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Bd" CornerRadius="10" Padding="14,12"
-                                Background="{DynamicResource Surface2Brush}"
-                                BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1">
-                            <Grid>
+                        <Grid>
+                            <!-- 底色常驻，高亮全部交给上面的叠加层做 Opacity 动画
+                                 （DynamicResource 画刷共享，改颜色一定是硬切） -->
+                            <Border x:Name="Bd" CornerRadius="10"
+                                    Background="{DynamicResource Surface2Brush}"
+                                    BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"/>
+
+                            <!-- 悬停：只亮描边 -->
+                            <Border x:Name="HoverBorder" CornerRadius="10" BorderThickness="1"
+                                    BorderBrush="{DynamicResource AccentBorderBrush}"
+                                    Opacity="0" IsHitTestVisible="False"/>
+
+                            <!-- 选中：底色 + 描边 -->
+                            <Border x:Name="CheckedBd" CornerRadius="10" BorderThickness="1"
+                                    Background="{DynamicResource AccentGlassLightBrush}"
+                                    BorderBrush="{DynamicResource AccentBorderBrush}"
+                                    Opacity="0" IsHitTestVisible="False"/>
+
+                            <Grid Margin="14,12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <Ellipse x:Name="Dot" Width="16" Height="16" VerticalAlignment="Center"
-                                         Stroke="{DynamicResource TextDimBrush}" StrokeThickness="2" Fill="Transparent"/>
+
+                                <!-- 圆点：两层交叉淡入（Stroke/Fill 也是画刷，不能直接动画） -->
+                                <Grid Grid.Column="0" Width="16" Height="16" VerticalAlignment="Center">
+                                    <Ellipse x:Name="DotNormal" Stroke="{DynamicResource TextDimBrush}"
+                                             StrokeThickness="2" Fill="Transparent"/>
+                                    <Ellipse x:Name="DotChecked" Stroke="{DynamicResource AccentBrush}"
+                                             StrokeThickness="2" Fill="{DynamicResource AccentBrush}" Opacity="0"/>
+                                </Grid>
+
                                 <ContentPresenter Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center"/>
                             </Grid>
-                        </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBorder" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.14" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBorder" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.12" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentGlassLightBrush}"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}"/>
-                                <Setter TargetName="Dot" Property="Stroke" Value="{DynamicResource AccentBrush}"/>
-                                <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="CheckedBd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.2" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                            <DoubleAnimation Storyboard.TargetName="DotChecked" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.2" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                            <DoubleAnimation Storyboard.TargetName="DotNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="CheckedBd" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                            <DoubleAnimation Storyboard.TargetName="DotChecked" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.14" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                            <DoubleAnimation Storyboard.TargetName="DotNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -245,12 +431,12 @@
             <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="Padding" Value="16,14"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
-                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}"/>
-                </Trigger>
-            </Style.Triggers>
+
+            <!-- ⚠ 悬停高亮交给附加属性做动画。
+                 普通 Border 的 Style.Triggers 里改 Background/BorderBrush 是硬切
+                 （DynamicResource 画刷共享，没法做 Color 动画）。 -->
+            <Setter Property="anim:MotionAssist.HoverTintBrush" Value="{DynamicResource Surface4Brush}"/>
+            <Setter Property="anim:MotionAssist.HoverTintBorderBrush" Value="{DynamicResource AccentBorderBrush}"/>
         </Style>
 
         <Style x:Key="IconTile" TargetType="Border">

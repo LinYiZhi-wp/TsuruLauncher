@@ -15,6 +15,11 @@ namespace TsuruLauncher.Views
             InitializeComponent();
             // Use MainViewModel from Application
             this.DataContext = ((App)Application.Current).MainWindow.DataContext;
+
+            // 自检钩子：TSURU_SELFTEST=accounts 时跑「导出 → 导入」往返
+            if (Environment.GetEnvironmentVariable("TSURU_SELFTEST") == "accounts")
+                Dispatcher.BeginInvoke(new Action(RunAccountsSelfTest),
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             
             // Initialize fields from Config
             if (DataContext is ViewModels.MainViewModel vm)
@@ -318,6 +323,105 @@ namespace TsuruLauncher.Views
             }
         }
 
+        /// <summary>
+        /// 自检：TSURU_SELFTEST=accounts 时跑一次「导出 → 导入」往返，
+        /// 验证导出的文件能被重新解析、账号数量对得上、重复导入不会重复添加。
+        /// </summary>
+        private void RunAccountsSelfTest()
+        {
+            try
+            {
+                if (DataContext is not MainViewModel vm) { Log("❌ 无 DataContext"); return; }
+
+                int before = vm.AccountManager.Accounts.Count;
+                string tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                    $"tsuru-accounts-selftest-{Guid.NewGuid():N}.json");
+
+                Log($"往返测试开始：现有 {before} 个账号");
+
+                if (!vm.ExportAccounts(tmp)) { Log("❌ 导出失败"); return; }
+                Log($"✅ 导出成功：{new System.IO.FileInfo(tmp).Length} 字节");
+
+                var root = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(tmp));
+                int inFile = (root["accounts"] as Newtonsoft.Json.Linq.JArray)?.Count ?? -1;
+                Log($"✅ 文件里解析到 {inFile} 个账号（应为 {before}）");
+
+                var (added, skipped) = vm.ImportAccounts(tmp);
+                Log($"✅ 重复导入：新增 {added}，跳过 {skipped}（期望 0 / {before}）");
+
+                int after = vm.AccountManager.Accounts.Count;
+                Log(after == before ? $"✅ 往返后账号数不变（{after}）" : $"❌ 账号数变了：{before} -> {after}");
+
+                try { System.IO.File.Delete(tmp); } catch { }
+            }
+            catch (Exception ex) { Log("❌ 自检异常：" + ex.Message); }
+        }
+
+        private static void Log(string msg)
+            => Utilities.Logger.LogInfo("[AccountSelfTest] " + msg);
+
+        /// <summary>
+        /// 导出全部账号。⚠ 导出的文件里**含登录令牌**，要明确提醒用户。
+        /// </summary>
+        private void ExportAccounts_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainViewModel vm) return;
+
+            if (vm.AccountManager.Accounts.Count == 0)
+            {
+                iOS26Dialog.Show("当前没有可导出的账号。", "导出账号", DialogIcon.Info);
+                return;
+            }
+
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "导出账号",
+                FileName = $"TsuruLauncher-accounts-{DateTime.Now:yyyyMMdd}.json",
+                Filter = "账号备份 (*.json)|*.json",
+            };
+            if (dialog.ShowDialog() != true) return;
+
+            if (!vm.ExportAccounts(dialog.FileName))
+            {
+                iOS26Dialog.Show("导出失败，详见日志。", "导出账号", DialogIcon.Error);
+                return;
+            }
+
+            // ⚠ 必须说清楚：这个文件等同于账号密码，能直接拿去登录
+            iOS26Dialog.Show(
+                $"已导出 {vm.AccountManager.Accounts.Count} 个账号。\n\n" +
+                "⚠ 这个文件里包含登录令牌，等同于账号凭证 ——\n" +
+                "请妥善保管，不要发给别人。",
+                "导出成功", DialogIcon.Warning);
+        }
+
+        /// <summary>
+        /// 导入账号：**按 Uuid 合并**，已存在的跳过，不会清掉现有账号。
+        /// </summary>
+        private void ImportAccounts_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainViewModel vm) return;
+
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "导入账号",
+                Filter = "账号备份 (*.json)|*.json|所有文件 (*.*)|*.*",
+            };
+            if (dialog.ShowDialog() != true) return;
+
+            var (added, skipped) = vm.ImportAccounts(dialog.FileName);
+
+            if (added == 0 && skipped == 0)
+            {
+                iOS26Dialog.Show("这个文件里没有解析到账号。", "导入账号", DialogIcon.Warning);
+                return;
+            }
+
+            iOS26Dialog.Show(
+                $"导入完成：新增 {added} 个，跳过 {skipped} 个（已存在）。",
+                "导入账号", DialogIcon.Success);
+        }
+
         private void RemoveAccount_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button btn && btn.Tag is TsuruLauncher.Models.Account account)
@@ -540,16 +644,24 @@ namespace TsuruLauncher.Views
             }
         }
 
+        // ⚠ async void 抛异常会崩应用 —— 切换开关时重载版本可能失败，必须兜住
         private async void VersionIsolationToggle_Changed(object sender, RoutedEventArgs e)
         {
-            if (!IsLoaded) return;
-            if (DataContext is ViewModels.MainViewModel vm)
+            try
             {
-                vm.ConfigService.Settings.VersionIsolation = VersionIsolationToggle.IsChecked == true;
-                vm.ConfigService.SaveConfig();
-                
-                // Reload versions to update game directories
-                await vm.LoadVersionsAsync();
+                if (!IsLoaded) return;
+                if (DataContext is ViewModels.MainViewModel vm)
+                {
+                    vm.ConfigService.Settings.VersionIsolation = VersionIsolationToggle.IsChecked == true;
+                    vm.ConfigService.SaveConfig();
+
+                    // Reload versions to update game directories
+                    await vm.LoadVersionsAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Utilities.Logger.LogError(ex, "切换版本隔离");
             }
         }
 

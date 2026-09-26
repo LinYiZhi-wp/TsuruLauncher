@@ -721,6 +721,26 @@ namespace TsuruLauncher.Services.Animation
         // （ButtonStyled.vue:267-271 / InstanceRowCard.vue:15），
         // 既保留 DynamicResource，又能真正做出 250ms 的平滑 hover。
 
+        /// <summary>
+        /// hover 时叠加的**描边**画刷（可选）。
+        /// 有些卡片 hover 除了底色变浅，还要亮一下描边 —— 同样不能直接改 BorderBrush
+        /// （共享冻结画刷，颜色动画会被 WPF 拒绝），所以一起画在 AdornerLayer 上。
+        /// </summary>
+        public static readonly DependencyProperty HoverTintBorderBrushProperty =
+            DependencyProperty.RegisterAttached("HoverTintBorderBrush", typeof(Brush), typeof(MotionAssist),
+                new PropertyMetadata(null, OnHoverTintChanged));
+
+        public static Brush? GetHoverTintBorderBrush(DependencyObject o) => (Brush?)o.GetValue(HoverTintBorderBrushProperty);
+        public static void SetHoverTintBorderBrush(DependencyObject o, Brush? v) => o.SetValue(HoverTintBorderBrushProperty, v);
+
+        /// <summary>hover 描边粗细，默认 1。</summary>
+        public static readonly DependencyProperty HoverTintBorderThicknessProperty =
+            DependencyProperty.RegisterAttached("HoverTintBorderThickness", typeof(double), typeof(MotionAssist),
+                new PropertyMetadata(1.0));
+
+        public static double GetHoverTintBorderThickness(DependencyObject o) => (double)o.GetValue(HoverTintBorderThicknessProperty);
+        public static void SetHoverTintBorderThickness(DependencyObject o, double v) => o.SetValue(HoverTintBorderThicknessProperty, v);
+
         /// <summary>hover 时叠加的色块画刷（建议给 Surface4/5Brush 之类的浅色令牌）。</summary>
         public static readonly DependencyProperty HoverTintBrushProperty =
             DependencyProperty.RegisterAttached("HoverTintBrush", typeof(Brush), typeof(MotionAssist),
@@ -809,7 +829,8 @@ namespace TsuruLauncher.Services.Animation
                 if (!hover) return;
                 var layer = AdornerLayer.GetAdornerLayer(fe);
                 var brush = GetHoverTintBrush(fe);
-                if (layer == null || brush == null)
+                var borderBrush = GetHoverTintBorderBrush(fe);
+                if (layer == null || (brush == null && borderBrush == null))
                 {
                     if (layer == null && !_hoverTintLayerWarned)
                     {
@@ -829,7 +850,7 @@ namespace TsuruLauncher.Services.Animation
                 if (double.IsNaN(radius))
                     radius = fe is Border b ? b.CornerRadius.TopLeft : 12.0;
 
-                adorner = new HoverTintAdorner(fe, brush, radius);
+                adorner = new HoverTintAdorner(fe, brush, radius, borderBrush, GetHoverTintBorderThickness(fe));
                 fe.SetValue(HoverTintAdornerProperty, adorner);
                 try { layer.Add(adorner); } catch { return; }
                 adorner.OwnerLayer = layer;
@@ -865,15 +886,20 @@ namespace TsuruLauncher.Services.Animation
             private static void OnTintOpacityChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
                 => ((HoverTintAdorner)d).InvalidateVisual();
 
-            private readonly Brush _brush;
+            private readonly Brush? _brush;
+            private readonly Brush? _borderBrush;
+            private readonly double _borderThickness;
             private readonly double _radius;
 
             /// <summary>加入时记住宿主层，元素 Unloaded 时才能精确摘除。</summary>
             public AdornerLayer? OwnerLayer;
 
-            public HoverTintAdorner(UIElement adorned, Brush brush, double radius) : base(adorned)
+            public HoverTintAdorner(UIElement adorned, Brush? brush, double radius,
+                                    Brush? borderBrush = null, double borderThickness = 1.0) : base(adorned)
             {
                 _brush = brush;
+                _borderBrush = borderBrush;
+                _borderThickness = borderThickness;
                 _radius = radius;
                 IsHitTestVisible = false;
             }
@@ -888,7 +914,23 @@ namespace TsuruLauncher.Services.Animation
 
                 double r = Math.Max(0, Math.Min(_radius, Math.Min(size.Width, size.Height) / 2.0));
                 drawingContext.PushOpacity(o);
-                drawingContext.DrawRoundedRectangle(_brush, null, new Rect(size), r, r);
+
+                // 描边要画在矩形内侧，否则会超出元素边界
+                double half = _borderBrush != null ? Math.Max(0, _borderThickness) / 2.0 : 0;
+                var rect = half > 0
+                    ? new Rect(half, half, Math.Max(0, size.Width - _borderThickness),
+                                              Math.Max(0, size.Height - _borderThickness))
+                    : new Rect(size);
+
+                Pen? pen = null;
+                if (_borderBrush != null && half > 0)
+                {
+                    pen = new Pen(_borderBrush, Math.Max(0.5, _borderThickness));
+                    pen.Freeze();
+                }
+
+                drawingContext.DrawRoundedRectangle(_brush, pen, rect,
+                    Math.Max(0, r - half), Math.Max(0, r - half));
                 drawingContext.Pop();
             }
         }

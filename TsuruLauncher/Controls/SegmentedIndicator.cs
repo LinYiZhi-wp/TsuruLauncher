@@ -394,12 +394,37 @@ namespace TsuruLauncher.Controls
             return null;
         }
 
+        // ── 频率熔断（防布局死循环）────────────────────────────────────
+        // ⚠⚠ 为什么需要：下面两个 SizeChanged 处理器都会调 UpdateCore 去重算 + 移动指示块。
+        //   如果"指示块尺寸变化"又反过来影响了宿主/分段的尺寸，
+        //   就会形成 host/item SizeChanged → UpdateCore → 尺寸再变 → SizeChanged → …
+        //   的死循环。宿主/分段在动画或不同 DPI 下尺寸抖动时特别容易触发，
+        //   表现就是切换「简洁 ⇄ 网格」时界面直接卡死（用户实测）。
+        //
+        //   这里加个频率熔断：1 秒内超过 N 次就停手。
+        //   **宁可指示块位置差一点，也绝不能卡死。**
+        private static int _resizeStreak;
+        private static DateTime _resizeStreakStart = DateTime.MinValue;
+        private const int ResizeStreakLimit = 60;
+
+        private static bool ResizeAllowed()
+        {
+            var now = DateTime.UtcNow;
+            if ((now - _resizeStreakStart).TotalSeconds > 1.0)
+            {
+                _resizeStreakStart = now;
+                _resizeStreak = 0;
+            }
+            return ++_resizeStreak <= ResizeStreakLimit;
+        }
+
         private static void OnHostSizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (sender is not FrameworkElement host) return;
             var st = GetState(host);
             if (st == null) return;
             if (st.Animating) return;              // 位移在播：绝不把它拽回去
+            if (!ResizeAllowed()) return;          // 熔断
             UpdateCore(st, animate: false, reason: "resize");
         }
 
@@ -418,6 +443,7 @@ namespace TsuruLauncher.Controls
             var st = (SegmentState?)item.GetValue(OwnerProperty);
             if (st == null) return;
             if (st.Animating) return;
+            if (!ResizeAllowed()) return;          // 熔断（见上面 ResizeAllowed 的说明）
             UpdateCore(st, animate: false, reason: "item-resize");
         }
 

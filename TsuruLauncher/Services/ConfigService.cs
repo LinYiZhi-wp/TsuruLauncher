@@ -16,6 +16,25 @@ namespace TsuruLauncher.Services
         public int WindowHeight { get; set; } = 480;
         public bool Fullscreen { get; set; } = false;
         public string DownloadSource { get; set; } = "Official";
+        /// <summary>
+        /// **所有**登录过的账号。
+        ///
+        /// ⚠ 以前只存一个 <see cref="SelectedAccount"/> —— 用户切换账号时，
+        ///   上一个账号就被**直接覆盖**了，重启后只剩最后用的那个，
+        ///   看起来就是"我另一个账号不见了"。现在改成存整个列表 + 一个"当前是谁"的标识。
+        /// </summary>
+        public List<Account> Accounts { get; set; } = new();
+
+        /// <summary>
+        /// 当前选中的账号标识（<c>Uuid</c>；离线账号没有 Uuid 就用 <c>用户名|类型</c>）。
+        /// 空 = 用列表里第一个。
+        /// </summary>
+        public string? CurrentAccountKey { get; set; }
+
+        /// <summary>
+        /// 【兼容旧配置】以前只存这一个字段。
+        /// 加载时如果 <see cref="Accounts"/> 为空而它有值，会自动迁移进列表。
+        /// </summary>
         public Account? SelectedAccount { get; set; }
         public bool VersionIsolation { get; set; } = true;
         public string Language { get; set; } = "en-US";
@@ -140,29 +159,46 @@ namespace TsuruLauncher.Services
 
                 return newPath;
             }
-            catch
+            catch (Exception ex)
             {
+                // ⚠⚠ 兜底：%APPDATA% 不可用时会退回到**程序目录旁边**。
+                //   这意味着配置（含账号令牌）会落在安装目录里 ——
+                //   如果用户把安装目录打包分享，就会连账号一起发出去。
+                //   这里留一条醒目的日志，方便排查。
+                try
+                {
+                    TsuruLauncher.Utilities.Logger.LogInfo(
+                        "[Config] ⚠ %APPDATA% 不可用，配置将写到程序目录：" + legacyPath +
+                        " —— 请勿把该目录打包分享（内含账号令牌）。原因：" + ex.Message);
+                }
+                catch { }
                 return legacyPath;
             }
         }
 
         private AppConfig LoadConfig()
         {
-            if (!File.Exists(_configPath))
+            // 主配置解析失败就退回 .bak（SaveConfig 每次都会留一份），
+            // 再失败才用默认值 —— 不要一坏了就静默重置，那等于把用户设置全清了。
+            foreach (var path in new[] { _configPath, _configPath + ".bak" })
             {
-                return new AppConfig();
+                if (!File.Exists(path)) continue;
+
+                try
+                {
+                    string json = File.ReadAllText(path);
+                    var cfg = JsonConvert.DeserializeObject<AppConfig>(json);
+                    if (cfg == null) continue;
+
+                    if (!string.Equals(path, _configPath, StringComparison.OrdinalIgnoreCase))
+                        TsuruLauncher.Utilities.Logger.LogInfo("[Config] 主配置损坏，已从 .bak 恢复");
+
+                    return cfg;
+                }
+                catch { }
             }
 
-
-            try
-            {
-                string json = File.ReadAllText(_configPath);
-                return JsonConvert.DeserializeObject<AppConfig>(json) ?? new AppConfig();
-            }
-            catch
-            {
-                return new AppConfig();
-            }
+            return new AppConfig();
         }
 
         public void SaveConfig()
@@ -170,7 +206,23 @@ namespace TsuruLauncher.Services
             try
             {
                 string json = JsonConvert.SerializeObject(Settings, Formatting.Indented);
-                File.WriteAllText(_configPath, json);
+
+                // ⚠⚠ **不要直接 File.WriteAllText** ——
+                //   写到一半进程被杀 / 磁盘满，config.json 就变成半截 JSON，
+                //   下次启动解析失败会**静默重置成默认值**：账号令牌、游戏路径、
+                //   所有设置全部丢失（用户只会看到"我的设置怎么没了"）。
+                //   改成「先写临时文件 → 原子替换 → 顺手留一份 .bak」。
+                string tmp = _configPath + ".tmp";
+                File.WriteAllText(tmp, json);
+
+                if (File.Exists(_configPath))
+                {
+                    File.Replace(tmp, _configPath, _configPath + ".bak", ignoreMetadataErrors: true);
+                }
+                else
+                {
+                    File.Move(tmp, _configPath);
+                }
             }
             catch (Exception ex)
             {

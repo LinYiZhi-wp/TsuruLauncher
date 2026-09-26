@@ -21,6 +21,9 @@ namespace TsuruLauncher.Views
 {
     public partial class HomePage : Page
     {
+        private readonly System.Diagnostics.Stopwatch _ctorClock = System.Diagnostics.Stopwatch.StartNew();
+
+
         public HomePage()
         {
             InitializeComponent();
@@ -41,14 +44,59 @@ namespace TsuruLauncher.Views
             // 不再靠 Visibility 硬切（Axolotl FloatingActionBar/App.vue 的 0.25s 过冲那组）。
             Loaded += HomePage_Loaded;
             Unloaded += HomePage_Unloaded;
+
+            if (Environment.GetEnvironmentVariable("TSURU_SELFTEST") == "homemode")
+                Dispatcher.BeginInvoke(new Action(RunHomeModeSelfTest),
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+
+            if (Environment.GetEnvironmentVariable("TSURU_PERF") == "1")
+                Utilities.Logger.LogInfo($"[Perf] HomePage 构造（XAML 解析）{_ctorClock.Elapsed.TotalMilliseconds:F1}ms");
+
+            if (Environment.GetEnvironmentVariable("TSURU_PERF") == "1")
+                Utilities.Logger.LogInfo($"[Perf] HomePage 构造（XAML 解析）{_ctorClock.Elapsed.TotalMilliseconds:F1}ms");
         }
 
         #region 两态切换（极简 / 信息主页）
 
         private bool? _appliedMinimalHome;
 
+        /// <summary>
+        /// 自检：TSURU_SELFTEST=homemode —— 反复切「简洁 ⇄ 网格」12 次。
+        /// 如果切换会卡死，await 就永远回不来，日志会停在中间某一次。
+        /// </summary>
+        private async void RunHomeModeSelfTest()
+        {
+            try
+            {
+                if (DataContext is not MainViewModel vm) { Log("❌ 无 DataContext"); return; }
+
+                Log("开始：简洁 ⇄ 网格 连续切换 12 次");
+                for (int i = 0; i < 12; i++)
+                {
+                    vm.IsMinimalHome = (i % 2 == 0);
+
+                    // ⚠ 关键：await 让 Dispatcher 跑完动画 + 布局。
+                    //   如果重排进了死循环，Dispatcher 被占满，这一句永远回不来。
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    await System.Threading.Tasks.Task.Delay(350);
+                    sw.Stop();
+
+                    Log($"  {i + 1}/12 -> {(vm.IsMinimalHome ? "简洁" : "网格")}  " +
+                        $"耗时 {sw.Elapsed.TotalMilliseconds:F0}ms  {MotionPerf.CacheSummary()}");
+                }
+                Log("✅ 12 次切换全部完成，没有卡死");
+            }
+            catch (Exception ex) { Log("❌ 异常：" + ex.Message); }
+        }
+
+        private static void Log(string msg)
+            => Utilities.Logger.LogInfo("[HomeModeSelfTest] " + msg);
+
         private void HomePage_Loaded(object sender, RoutedEventArgs e)
         {
+            if (Environment.GetEnvironmentVariable("TSURU_PERF") == "1")
+                Utilities.Logger.LogInfo($"[Perf] HomePage Loaded 触发（距构造 {_ctorClock.Elapsed.TotalMilliseconds:F1}ms）");
+
             if (DataContext is MainViewModel vm)
             {
                 vm.PropertyChanged -= OnHomeViewModelPropertyChanged;
@@ -274,7 +322,7 @@ namespace TsuruLauncher.Views
         private void WidgetToolbarGrid_Click(object sender, RoutedEventArgs e)
         {
             if (DataContext is ViewModels.MainViewModel vm) vm.IsFreeLayout = false;
-            ApplyWidgetPacking();
+            QueueWidgetPacking();
         }
 
         private void WidgetToolbarFree_Click(object sender, RoutedEventArgs e)
@@ -285,7 +333,7 @@ namespace TsuruLauncher.Views
                 if (!vm.IsFreeLayout) CapturePackedPositionsAsFree();
                 vm.IsFreeLayout = true;
             }
-            ApplyWidgetPacking();
+            QueueWidgetPacking();
         }
 
         /// <summary>把当前 grid 装箱结果固化成 free 模式的初始坐标。</summary>
@@ -406,10 +454,23 @@ namespace TsuruLauncher.Views
         }
 
         /// <summary>项容器生成后播一次弹入（=「添加组件」的过渡动画）。</summary>
+        private int _lastPackedWidgetCount = -1;
+
         private void WidgetItem_Loaded(object sender, RoutedEventArgs e)
         {
             if (sender is not FrameworkElement fe) return;
-            ApplyWidgetPacking();
+
+            // ⚠⚠ 这里**不能**无条件 QueueWidgetPacking。
+            //   容器加载 → 重排 → 布局失效 → 容器重新加载 → 再重排 → … 会形成死循环，
+            //   表现就是「简洁模式 ⇄ 网格模式」切换直接卡死。
+            //   只有**组件数量变了**（新增/删除）才需要重排；
+            //   尺寸变化由 WidgetSize_Changed 那边负责。
+            int count = (DataContext as ViewModels.MainViewModel)?.HomeWidgets.Count ?? -1;
+            if (count != _lastPackedWidgetCount)
+            {
+                _lastPackedWidgetCount = count;
+                QueueWidgetPacking();
+            }
             if (fe.Tag as string == "anim-done") return;
             fe.Tag = "anim-done";
             Utilities.Logger.LogInfo("[WidgetGrid] item kind=" +
@@ -449,6 +510,59 @@ namespace TsuruLauncher.Views
         // 首次适应（first-fit）装箱：按顺序给每个小组件找**第一个装得下的位置**。
         // 这是 Axolotl 的 grid 布局模式（home-dashboard.ts: packHomeWidgets），
         // 和 WrapPanel 的区别就是**后面的卡会回填前面的空洞**。
+        // ── 重排合并 ────────────────────────────────────────────────────
+        // ⚠ 为什么要合并：`ApplyWidgetPacking` 会写 Grid.Row/Column/RowSpan/ColumnSpan，
+        //   每次写都让布局失效 → 触发一次完整 layout pass。
+        //   而它在 7 个地方被调（小组件增删、尺寸变化、模式切换、容器尺寸变化…），
+        //   启动时 5 个小组件各渲染一次就是 **5 次完整重排 + 5 次布局失效**。
+        //   实测启动日志里 `[WidgetPack]` 连打 5 遍。
+        //
+        //   改成「标脏 + 下一帧统一做一次」：同一帧内调 N 次只真正排 1 次。
+        private bool _packQueued;
+
+        // ── 频率熔断（防死循环卡死）────────────────────────────────────
+        // ⚠⚠ 背景：`WidgetItem_Loaded`（每个小组件加载完）会调 QueueWidgetPacking。
+        //   如果重排本身又导致容器重新加载，就形成
+        //      加载 → 重排 → 布局失效 → 重新加载 → 重排 → …
+        //   的循环。而每轮还会写一次日志（**同步文件 IO**），
+        //   结果就是界面彻底卡死（用户实测：简洁模式 ⇄ 网格模式切换卡死）。
+        //
+        //   这里加个频率熔断：1 秒内重排超过 N 次就认定进了循环、直接停手。
+        //   **宁可布局差一点，也绝不能卡死。**
+        private string? _lastPackSignature;
+        private int _packStreak;
+        private DateTime _packStreakStartUtc = DateTime.MinValue;
+        private const int PackStreakLimit = 30;
+
+        private void QueueWidgetPacking()
+        {
+            if (_packQueued) return;
+
+            var now = DateTime.UtcNow;
+            if ((now - _packStreakStartUtc).TotalSeconds > 1.0)
+            {
+                _packStreakStartUtc = now;
+                _packStreak = 0;
+            }
+            if (++_packStreak > PackStreakLimit)
+            {
+                if (_packStreak == PackStreakLimit + 1)
+                    Utilities.Logger.LogInfo(
+                        $"[WidgetPack] ⚠ 熔断：1 秒内重排超过 {PackStreakLimit} 次，已暂停（防止卡死）");
+                return;
+            }
+
+            _packQueued = true;
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                // ⚠ 这里必须调 ApplyWidgetPacking（真正干活的那个），不是 QueueWidgetPacking。
+                //   而且 _packQueued 要**等排完再复位** —— 否则排的过程中再被触发会无限排队。
+                try { ApplyWidgetPacking(); }
+                finally { _packQueued = false; }
+            }), System.Windows.Threading.DispatcherPriority.Render);
+        }
+
         private void ApplyWidgetPacking()
         {
             if (WidgetHost == null) return;
@@ -528,9 +642,15 @@ namespace TsuruLauncher.Views
                     panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto, MinHeight = Models.HomeWidget.GridRowHeight });
             }
 
-            Utilities.Logger.LogInfo("[WidgetPack] cols=" + cols + " rows=" + maxRow + " -> " +
-                string.Join(" ", placed.Select(p => p.W.Kind + "@" + p.Col + "," + p.Row +
-                    "(" + p.ColSpan + "x" + p.RowSpan + ")")));
+            // ⚠ 只在**布局真的变了**时才写日志 —— 每次重排都 LogInfo 是同步文件 IO，
+            //   一旦进了循环就是雪上加霜（实测会直接把界面拖死）。
+            string signature = cols + "x" + maxRow + "|" + string.Join(" ", placed.Select(p =>
+                p.W.Kind + "@" + p.Col + "," + p.Row + "(" + p.ColSpan + "x" + p.RowSpan + ")"));
+            if (signature != _lastPackSignature)
+            {
+                _lastPackSignature = signature;
+                Utilities.Logger.LogInfo("[WidgetPack] " + signature);
+            }
 
             // 写到每项的容器上
             foreach (var p in placed)
@@ -644,7 +764,7 @@ namespace TsuruLauncher.Views
                         case 12:
                             CapturePackedPositionsAsFree();
                             vm.IsFreeLayout = true;
-                            ApplyWidgetPacking();
+                            QueueWidgetPacking();
                             Utilities.Logger.LogInfo("[SelfTest] 12 切自由摆放 isFree=" + vm.IsFreeLayout +
                                 " 坐标: " + string.Join(" ", vm.HomeWidgets.Select(w => w.Kind + "@" + w.X + "," + w.Y)));
                             break;
@@ -661,7 +781,7 @@ namespace TsuruLauncher.Views
                             break;
                         case 15:
                             vm.IsFreeLayout = false;
-                            ApplyWidgetPacking();
+                            QueueWidgetPacking();
                             Utilities.Logger.LogInfo("[SelfTest] 15 切回网格 isFree=" + vm.IsFreeLayout);
                             t.Stop();
                             Utilities.Logger.LogInfo("[SelfTest] DONE");
@@ -694,7 +814,7 @@ namespace TsuruLauncher.Views
             Models.HomeWidget.ContainerWidth = w;
             if (DataContext is ViewModels.MainViewModel vm)
                 foreach (var widget in vm.HomeWidgets) widget.RefreshSize();
-            ApplyWidgetPacking();
+            QueueWidgetPacking();
         }
 
         private FrameworkElement? _dragItem;
@@ -812,7 +932,7 @@ namespace TsuruLauncher.Views
                     int col = (int)Math.Round(pt.X / pitchX);
                     int row = (int)Math.Round(pt.Y / pitchY);
                     fvm.PlaceWidgetAt(fw, col, row);
-                    ApplyWidgetPacking();
+                    QueueWidgetPacking();
                 }
                 return;
             }

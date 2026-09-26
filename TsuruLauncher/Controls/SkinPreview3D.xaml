@@ -1,0 +1,32 @@
+<UserControl x:Class="TsuruLauncher.Controls.SkinPreview3D"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="360" d:DesignWidth="300"
+             Cursor="SizeWE" Background="Transparent">
+    <!-- Root 承担「换皮肤时的淡入 + 上浮」 -->
+    <Grid x:Name="Root">
+        <Viewport3D x:Name="Viewport" ClipToBounds="True">
+            <Viewport3D.Camera>
+                <!-- 相机参数照抄 Axolotl 源码（use-skin-preview-fit.ts）：
+                     · FOV = 35（不是 22/26）
+                     · **水平，不俯视** —— 源码里 position 和 target 的 y 相同，
+                       相机只是比模型中心略低一点（给下方控制条留空间）。
+                       我之前自己加了 15° 俯视，是错的。
+                     · 角色约占视口高度 60% -->
+                <PerspectiveCamera x:Name="Cam" Position="0,-2,64" LookDirection="0,0,-1"
+                                   UpDirection="0,1,0" FieldOfView="35"/>
+            </Viewport3D.Camera>
+            <ModelVisual3D x:Name="ModelHost"/>
+        </Viewport3D>
+
+        <!-- 没皮肤时的占位 -->
+        <StackPanel x:Name="Placeholder" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock Text="🧍" FontSize="40" HorizontalAlignment="Center" Opacity="0.45"/>
+            <TextBlock Text="还没有皮肤" FontSize="12.5" Margin="0,10,0,0" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextTertiaryBrush}"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

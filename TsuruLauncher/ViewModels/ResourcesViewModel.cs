@@ -581,6 +581,53 @@ namespace TsuruLauncher.ViewModels
         public ObservableCollection<ModProject> SearchResults { get; } = new ObservableCollection<ModProject>();
         public ObservableCollection<ModProject> TrendingMods { get; } = new ObservableCollection<ModProject>();
         public ObservableCollection<ModProject> NewestMods { get; } = new ObservableCollection<ModProject>();
+
+        /// <summary>精选区（热门 / 最新）的**列表行**投影 —— 网格/列表切换时用这一份。</summary>
+        public ObservableCollection<ResourceRowItem> TrendingRows { get; } = new ObservableCollection<ResourceRowItem>();
+        public ObservableCollection<ResourceRowItem> NewestRows { get; } = new ObservableCollection<ResourceRowItem>();
+        public ICollectionView TrendingRowsView { get; }
+        public ICollectionView NewestRowsView { get; }
+
+        /// <summary>
+        /// 网格视图每张卡片的**目标**宽度 —— 只用来决定列数，实际宽度由
+        /// <see cref="TsuruLauncher.Controls.ResponsiveWrapPanel"/> 按可用宽度均分（会铺满，不留右侧空白）。
+        ///
+        /// 分类信息量不同，目标宽度也不同（数字是反推出来的，让常见窗口宽度下正好落到想要的列数）：
+        ///   模组 128 → 5 列（卡片小、图标方，可以密一点）
+        ///   整合包 214 → 3 列（封面图大，列多了看不清）
+        ///   资源包 / 数据包 / 光影 158 → 4 列
+        /// </summary>
+        public double GridTargetItemWidth => SelectedCategory switch
+        {
+            "mod" => 128,
+            "modpack" => 214,
+            _ => 158,
+        };
+
+        /// <summary>分类切换时刷新目标宽度（列数随之变化）。</summary>
+        partial void OnSelectedCategoryChanged(string value)
+            => OnPropertyChanged(nameof(GridTargetItemWidth));
+
+        /// <summary>把精选数据同时灌进「网格源」和「列表行源」，两个视图共用一份数据。</summary>
+        private void SetFeatured(IEnumerable<ModProject> trending, IEnumerable<ModProject> newest)
+        {
+            TrendingMods.Clear();
+            TrendingRows.Clear();
+            foreach (var mod in trending)
+            {
+                TrendingMods.Add(mod);
+                TrendingRows.Add(new ResourceRowItem(mod));
+            }
+
+            NewestMods.Clear();
+            NewestRows.Clear();
+            foreach (var mod in newest)
+            {
+                NewestMods.Add(mod);
+                NewestRows.Add(new ResourceRowItem(mod));
+            }
+        }
+
         public ObservableCollection<LocalModFile> LocalMods { get; } = new ObservableCollection<LocalModFile>();
         public ObservableCollection<string> InstalledMods { get; } = new ObservableCollection<string>();
 
@@ -592,6 +639,12 @@ namespace TsuruLauncher.ViewModels
 
             SearchRowsView = CollectionViewSource.GetDefaultView(SearchRows);
             SearchRowsView.Filter = o => o is ResourceRowItem row && MatchesEnvironment(row);
+
+            TrendingRowsView = CollectionViewSource.GetDefaultView(TrendingRows);
+            TrendingRowsView.Filter = o => o is ResourceRowItem row && MatchesEnvironment(row);
+            NewestRowsView = CollectionViewSource.GetDefaultView(NewestRows);
+            NewestRowsView.Filter = o => o is ResourceRowItem row && MatchesEnvironment(row);
+
             RebuildFilteredSubCategories();
 
             IsFeaturedLoading = true;
@@ -607,12 +660,7 @@ namespace TsuruLauncher.ViewModels
             {
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TrendingMods.Clear();
-                    foreach (var mod in PreloadService.CachedTrendingMods) TrendingMods.Add(mod);
-
-                    NewestMods.Clear();
-                    foreach (var mod in PreloadService.CachedNewestMods) NewestMods.Add(mod);
-
+                    SetFeatured(PreloadService.CachedTrendingMods, PreloadService.CachedNewestMods);
                     IsFeaturedLoading = false;
                 });
                 return;
@@ -653,12 +701,7 @@ namespace TsuruLauncher.ViewModels
 
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    TrendingMods.Clear();
-                    foreach (var mod in trending) TrendingMods.Add(mod);
-
-                    NewestMods.Clear();
-                    foreach (var mod in newest) NewestMods.Add(mod);
-
+                    SetFeatured(trending, newest);
                     IsFeaturedLoading = false;
                 });
 

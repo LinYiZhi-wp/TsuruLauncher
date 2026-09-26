@@ -21,12 +21,24 @@ namespace TsuruLauncher.Views.Dialogs
             InitializeWebView();
         }
 
+        // ⚠ async void 抛异常会崩应用 —— 登录初始化失败要给用户提示，不能静默崩
         private async void InitializeWebView()
         {
-            await LoginWebView.EnsureCoreWebView2Async();
-            
-            LoginWebView.CoreWebView2.NavigationStarting += CoreWebView2_NavigationStarting;
-            LoginWebView.Source = new Uri(_loginUrl);
+            try
+            {
+                await LoginWebView.EnsureCoreWebView2Async();
+
+                LoginWebView.CoreWebView2.NavigationStarting += CoreWebView2_NavigationStarting;
+                LoginWebView.Source = new Uri(_loginUrl);
+            }
+            catch (Exception ex)
+            {
+                Utilities.Logger.LogError(ex, "初始化登录 WebView");
+                Controls.iOS26Dialog.Show(
+                    "登录窗口初始化失败，可能是缺少 WebView2 运行时。\n\n" + ex.Message,
+                    "登录", Controls.DialogIcon.Error);
+                Close();
+            }
         }
 
         private void CoreWebView2_NavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)

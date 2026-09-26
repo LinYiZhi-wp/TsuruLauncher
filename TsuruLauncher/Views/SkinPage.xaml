@@ -1,0 +1,574 @@
+<Page x:Class="TsuruLauncher.Views.SkinPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:anim="clr-namespace:TsuruLauncher.Services.Animation"
+      xmlns:motion="clr-namespace:TsuruLauncher.Services.Animation"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:ctl="clr-namespace:TsuruLauncher.Controls"
+      xmlns:vm="clr-namespace:TsuruLauncher.ViewModels"
+      mc:Ignorable="d"
+      d:DesignHeight="760" d:DesignWidth="1180"
+      Title="Skin"
+      Background="Transparent"
+      AllowDrop="True"
+      Drop="Page_Drop"
+      DragOver="Page_DragOver"
+      DragLeave="Page_DragLeave">
+
+    <Page.DataContext>
+        <vm:SkinViewModel/>
+    </Page.DataContext>
+
+    <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- 缓动曲线统一从 AxolotlMotion 取（和项目其它动效同一套曲线，不要新造） -->
+        <x:Static x:Key="EaseOutCubic" Member="anim:AxolotlMotion.EaseOut"/>
+        <x:Static x:Key="EaseOutBack" Member="anim:AxolotlMotion.OvershootEase"/>
+        <x:Static x:Key="EaseInOutCubic" Member="anim:AxolotlMotion.EaseInOut"/>
+
+        <!-- 顶部两个页签：跟资源详情页同一套「滑动指示块 + 文字交叉淡入」 -->
+        <Style x:Key="SkinTabStyle" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid Background="Transparent">
+                            <Border x:Name="HoverLayer" CornerRadius="15" Opacity="0"
+                                    Background="{DynamicResource Surface4Brush}"/>
+                            <Border Padding="16,0" Background="Transparent">
+                                <Grid>
+                                    <ContentPresenter x:Name="TextNormal" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      TextElement.Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <ContentPresenter x:Name="TextAccent" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0"
+                                                      IsHitTestVisible="False"
+                                                      TextElement.Foreground="{DynamicResource AccentForegroundBrush}"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                    <Condition Property="IsChecked" Value="False"/>
+                                </MultiTrigger.Conditions>
+                                <MultiTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverLayer" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </MultiTrigger.EnterActions>
+                                <MultiTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverLayer" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </MultiTrigger.ExitActions>
+                            </MultiTrigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 皮肤卡片 -->
+        <Style x:Key="SkinCard" TargetType="Border">
+            <Setter Property="Width" Value="118"/>
+            <Setter Property="Height" Value="150"/>
+            <Setter Property="Margin" Value="0,0,12,12"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </Page.Resources>
+
+    <Grid Margin="24,20,24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ══ 顶栏：标题 + 页签胶囊 + 创建皮肤 ══
+             列宽和下面的内容区一致（320 / *），这样页签的左缘正好落在右栏的起始位置
+             —— 参考里就是这个对齐，而不是跟「创建皮肤」一起挤在右边。 -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="皮肤选择器" FontSize="19" FontWeight="SemiBold"
+                       VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+            <Grid Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="18,0,0,0"
+                  ctl:SegmentedIndicator.Host="True"
+                  ctl:SegmentedIndicator.Indicator="{Binding ElementName=SkinTabIndicator}">
+                <Canvas IsHitTestVisible="False">
+                    <Border x:Name="SkinTabIndicator" CornerRadius="15" Opacity="0"
+                            Background="{DynamicResource AccentBrush}"/>
+                </Canvas>
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="TabSaved" Content="已保存皮肤" GroupName="SkinTab" IsChecked="True"
+                                 Checked="SkinTab_Checked" Style="{StaticResource SkinTabStyle}"/>
+                    <RadioButton x:Name="TabOfficial" Content="官方皮肤" GroupName="SkinTab"
+                                 Checked="SkinTab_Checked" Style="{StaticResource SkinTabStyle}"/>
+                </StackPanel>
+            </Grid>
+
+            <Button Grid.Column="1" x:Name="CreateSkinBtn" HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Height="32" Padding="14,0" Cursor="Hand"
+                    Background="{DynamicResource AccentBrush}"
+                    Foreground="{DynamicResource AccentForegroundBrush}"
+                    BorderThickness="0" Click="CreateSkin_Click">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Bd" CornerRadius="16" Background="{TemplateBinding Background}"/>
+
+                            <!-- 悬停高亮：叠加层动画（改 Background 是硬切） -->
+                            <Border x:Name="HoverBd" CornerRadius="16"
+                                    Background="{DynamicResource AccentHoverBrush}" Opacity="0" IsHitTestVisible="False"/>
+
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.14" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.12" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="+" FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Text="创建皮肤" FontSize="12.5" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!-- ══ 内容：左预览 / 右皮肤库 ══ -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 左：3D 预览。
+                 参考（Axolotl）这里是**没有卡片外框**的 —— 角色直接浮在页面背景上，
+                 脚下有一圈柔和投影。所以这里不用 Border，只放内容 + 一个椭圆阴影。 -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- 皮肤名小标签 —— **永远反映账号当前正在用的皮肤**（换完皮肤会自动变） -->
+                <Border HorizontalAlignment="Left" CornerRadius="8" Padding="12,6"
+                        Background="{DynamicResource Surface4Brush}">
+                    <TextBlock x:Name="ChipTextBlock" Text="{Binding ChipText}" FontSize="12.5"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis" MaxWidth="200"/>
+                </Border>
+
+                <Grid Grid.Row="1" Margin="0,10,0,6">
+                    <!-- 3D 预览用 WebView2 + three.js 渲染（WPF 的 Viewport3D 没有最近邻采样、
+                             透明层也排序不对，做不出参考那种效果） -->
+                        <ctl:SkinPreviewWeb x:Name="Preview" Slim="{Binding IsSlimPreview}"
+                                            SkinSource="{Binding PreviewSkin}" CapeSource="{Binding OfficialCape}"/>
+                    <!-- 脚下投影：跟着角色一起淡入（放在 SkinPreview3D 外面，
+                         因为它的 Root 会整体淡入，阴影要自己动） -->
+                    <Ellipse x:Name="GroundShadow" Width="120" Height="18" VerticalAlignment="Bottom"
+                             HorizontalAlignment="Center" Margin="0,0,0,46" Opacity="0" IsHitTestVisible="False">
+                        <Ellipse.Fill>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#3A000000" Offset="0"/>
+                                <GradientStop Color="#00000000" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                </Grid>
+
+                <TextBlock Grid.Row="2" Text="↔ 拖动以旋转" FontSize="12" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+
+                <!-- 编辑皮肤：直接用系统默认图片编辑器打开当前皮肤的 PNG -->
+                <Button Grid.Row="3" x:Name="EditSkinBtn" Margin="0,14,0,0" Height="38" Padding="18,0"
+                        HorizontalAlignment="Center" Cursor="Hand"
+                        Background="{DynamicResource Surface4Brush}"
+                        Foreground="{DynamicResource TextPrimaryBrush}"
+                        BorderThickness="0" Click="EditSkin_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid>
+                                <Border x:Name="Bd" CornerRadius="12" Background="{TemplateBinding Background}"/>
+
+                                <Border x:Name="HoverBd" CornerRadius="12"
+                                        Background="{DynamicResource Surface5Brush}" Opacity="0" IsHitTestVisible="False"/>
+
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Margin="{TemplateBinding Padding}"/>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                                 To="1" Duration="0:0:0.14" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                                 To="0" Duration="0:0:0.12" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="✎" FontSize="12.5" VerticalAlignment="Center"/>
+                        <TextBlock Text="编辑皮肤" FontSize="12.5" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <!-- 右：皮肤库 -->
+            <Grid Grid.Column="1" Margin="18,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock x:Name="SectionTitleText" Grid.Row="0" FontSize="14" FontWeight="SemiBold" Margin="2,0,0,12"
+                           Foreground="{DynamicResource TextPrimaryBrush}">
+                    <Run Text="⌃  "/>
+                    <Run Text="{Binding SectionTitle, Mode=OneWay}"/>
+                </TextBlock>
+
+                <!-- ⚠ 两个面板都常驻、用 Opacity 控制 —— 不能绑 Visibility，
+                     否则切换是"啪"一下硬切，没法做交叉淡入。 -->
+                <ScrollViewer x:Name="SavedPanel" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0"
+                              Opacity="1">
+                    <Grid>
+                        <ItemsControl x:Name="SkinGrid" ItemsSource="{Binding SavedSkins}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal" motion:PageAnimation.StaggerChildren="True"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border MouseLeftButtonUp="SkinCard_Click" Tag="{Binding}"
+                                            MouseEnter="SkinCard_MouseEnter" MouseLeave="SkinCard_MouseLeave">
+                                        <Border.Style>
+                                            <!-- ⚠ 这里**不要**用 DataTrigger 改 BorderBrush ——
+                                                 DynamicResource 画刷是共享的，没法做颜色动画，
+                                                 结果就是选中时"啪"一下变色（硬切）。
+                                                 选中高亮交给内层的描边 Border，用 Opacity 动画。 -->
+                                            <Style TargetType="Border" BasedOn="{StaticResource SkinCard}"/>
+                                        </Border.Style>
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <!-- 缩略图 -->
+                                            <Border Grid.Row="0" CornerRadius="8" ClipToBounds="True"
+                                                    Background="{DynamicResource Surface4Brush}">
+                                                <Grid>
+                                                    <!-- 3D 缩略图（离屏渲染），不是平铺贴图 -->
+                                                    <Image Source="{Binding Thumbnail}" Stretch="Uniform"
+                                                           Visibility="{Binding IsNotAddCard, Converter={StaticResource BoolToVis}}"
+                                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+
+                                                    <!-- 「＋ 添加皮肤 / 拖放」占位卡（常驻第一位） -->
+                                                    <StackPanel VerticalAlignment="Center"
+                                                                Visibility="{Binding IsAddCard, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock Text="＋" FontSize="26" HorizontalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                        <TextBlock Text="添加皮肤" FontSize="13" Margin="0,10,0,0"
+                                                                   HorizontalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                                        <TextBlock Text="拖放" FontSize="11" Margin="0,4,0,0"
+                                                                   HorizontalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                                    </StackPanel>
+
+                                                    <!-- 选中描边：淡入淡出（不是硬切） -->
+                                                    <Border CornerRadius="8" BorderThickness="2"
+                                                            BorderBrush="{DynamicResource AccentBrush}">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Opacity" Value="0"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                        <DataTrigger.EnterActions>
+                                                                            <BeginStoryboard>
+                                                                                <Storyboard>
+                                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                                     To="1" Duration="0:0:0.18"
+                                                                                                     EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                                                </Storyboard>
+                                                                            </BeginStoryboard>
+                                                                        </DataTrigger.EnterActions>
+                                                                        <DataTrigger.ExitActions>
+                                                                            <BeginStoryboard>
+                                                                                <Storyboard>
+                                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                                     To="0" Duration="0:0:0.15"
+                                                                                                     EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                                                </Storyboard>
+                                                                            </BeginStoryboard>
+                                                                        </DataTrigger.ExitActions>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                    </Border>
+
+                                                    <!-- 选中对勾 -->
+                                                    <Border Width="20" Height="20" CornerRadius="10"
+                                                            HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6"
+                                                            Background="{DynamicResource AccentBrush}">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Opacity" Value="0"/>
+                                                                <Setter Property="RenderTransform">
+                                                                    <Setter.Value>
+                                                                        <ScaleTransform ScaleX="0.6" ScaleY="0.6"/>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                                <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                        <DataTrigger.EnterActions>
+                                                                            <BeginStoryboard>
+                                                                                <Storyboard>
+                                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                                     To="1" Duration="0:0:0.2"
+                                                                                                     EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                                                                     To="1" Duration="0:0:0.24"
+                                                                                                     EasingFunction="{StaticResource EaseOutBack}"/>
+                                                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                                                                     To="1" Duration="0:0:0.24"
+                                                                                                     EasingFunction="{StaticResource EaseOutBack}"/>
+                                                                                </Storyboard>
+                                                                            </BeginStoryboard>
+                                                                        </DataTrigger.EnterActions>
+                                                                        <DataTrigger.ExitActions>
+                                                                            <BeginStoryboard>
+                                                                                <Storyboard>
+                                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                                     To="0" Duration="0:0:0.12"/>
+                                                                                </Storyboard>
+                                                                            </BeginStoryboard>
+                                                                        </DataTrigger.ExitActions>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Text="✓" FontSize="11" FontWeight="Bold"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource AccentForegroundBrush}"/>
+                                                    </Border>
+
+                                                    <!-- 删除（悬停才出现，由 code-behind 淡入淡出） -->
+                                                    <Button x:Name="DelBtn" Content="✕" Width="20" Height="20" Padding="0"
+                                                            FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                            Margin="6" Opacity="0" Cursor="Hand"
+                                                            Visibility="{Binding IsNotAddCard, Converter={StaticResource BoolToVis}}"
+                                                            Background="{DynamicResource Surface3Brush}"
+                                                            Foreground="{DynamicResource TextSecondaryBrush}"
+                                                            BorderThickness="0" Click="DeleteSkin_Click" Tag="{Binding}"/>
+                                                </Grid>
+                                            </Border>
+
+                                            <TextBlock Grid.Row="1" Text="{Binding Name}" FontSize="11.5" Margin="0,8,0,0"
+                                                       HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                       Visibility="{Binding IsNotAddCard, Converter={StaticResource BoolToVis}}"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+
+                    </Grid>
+                </ScrollViewer>
+
+                <!-- 官方皮肤页签 = **默认皮肤库**（Minecraft 自带的 9 款）
+                     ⚠ 参考（Axolotl）这一页是让用户「挑一款默认皮肤用」，
+                       不是只显示账号当前那张 —— 这是两边逻辑最大的差别。 -->
+                <ScrollViewer x:Name="OfficialPanel" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              Opacity="0" IsHitTestVisible="False">
+                    <StackPanel>
+                        <!-- 上传状态 / 报错 -->
+                        <TextBlock x:Name="ApplyStatusText" Text="{Binding ApplyStatus}" FontSize="11.5" Margin="2,0,0,10"
+                                   TextWrapping="Wrap" LineHeight="18"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Text="正在应用到账号…" FontSize="11.5" Margin="2,0,0,10"
+                                   Foreground="{DynamicResource AccentBrush}"
+                                   Visibility="{Binding IsApplying, Converter={StaticResource BoolToVis}}"/>
+
+                        <!-- 说明这一排是干嘛的：想换皮肤就来这里挑一张 -->
+                        <TextBlock Text="想换皮肤？点下面任意一款，会直接应用到账号。"
+                                   FontSize="11.5" Margin="2,0,0,12"
+                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
+
+                    <ItemsControl ItemsSource="{Binding OfficialSkins}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <!-- 和「已保存皮肤」用同一套卡片样式；点一张会**应用到账号**（上传） -->
+                                <Border MouseLeftButtonUp="DefaultSkinCard_Click" Tag="{Binding}"
+                                        MouseEnter="SkinCard_MouseEnter" MouseLeave="SkinCard_MouseLeave">
+                                    <!-- ⚠ 选中高亮不要用 DataTrigger 改 BorderBrush（DynamicResource 画刷共享，
+                                         没法做颜色动画 = 硬切）。交给下面那层描边做 Opacity 动画。 -->
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource SkinCard}"/>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <Border Grid.Row="0" CornerRadius="8" ClipToBounds="True"
+                                                Background="{DynamicResource Surface4Brush}">
+                                            <Grid>
+                                                <Image Source="{Binding Thumbnail}" Stretch="Uniform"
+                                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+
+                                                <!-- 选中描边：淡入淡出 -->
+                                                <Border CornerRadius="8" BorderThickness="2"
+                                                        BorderBrush="{DynamicResource AccentBrush}">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Opacity" Value="0"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                    <DataTrigger.EnterActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                                 To="1" Duration="0:0:0.18"
+                                                                                                 EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </DataTrigger.EnterActions>
+                                                                    <DataTrigger.ExitActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                                 To="0" Duration="0:0:0.15"
+                                                                                                 EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </DataTrigger.ExitActions>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+
+                                        <TextBlock Grid.Row="1" Text="{Binding Name}"
+                                                   FontSize="11.5" Margin="0,8,0,0"
+                                                   HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+
+            </Grid>
+        </Grid>
+
+        <!-- 拖放提示遮罩 -->
+        <Border x:Name="DropOverlay" Grid.RowSpan="2" Opacity="0" IsHitTestVisible="False"
+                CornerRadius="{StaticResource RadiusLarge}"
+                Background="{DynamicResource AccentGlassLightBrush}"
+                BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="＋" FontSize="34" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource AccentBrush}"/>
+                <TextBlock Text="松开即可添加皮肤" FontSize="13.5" Margin="0,8,0,0" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource AccentBrush}"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>

@@ -30,9 +30,18 @@ namespace TsuruLauncher
             // （系统 ClientAreaAnimation / MenuAnimation 在远程桌面等会话里默认就是 False，
             //   以前直接拿它当默认值会让整套界面变成硬切）。
             Utilities.Logger.LogInfo("[Motion] " + AxolotlMotion.DescribeMotionPreference());
+
+            // 版本号从程序集读，别写死在 XAML 里
+            try
+            {
+                var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+                VersionText.Text = "v" + (v != null ? v.ToString(3) : "?");
+            }
+            catch { VersionText.Text = "v?"; }
             
             RootFrame.Navigating += RootFrame_Navigating;
             RootFrame.Navigated += RootFrame_Navigated;
+            RootFrame.Navigated += PerfLogNavigation;
             this.Loaded += MainWindow_Loaded;
             this.Activated += MainWindow_Activated;
 
@@ -44,6 +53,7 @@ namespace TsuruLauncher
                 {
                     if (RootFrame.Content is System.Windows.Controls.Page current)
                     {
+                        _navClock.Restart();
                         RootFrame.Navigate(current);
                     }
                 });
@@ -52,7 +62,11 @@ namespace TsuruLauncher
             var vm = this.DataContext as ViewModels.MainViewModel;
             if (vm != null)
             {
-                vm.RequestNavigation += (page) => RootFrame.Navigate(page);
+                vm.RequestNavigation += (page) =>
+                {
+                    _navClock.Restart();
+                    RootFrame.Navigate(page);
+                };
                 vm.RequestGoBack += () => 
                 {
                     if (RootFrame.CanGoBack) RootFrame.GoBack();
@@ -211,6 +225,7 @@ namespace TsuruLauncher
                 "home" => GetCachedPage("home", () => new Views.HomePage()),
                 "resources" => GetCachedPage("resources", () => new Views.ResourcesPage()),
                 "download" => GetCachedPage("download", () => new Views.DownloadPage()),
+                "skin" => GetCachedPage("skin", () => new Views.SkinPage()),
                 "lab" => GetCachedPage("lab", () => new Views.LabPage()),
                 "settings" => GetCachedPage("settings", () => new Views.SettingsPage()),
                 // 调试用：直接进「版本选择」页（它平时只能从首页点进去），方便验证右栏文件夹列表
@@ -653,8 +668,33 @@ namespace TsuruLauncher
         /// 好处还顺带消掉了"拦下来的导航被新导航打断"那一整类边界情况
         /// （<c>_pendingSwap</c> / <c>_suppressLeaveFade</c> / <c>FlushPendingSwap</c> 全部不再需要）。
         /// </summary>
+        // ── 页面加载耗时测量 ────────────────────────────────────────────
+        // 目的：给"哪个页面慢"一个**可量化**的答案，而不是靠感觉。
+        // 打开方式：TSURU_PERF=1
+        private static bool PerfEnabled =>
+            Environment.GetEnvironmentVariable("TSURU_PERF") == "1";
+
+        private readonly System.Diagnostics.Stopwatch _navClock = new();
+
+        private void PerfLogNavigation(object sender, System.Windows.Navigation.NavigationEventArgs e)
+        {
+            if (!PerfEnabled) return;
+            try
+            {
+                _navClock.Stop();
+                Utilities.Logger.LogInfo(
+                    $"[Perf] 页面 {e.Content?.GetType().Name ?? "?"} 加载 {_navClock.Elapsed.TotalMilliseconds:F1}ms");
+            }
+            catch { }
+        }
+
         private void RootFrame_Navigating(object sender, System.Windows.Navigation.NavigatingCancelEventArgs e)
         {
+            // 所有导航都会经过这里，作为「页面加载耗时」的起点。
+            // ⚠ 用实例导航（Navigate(page)）时页面构造函数已经跑完了，
+            //   所以这里量到的是「布局 + 首次渲染」，不含构造。
+            if (PerfEnabled) _navClock.Restart();
+
             if (e.Content is Page page)
             {
                 page.Width = double.NaN;
@@ -828,6 +868,7 @@ namespace TsuruLauncher
             Views.HomePage => ("首页", SymbolRegular.Home24),
             Views.ResourcesPage => ("资源", SymbolRegular.Library24),
             Views.DownloadPage => ("下载", SymbolRegular.ArrowDownload24),
+            Views.SkinPage => ("皮肤选择器", SymbolRegular.PaintBrush24),
             Views.LabPage => ("实验室", SymbolRegular.Beaker24),
             Views.SettingsPage => ("设置", SymbolRegular.Settings24),
             Views.VersionSettingsPage => ("版本设置", SymbolRegular.Settings24),

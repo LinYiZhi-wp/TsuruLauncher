@@ -43,6 +43,11 @@
         <!-- 资源详情的标签胶囊：选中态是 **accent 实心 + 白字**（Axolotl 那颗粉色胶囊），
              悬停给一层浅底。之前用 SegTab 但没配 SegmentedIndicator 宿主，
              选中态没有底色，看着像三个灰片。 -->
+        <!-- 描述 / 版本 / 图库 胶囊。
+             ⚠ 选中底色**不再由每一项自己画**（那样只能瞬时硬切，因为主题画刷是共享的
+             DynamicResource，WPF 不允许对冻结画刷做 Color 动画）。改成外面一块
+             SegmentedIndicator 指示块滑过去，文字用两层 ContentPresenter 交叉淡入
+             —— 跟资源页的 CategoryPill 同一套机制。 -->
         <Style x:Key="DetailTabStyle" TargetType="RadioButton">
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Height" Value="32"/>
@@ -53,23 +58,70 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Bd" CornerRadius="16" Padding="18,0"
-                                Background="Transparent">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid Background="Transparent">
+                            <Border x:Name="HoverLayer" CornerRadius="16" Opacity="0"
+                                    Background="{DynamicResource Surface4Brush}"/>
+                            <Border Padding="18,0" Background="Transparent">
+                                <Grid>
+                                    <ContentPresenter x:Name="TextNormal" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      TextElement.Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <ContentPresenter x:Name="TextAccent" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0"
+                                                      IsHitTestVisible="False"
+                                                      TextElement.Foreground="{DynamicResource AccentForegroundBrush}"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentBrush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
-                            </Trigger>
                             <MultiTrigger>
                                 <MultiTrigger.Conditions>
                                     <Condition Property="IsMouseOver" Value="True"/>
                                     <Condition Property="IsChecked" Value="False"/>
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface4Brush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                                <MultiTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverLayer" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </MultiTrigger.EnterActions>
+                                <MultiTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverLayer" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </MultiTrigger.ExitActions>
                             </MultiTrigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="TextAccent" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"
+                                                             EasingFunction="{x:Static anim:AxolotlMotion.EaseInOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -90,11 +142,12 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Padding" Value="16,14"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
+
+            <!-- ⚠ hover 描边高亮走 AdornerLayer 动画（直接 Setter 改 BorderBrush 是硬切）。
+                 另外原来的 hover Background 和基础色是同一个 GlassLightBrush —— 等于没效果，去掉了。 -->
+            <Setter Property="motion:MotionAssist.HoverTintBorderBrush" Value="{DynamicResource GlassStrongBrush}"/>
+
             <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource GlassLightBrush}"/>
-                    <Setter Property="BorderBrush" Value="{DynamicResource GlassStrongBrush}"/>
-                </Trigger>
                 <DataTrigger Binding="{Binding SelectedVersion, Source={StaticResource ResourceKey}, FallbackValue={x:Null}}" Value="{x:Null}">
                     <!-- Default state -->
                 </DataTrigger>
@@ -110,23 +163,73 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                CornerRadius="{StaticResource RadiusMedium}" Padding="{TemplateBinding Padding}"
-                                BorderThickness="0">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid>
+                            <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                    CornerRadius="{StaticResource RadiusMedium}"
+                                    BorderThickness="0" RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="bdScale" ScaleX="1" ScaleY="1"/>
+                                </Border.RenderTransform>
+                            </Border>
+
+                            <!-- ⚠ 悬停/禁用都改成叠加层动画（原来 Setter 改 Background 是硬切；
+                                 悬停那个 ScaleTransform 用 Setter 换整个 Transform 也是硬切）。 -->
+                            <Border x:Name="HoverBd" Background="#00C853"
+                                    CornerRadius="{StaticResource RadiusMedium}" Opacity="0" IsHitTestVisible="False"/>
+                            <Border x:Name="DisabledBd" Background="{DynamicResource GlassStrongBrush}"
+                                    CornerRadius="{StaticResource RadiusMedium}" Opacity="0" IsHitTestVisible="False"/>
+
+                            <ContentPresenter x:Name="Content" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#00C853"/>
-                                <Setter TargetName="bd" Property="RenderTransform">
-                                    <Setter.Value>
-                                        <ScaleTransform ScaleX="1.02" ScaleY="1.02"/>
-                                    </Setter.Value>
-                                </Setter>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="1.02" Duration="0:0:0.18" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="1.02" Duration="0:0:0.18" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.14" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="1" Duration="0:0:0.18" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="1" Duration="0:0:0.18" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource GlassStrongBrush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DisabledBd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="Content" Storyboard.TargetProperty="Opacity"
+                                                             To="0.45" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DisabledBd" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="Content" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -153,26 +256,78 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="10" Padding="{TemplateBinding Padding}"
-                                Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                            <Border.RenderTransform>
-                                <ScaleTransform ScaleX="1" ScaleY="1"/>
-                            </Border.RenderTransform>
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid>
+                            <Border x:Name="Bd" CornerRadius="10" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="bdScale" ScaleX="1" ScaleY="1"/>
+                                </Border.RenderTransform>
+                            </Border>
+
+                            <!-- 悬停高亮：叠加层动画 -->
+                            <Border x:Name="HoverBd" CornerRadius="10"
+                                    Background="{DynamicResource GlassLightBrush}" Opacity="0" IsHitTestVisible="False"/>
+
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassLightBrush}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.12" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="RenderTransform">
-                                    <Setter.Value>
-                                        <ScaleTransform ScaleX="0.97" ScaleY="0.97"/>
-                                    </Setter.Value>
-                                </Setter>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="0.97" Duration="0:0:0.1" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="0.97" Duration="0:0:0.1" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.45"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity"
+                                                             To="0.45" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -185,27 +340,84 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="10" Padding="{TemplateBinding Padding}"
-                                Background="{DynamicResource AccentBrush}" RenderTransformOrigin="0.5,0.5">
-                            <Border.RenderTransform>
-                                <ScaleTransform ScaleX="1" ScaleY="1"/>
-                            </Border.RenderTransform>
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid>
+                            <Border x:Name="Bd" CornerRadius="10" Background="{DynamicResource AccentBrush}"
+                                    RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="bdScale" ScaleX="1" ScaleY="1"/>
+                                </Border.RenderTransform>
+                            </Border>
+
+                            <Border x:Name="HoverBd" CornerRadius="10"
+                                    Background="{DynamicResource AccentHoverBrush}" Opacity="0" IsHitTestVisible="False"/>
+                            <Border x:Name="DisabledBd" CornerRadius="10"
+                                    Background="{DynamicResource GlassStrongBrush}" Opacity="0" IsHitTestVisible="False"/>
+
+                            <ContentPresenter x:Name="Content" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentHoverBrush}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.15" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.12" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="RenderTransform">
-                                    <Setter.Value>
-                                        <ScaleTransform ScaleX="0.97" ScaleY="0.97"/>
-                                    </Setter.Value>
-                                </Setter>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="0.97" Duration="0:0:0.1" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="0.97" Duration="0:0:0.1" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="bdScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassStrongBrush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DisabledBd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="Content" Storyboard.TargetProperty="Opacity"
+                                                             To="0.45" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="DisabledBd" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="Content" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -226,15 +438,38 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="13" Padding="9,0"
-                                Background="{DynamicResource GlassLightBrush}"
-                                BorderBrush="{DynamicResource GlassLightBrush}" BorderThickness="1">
-                            <ContentPresenter VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid>
+                            <Border x:Name="Bd" CornerRadius="13"
+                                    Background="{DynamicResource GlassLightBrush}"
+                                    BorderBrush="{DynamicResource GlassLightBrush}" BorderThickness="1"/>
+
+                            <Border x:Name="HoverBd" CornerRadius="13"
+                                    Background="{DynamicResource GlassMediumBrush}"
+                                    BorderBrush="{DynamicResource GlassStrongBrush}" BorderThickness="1"
+                                    Opacity="0" IsHitTestVisible="False"/>
+
+                            <!-- ⚠ 内容里的 TextBlock 自带 Foreground，且是 UIElement（只能有一个父节点），
+                                 所以这里只用单 presenter，别做多层交叉淡入。 -->
+                            <ContentPresenter VerticalAlignment="Center" Margin="9,0"/>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassMediumBrush}"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource GlassStrongBrush}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.14" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.12" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -432,15 +667,28 @@
                         </Grid>
                     </Border>
 
-                    <!-- ══ 标签页（描述 / 版本 / 图库）—— 三个胶囊 tab，跟美西螈一致 ══ -->
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,14">
-                        <RadioButton x:Name="TabDesc" Content="描述" GroupName="DetailTab" IsChecked="True"
-                                     Click="DetailTab_Click" Tag="desc" Style="{StaticResource DetailTabStyle}"/>
-                        <RadioButton x:Name="TabVer" Content="版本" GroupName="DetailTab"
-                                     Click="DetailTab_Click" Tag="ver" Style="{StaticResource DetailTabStyle}"/>
-                        <RadioButton x:Name="TabGallery" Content="图库" GroupName="DetailTab"
-                                     Click="DetailTab_Click" Tag="gallery" Style="{StaticResource DetailTabStyle}"/>
-                    </StackPanel>
+                    <!-- ══ 标签页（描述 / 版本 / 图库）—— 三个胶囊 tab，跟美西螈一致 ══
+                         选中底色由一块会**滑过去**的指示块承担（SegmentedIndicator），
+                         不再让每个 tab 自己硬切背景色。 -->
+                    <Grid Grid.Row="1" Margin="0,0,0,14" HorizontalAlignment="Left"
+                          ctl:SegmentedIndicator.Host="True"
+                          ctl:SegmentedIndicator.Indicator="{Binding ElementName=DetailTabIndicator}">
+                        <Canvas IsHitTestVisible="False">
+                            <Border x:Name="DetailTabIndicator" CornerRadius="16" Opacity="0"
+                                    Background="{DynamicResource AccentBrush}"/>
+                        </Canvas>
+                        <StackPanel Orientation="Horizontal">
+                            <!-- ⚠ 用 Checked 而不是 Click：指示块是跟着 IsChecked 走的，
+                                 面板也必须跟着**状态**走，否则程序化设置 IsChecked（自检 / 外部入口）
+                                 会出现「胶囊在图库、内容还是描述」的错位。 -->
+                            <RadioButton x:Name="TabDesc" Content="描述" GroupName="DetailTab" IsChecked="True"
+                                         Checked="DetailTab_Checked" Tag="desc" Style="{StaticResource DetailTabStyle}"/>
+                            <RadioButton x:Name="TabVer" Content="版本" GroupName="DetailTab"
+                                         Checked="DetailTab_Checked" Tag="ver" Style="{StaticResource DetailTabStyle}"/>
+                            <RadioButton x:Name="TabGallery" Content="图库" GroupName="DetailTab"
+                                         Checked="DetailTab_Checked" Tag="gallery" Style="{StaticResource DetailTabStyle}"/>
+                        </StackPanel>
+                    </Grid>
 
                     <!-- DESCRIPTION & META
                          ⚠ 之前这里套了一个 <ScrollViewer MaxHeight="360"> —— 外层页面本身
@@ -576,14 +824,79 @@
                                                         Cursor="Hand" FontSize="12"
                                                         Click="PageButton_Click" Tag="{Binding Number}">
                                                     <Button.Style>
-                                                        <Style TargetType="Button" BasedOn="{StaticResource iOS26.SecondaryButton}">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                                                    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-                                                                    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
-                                                                    <Setter Property="FontWeight" Value="Bold"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
+                                                        <!-- ⚠ 不用库样式了：它改 Background/Foreground 是硬切，
+                                                             而 DataTrigger 又改不了库模板里的元素。
+                                                             自己给个模板，把"当前页"做成两层叠层动画。 -->
+                                                        <Style TargetType="Button">
+                                                            <Setter Property="Cursor" Value="Hand"/>
+                                                            <Setter Property="Template">
+                                                                <Setter.Value>
+                                                                    <ControlTemplate TargetType="Button">
+                                                                        <Grid>
+                                                                            <Border x:Name="Bd" CornerRadius="8"
+                                                                                    Background="{DynamicResource Surface4Brush}"/>
+                                                                            <Border x:Name="CurrentBd" CornerRadius="8"
+                                                                                    Background="{DynamicResource AccentBrush}"
+                                                                                    Opacity="0" IsHitTestVisible="False"/>
+
+                                                                            <ContentPresenter x:Name="TextNormal"
+                                                                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                              TextElement.Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                                            <ContentPresenter x:Name="TextCurrent"
+                                                                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                              Opacity="0" IsHitTestVisible="False"
+                                                                                              TextElement.FontWeight="Bold"
+                                                                                              TextElement.Foreground="{DynamicResource AccentForegroundBrush}"/>
+                                                                        </Grid>
+                                                                        <ControlTemplate.Triggers>
+                                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                                <Trigger.EnterActions>
+                                                                                    <BeginStoryboard>
+                                                                                        <Storyboard>
+                                                                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity"
+                                                                                                             To="0.75" Duration="0:0:0.12" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                                        </Storyboard>
+                                                                                    </BeginStoryboard>
+                                                                                </Trigger.EnterActions>
+                                                                                <Trigger.ExitActions>
+                                                                                    <BeginStoryboard>
+                                                                                        <Storyboard>
+                                                                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity"
+                                                                                                             To="1" Duration="0:0:0.14" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                                        </Storyboard>
+                                                                                    </BeginStoryboard>
+                                                                                </Trigger.ExitActions>
+                                                                            </Trigger>
+                                                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                                                <DataTrigger.EnterActions>
+                                                                                    <BeginStoryboard>
+                                                                                        <Storyboard>
+                                                                                            <DoubleAnimation Storyboard.TargetName="CurrentBd" Storyboard.TargetProperty="Opacity"
+                                                                                                             To="1" Duration="0:0:0.2" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                                            <DoubleAnimation Storyboard.TargetName="TextCurrent" Storyboard.TargetProperty="Opacity"
+                                                                                                             To="1" Duration="0:0:0.18" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                                                                             To="0" Duration="0:0:0.18" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                                        </Storyboard>
+                                                                                    </BeginStoryboard>
+                                                                                </DataTrigger.EnterActions>
+                                                                                <DataTrigger.ExitActions>
+                                                                                    <BeginStoryboard>
+                                                                                        <Storyboard>
+                                                                                            <DoubleAnimation Storyboard.TargetName="CurrentBd" Storyboard.TargetProperty="Opacity"
+                                                                                                             To="0" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                                            <DoubleAnimation Storyboard.TargetName="TextCurrent" Storyboard.TargetProperty="Opacity"
+                                                                                                             To="0" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                                            <DoubleAnimation Storyboard.TargetName="TextNormal" Storyboard.TargetProperty="Opacity"
+                                                                                                             To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                                        </Storyboard>
+                                                                                    </BeginStoryboard>
+                                                                                </DataTrigger.ExitActions>
+                                                                            </DataTrigger>
+                                                                        </ControlTemplate.Triggers>
+                                                                    </ControlTemplate>
+                                                                </Setter.Value>
+                                                            </Setter>
                                                         </Style>
                                                     </Button.Style>
                                                 </Button>
@@ -669,7 +982,36 @@
                                             <Setter Property="Template">
                                                 <Setter.Value>
                                                     <ControlTemplate TargetType="ListBoxItem">
-                                                        <ContentPresenter/>
+                                                        <Grid>
+                                                            <!-- ⚠ 选中高亮放这里（不是行里的 Border）——
+                                                                 这里是真正的 ControlTemplate，Storyboard.TargetName 才有效；
+                                                                 行里的 Border 是 DataTemplate，跨不出命名域。 -->
+                                                            <Border x:Name="SelectedBd" CornerRadius="{StaticResource RadiusMedium}"
+                                                                    Background="{DynamicResource AccentGlassLightBrush}"
+                                                                    BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
+                                                                    Opacity="0" IsHitTestVisible="False"/>
+                                                            <ContentPresenter/>
+                                                        </Grid>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Trigger.EnterActions>
+                                                                    <BeginStoryboard>
+                                                                        <Storyboard>
+                                                                            <DoubleAnimation Storyboard.TargetName="SelectedBd" Storyboard.TargetProperty="Opacity"
+                                                                                             To="1" Duration="0:0:0.2" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                        </Storyboard>
+                                                                    </BeginStoryboard>
+                                                                </Trigger.EnterActions>
+                                                                <Trigger.ExitActions>
+                                                                    <BeginStoryboard>
+                                                                        <Storyboard>
+                                                                            <DoubleAnimation Storyboard.TargetName="SelectedBd" Storyboard.TargetProperty="Opacity"
+                                                                                             To="0" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                        </Storyboard>
+                                                                    </BeginStoryboard>
+                                                                </Trigger.ExitActions>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
                                                     </ControlTemplate>
                                                 </Setter.Value>
                                             </Setter>
@@ -687,15 +1029,12 @@
                                     Cursor="Hand" Padding="14,8">
                                 <Border.Style>
                                     <Style TargetType="Border">
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource GlassLightBrush}"/>
-                                            </Trigger>
-                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource AccentGlassLightBrush}"/>
-                                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
+                                        <!-- hover 底色走 AdornerLayer 动画（直接 Setter 是硬切） -->
+                                        <Setter Property="motion:MotionAssist.HoverTintBrush" Value="{DynamicResource GlassLightBrush}"/>
+                                        <Setter Property="motion:MotionAssist.HoverTintOpacity" Value="0.85"/>
+                                        <!-- ⚠ 选中高亮**不在**这里做 —— 这是 DataTemplate 里的 Border，
+                                             起不了 Storyboard。已挪到 ListBox.ItemContainerStyle 的
+                                             ControlTemplate 里（见上面的 SelectedBd）。 -->
                                     </Style>
                                 </Border.Style>
                                                 <Grid>
@@ -858,24 +1197,67 @@
                                                                Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,2,0,0"
                                                                TextTrimming="CharacterEllipsis"/>
                                                 </StackPanel>
-                                                <Border CornerRadius="{StaticResource RadiusSmall}" Padding="8,3"
-                                                        Grid.Column="1" VerticalAlignment="Center">
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
-                                                            <Style.Triggers>
+                                                <!-- ⚠ 徽章底色随状态变（必需/不兼容），原来用 Style.Triggers 直接改
+                                                     Background 是硬切。普通 Border 没法在样式里叠层，
+                                                     所以换成 ContentControl + ControlTemplate ——
+                                                     这样叠层和目标在同一个命名域，Storyboard.TargetName 才有效。 -->
+                                                <ContentControl Grid.Column="1" VerticalAlignment="Center">
+                                                    <ContentControl.Template>
+                                                        <ControlTemplate TargetType="ContentControl">
+                                                            <Grid>
+                                                                <Border x:Name="Base" CornerRadius="{StaticResource RadiusSmall}"
+                                                                        Background="{DynamicResource Surface4Brush}"/>
+                                                                <Border x:Name="Required" CornerRadius="{StaticResource RadiusSmall}"
+                                                                        Background="{DynamicResource AccentGlassLightBrush}"
+                                                                        Opacity="0" IsHitTestVisible="False"/>
+                                                                <Border x:Name="Incompatible" CornerRadius="{StaticResource RadiusSmall}"
+                                                                        Background="{DynamicResource WarningGlassBrush}"
+                                                                        Opacity="0" IsHitTestVisible="False"/>
+                                                                <ContentPresenter Margin="8,3"/>
+                                                            </Grid>
+                                                            <ControlTemplate.Triggers>
                                                                 <DataTrigger Binding="{Binding IsRequired}" Value="True">
-                                                                    <Setter Property="Background" Value="{DynamicResource AccentGlassLightBrush}"/>
+                                                                    <DataTrigger.EnterActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetName="Required" Storyboard.TargetProperty="Opacity"
+                                                                                                 To="1" Duration="0:0:0.18" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </DataTrigger.EnterActions>
+                                                                    <DataTrigger.ExitActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetName="Required" Storyboard.TargetProperty="Opacity"
+                                                                                                 To="0" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </DataTrigger.ExitActions>
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding IsIncompatible}" Value="True">
-                                                                    <Setter Property="Background" Value="{DynamicResource WarningGlassBrush}"/>
+                                                                    <DataTrigger.EnterActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetName="Incompatible" Storyboard.TargetProperty="Opacity"
+                                                                                                 To="1" Duration="0:0:0.18" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </DataTrigger.EnterActions>
+                                                                    <DataTrigger.ExitActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetName="Incompatible" Storyboard.TargetProperty="Opacity"
+                                                                                                 To="0" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </DataTrigger.ExitActions>
                                                                 </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </ContentControl.Template>
                                                     <TextBlock Text="{Binding TypeLabel}" FontSize="10"
                                                                Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                                </Border>
+                                                </ContentControl>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>

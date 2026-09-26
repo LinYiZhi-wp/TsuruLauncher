@@ -200,10 +200,100 @@ namespace TsuruLauncher.ViewModels
         }
 
         /// <summary>把当前账号落进配置（合并写盘）+ 刷新玩家卡 / 账号行的「当前」标记。</summary>
+        /// <summary>
+        /// 账号的唯一标识：正版/外置用 Uuid；没有 Uuid 的退化成「用户名|类型」。
+        /// </summary>
+        private static string? AccountKey(Account? a)
+            => a == null ? null
+               : !string.IsNullOrWhiteSpace(a.Uuid) ? a.Uuid
+               : $"{a.Username}|{a.Type}";
+
+        /// <summary>
+        /// 把**整个账号列表** + 当前账号标识写进配置。
+        /// ⚠ 不要再只存 CurrentAccount —— 那样切换账号会把上一个覆盖掉。
+        /// </summary>
+        private void PersistAccounts()
+        {
+            var cfg = _configService.Settings;
+            cfg.Accounts = AccountManager.Accounts.ToList();
+            cfg.CurrentAccountKey = AccountKey(AccountManager.CurrentAccount);
+            cfg.SelectedAccount = null;   // 新格式不再用这个字段
+            _configService.SaveConfigDebounced();
+        }
+
+        // ── 账号导出 / 导入 ────────────────────────────────────────────
+        // 账号存在本地 %APPDATA%，**打包发布 / 更新启动器都不会动它**，
+        // 所以开发者自己打包后不需要重新登录。
+        // 但换电脑时本地文件不会跟着走 —— 这两个方法就是为此准备的：
+        // 导出一个 json，拷到另一台机器导入即可。
+
+        /// <summary>导出全部账号到一个 json 文件（**含令牌**，要提醒用户妥善保管）。</summary>
+        public bool ExportAccounts(string path)
+        {
+            try
+            {
+                var payload = new
+                {
+                    version = 1,
+                    exportedAt = DateTime.Now.ToString("o"),
+                    accounts = AccountManager.Accounts.ToList(),
+                    currentKey = AccountKey(AccountManager.CurrentAccount),
+                };
+
+                string json = Newtonsoft.Json.JsonConvert.SerializeObject(payload,
+                    Newtonsoft.Json.Formatting.Indented);
+                System.IO.File.WriteAllText(path, json, System.Text.Encoding.UTF8);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Utilities.Logger.LogError(ex, "导出账号");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 从 json 导入账号。**按 Uuid 合并**（已存在的跳过），不会清掉现有账号。
+        /// 返回 (新增数, 跳过数)。
+        /// </summary>
+        public (int added, int skipped) ImportAccounts(string path)
+        {
+            int added = 0, skipped = 0;
+            try
+            {
+                string json = System.IO.File.ReadAllText(path, System.Text.Encoding.UTF8);
+                var root = Newtonsoft.Json.Linq.JObject.Parse(json);
+
+                // 兼容两种格式：{accounts:[...]} 或者直接是数组
+                var arr = root["accounts"] as Newtonsoft.Json.Linq.JArray
+                          ?? Newtonsoft.Json.Linq.JArray.Parse(json);
+
+                foreach (var tok in arr)
+                {
+                    var acc = tok.ToObject<Account>();
+                    if (acc == null || string.IsNullOrWhiteSpace(acc.Username)) { skipped++; continue; }
+
+                    // 按 key 判重（Uuid 或 用户名|类型）
+                    string key = AccountKey(acc) ?? "";
+                    bool exists = AccountManager.Accounts.Any(a => AccountKey(a) == key);
+                    if (exists) { skipped++; continue; }
+
+                    AccountManager.AddAccount(acc);
+                    added++;
+                }
+
+                if (added > 0) PersistAccounts();
+            }
+            catch (Exception ex)
+            {
+                Utilities.Logger.LogError(ex, "导入账号");
+            }
+            return (added, skipped);
+        }
+
         private void PersistSelectedAccount()
         {
-            _configService.Settings.SelectedAccount = AccountManager.CurrentAccount;
-            _configService.SaveConfigDebounced();
+            PersistAccounts();
             RefreshPlayerCard();
             RefreshCurrentAccountFlags();
             OnPropertyChanged(nameof(CurrentAccount));
@@ -608,16 +698,30 @@ namespace TsuruLauncher.ViewModels
             _configService = ConfigService.Instance;
             _accountManager = new AccountManager();
 
-            // Restore the account that was active last session (incl. the
-            // Microsoft refresh token) so users don't have to log in again.
-            if (_configService.Settings.SelectedAccount != null)
+            // ── 恢复上次的所有账号 ──────────────────────────────────────
+            // ⚠ 以前只恢复 SelectedAccount 一个 —— 用户切过账号再重启，
+            //   另一个账号就"消失"了（其实是从来没被存下来）。
+            //   现在存的是整个列表 + 一个"当前是谁"的标识。
+            var cfg = _configService.Settings;
+
+            // 兼容旧配置：只有 SelectedAccount 的，迁移进列表
+            if (cfg.Accounts.Count == 0 && cfg.SelectedAccount != null)
             {
-                _accountManager.AddAccount(_configService.Settings.SelectedAccount);
+                cfg.Accounts.Add(cfg.SelectedAccount);
+                cfg.SelectedAccount = null;
+                cfg.CurrentAccountKey ??= AccountKey(cfg.Accounts[0]);
             }
+
+            foreach (var acc in cfg.Accounts.ToList())
+                _accountManager.AddAccount(acc);
+
+            // 再把「上次用的是哪个」设回去
+            var want = cfg.Accounts.FirstOrDefault(a => AccountKey(a) == cfg.CurrentAccountKey);
+            if (want != null) _accountManager.SetCurrent(want);
+
             _accountManager.AccountsChanged += () =>
             {
-                _configService.Settings.SelectedAccount = _accountManager.CurrentAccount;
-                _configService.SaveConfigDebounced();
+                PersistAccounts();
                 RefreshPlayerCard();
                 RefreshCurrentAccountFlags();
                 OnPropertyChanged(nameof(CurrentAccount));

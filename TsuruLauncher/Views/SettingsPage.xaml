@@ -1,6 +1,7 @@
 <Page x:Class="TsuruLauncher.Views.SettingsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:anim="clr-namespace:TsuruLauncher.Services.Animation"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -143,24 +144,60 @@
                                                 <Setter Property="Template">
                                                     <Setter.Value>
                                                         <ControlTemplate TargetType="ListBoxItem">
-                                                            <Border x:Name="Bd"
-                                                                    Background="{DynamicResource SurfaceInputBrush}"
-                                                                    BorderBrush="{DynamicResource GlassBorderBrush}"
-                                                                    BorderThickness="1"
-                                                                    CornerRadius="{StaticResource RadiusMedium}"
-                                                                    Padding="10,6">
-                                                                <ContentPresenter/>
-                                                            </Border>
+                                                            <Grid>
+                                                                <Border x:Name="Bd"
+                                                                        Background="{DynamicResource SurfaceInputBrush}"
+                                                                        BorderBrush="{DynamicResource GlassBorderBrush}"
+                                                                        BorderThickness="1"
+                                                                        CornerRadius="{StaticResource RadiusMedium}"/>
+
+                                                                <!-- 悬停 / 选中高亮：叠加层动画（原来 Setter 改 BorderBrush/Background 是硬切） -->
+                                                                <Border x:Name="HoverBd" CornerRadius="{StaticResource RadiusMedium}"
+                                                                        BorderBrush="{DynamicResource GlassBorderHoverBrush}"
+                                                                        BorderThickness="1" Opacity="0" IsHitTestVisible="False"/>
+                                                                <Border x:Name="SelectedBd" CornerRadius="{StaticResource RadiusMedium}"
+                                                                        BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
+                                                                        Background="{DynamicResource AccentGlassMediumBrush}"
+                                                                        Opacity="0" IsHitTestVisible="False"/>
+
+                                                                <ContentPresenter Margin="10,6"/>
+                                                            </Grid>
                                                             <ControlTemplate.Triggers>
                                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter TargetName="Bd" Property="BorderBrush"
-                                                                            Value="{DynamicResource GlassBorderHoverBrush}"/>
+                                                                    <Trigger.EnterActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                                                                 To="1" Duration="0:0:0.14" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </Trigger.EnterActions>
+                                                                    <Trigger.ExitActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                                                                 To="0" Duration="0:0:0.12" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </Trigger.ExitActions>
                                                                 </Trigger>
                                                                 <Trigger Property="IsSelected" Value="True">
-                                                                    <Setter TargetName="Bd" Property="BorderBrush"
-                                                                            Value="{DynamicResource AccentBrush}"/>
-                                                                    <Setter TargetName="Bd" Property="Background"
-                                                                            Value="{DynamicResource AccentGlassMediumBrush}"/>
+                                                                    <Trigger.EnterActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetName="SelectedBd" Storyboard.TargetProperty="Opacity"
+                                                                                                 To="1" Duration="0:0:0.18" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </Trigger.EnterActions>
+                                                                    <Trigger.ExitActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetName="SelectedBd" Storyboard.TargetProperty="Opacity"
+                                                                                                 To="0" Duration="0:0:0.16" EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </Trigger.ExitActions>
                                                                 </Trigger>
                                                             </ControlTemplate.Triggers>
                                                         </ControlTemplate>
@@ -687,6 +724,27 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+
+                        <!-- 备份 / 迁移账号 -->
+                        <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock Text="备份 / 迁移账号" Style="{StaticResource iOS26.SettingsItem.Title}"/>
+                                    <TextBlock Text="账号存在本机（%APPDATA%\TsuruLauncher），重装或更新启动器都不会丢。换电脑时导出这个文件、在新机器上导入即可。"
+                                               FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"
+                                               TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Content="导出账号" Click="ExportAccounts_Click" Padding="12,6"
+                                            Background="{StaticResource iOS26.Accent}" Margin="0,0,8,0"/>
+                                    <Button Content="导入账号" Click="ImportAccounts_Click" Padding="12,6"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
 
                         <!-- Add Account Row -->
                         <Border Style="{StaticResource iOS26.SettingsItem}" BorderThickness="0">

@@ -1,0 +1,5 @@
+
+
+# 打包产物不进仓库（脚本和发行说明要进）
+Setup/Output/
+publish/

@@ -33,6 +33,20 @@ namespace TsuruLauncher.Services
             AccountsChanged?.Invoke();
         }
 
+        /// <summary>
+        /// 把**已经在列表里**的某个账号设为当前。
+        /// 和 <see cref="AddAccount"/> 的区别：不重新添加、不走去重、不改变列表顺序。
+        /// 启动时恢复「上次用的是哪个账号」用的就是这个。
+        /// </summary>
+        public void SetCurrent(Account account)
+        {
+            if (!Accounts.Contains(account)) { AddAccount(account); return; }
+            if (ReferenceEquals(CurrentAccount, account)) return;
+
+            CurrentAccount = account;
+            AccountsChanged?.Invoke();
+        }
+
         public void LoginOffline(string username)
         {
             var account = _authService.LoginOffline(username);

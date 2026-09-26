@@ -29,6 +29,11 @@
                     <ControlTemplate TargetType="RadioButton">
                          <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="{StaticResource RadiusLarge}">
                              <Grid Margin="{TemplateBinding Padding}">
+                                 <!-- 悬停高亮：叠加层动画（原来 Setter 改 Background 是硬切） -->
+                                 <Border x:Name="HoverBd" CornerRadius="{StaticResource RadiusLarge}"
+                                         Margin="-15,0" Background="{DynamicResource GlassMediumBrush}"
+                                         Opacity="0" IsHitTestVisible="False"/>
+
                                  <ContentPresenter x:Name="TextNormal" VerticalAlignment="Center" HorizontalAlignment="Left"
                                                    TextElement.FontWeight="SemiBold"/>
                                  <ContentPresenter x:Name="TextAccent" VerticalAlignment="Center" HorizontalAlignment="Left"
@@ -48,7 +53,24 @@
                                      <Condition Property="IsMouseOver" Value="True"/>
                                      <Condition Property="IsChecked" Value="False"/>
                                  </MultiTrigger.Conditions>
-                                 <Setter TargetName="border" Property="Background" Value="{DynamicResource GlassMediumBrush}"/>
+                                 <MultiTrigger.EnterActions>
+                                     <BeginStoryboard>
+                                         <Storyboard>
+                                             <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                              To="1" Duration="0:0:0.14"
+                                                              EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                         </Storyboard>
+                                     </BeginStoryboard>
+                                 </MultiTrigger.EnterActions>
+                                 <MultiTrigger.ExitActions>
+                                     <BeginStoryboard>
+                                         <Storyboard>
+                                             <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                              To="0" Duration="0:0:0.12"
+                                                              EasingFunction="{x:Static anim:AxolotlMotion.EaseOut}"/>
+                                         </Storyboard>
+                                     </BeginStoryboard>
+                                 </MultiTrigger.ExitActions>
                              </MultiTrigger>
                              <Trigger Property="IsChecked" Value="True">
                                  <Trigger.EnterActions>

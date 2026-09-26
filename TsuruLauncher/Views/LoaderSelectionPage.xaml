@@ -42,27 +42,83 @@
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ListBoxItem">
-                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="10"
-                                            Padding="{TemplateBinding Padding}">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock x:Name="Dot" Text="○" FontSize="12" Margin="0,0,8,0"
-                                                       VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}"/>
-                                            <TextBlock Text="{Binding Version}" FontSize="13"
-                                                       VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}"
-                                                       x:Name="Ver"/>
+                                    <Grid>
+                                        <Border x:Name="Bd" Background="Transparent" CornerRadius="10"/>
+
+                                        <!-- 悬停高亮：叠加层动画（原来 Setter 改 Background 是硬切） -->
+                                        <Border x:Name="HoverBd" CornerRadius="10" Background="#15FFFFFF"
+                                                Opacity="0" IsHitTestVisible="False"/>
+
+                                        <StackPanel Orientation="Horizontal" Margin="{TemplateBinding Padding}">
+                                            <!-- ⚠ 圆点和版本号都要变色（还是共享画刷，做不了 Color 动画），
+                                                 叠两层交叉淡入。 -->
+                                            <Grid Margin="0,0,8,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="DotNormal" Text="○" FontSize="12"
+                                                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                                <TextBlock x:Name="DotChecked" Text="●" FontSize="12" Opacity="0"
+                                                           Foreground="#00E676"/>
+                                            </Grid>
+
+                                            <Grid VerticalAlignment="Center">
+                                                <TextBlock x:Name="VerNormal" Text="{Binding Version}" FontSize="13"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                <TextBlock x:Name="VerChecked" Text="{Binding Version}" FontSize="13" Opacity="0"
+                                                           Foreground="#00E676"/>
+                                            </Grid>
+
                                             <TextBlock Text="{Binding Type}" FontSize="11" Margin="8,0,0,0"
                                                        VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}"
                                                        x:Name="TypeTag"/>
                                         </StackPanel>
-                                    </Border>
+                                    </Grid>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="Dot" Property="Text" Value="●"/>
-                                            <Setter TargetName="Dot" Property="Foreground" Value="#00E676"/>
-                                            <Setter TargetName="Ver" Property="Foreground" Value="#00E676"/>
+                                            <Trigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="DotChecked" Storyboard.TargetProperty="Opacity"
+                                                                         To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                        <DoubleAnimation Storyboard.TargetName="DotNormal" Storyboard.TargetProperty="Opacity"
+                                                                         To="0" Duration="0:0:0.14" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                        <DoubleAnimation Storyboard.TargetName="VerChecked" Storyboard.TargetProperty="Opacity"
+                                                                         To="1" Duration="0:0:0.16" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                        <DoubleAnimation Storyboard.TargetName="VerNormal" Storyboard.TargetProperty="Opacity"
+                                                                         To="0" Duration="0:0:0.14" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </Trigger.EnterActions>
+                                            <Trigger.ExitActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="DotChecked" Storyboard.TargetProperty="Opacity"
+                                                                         To="0" Duration="0:0:0.14" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                        <DoubleAnimation Storyboard.TargetName="DotNormal" Storyboard.TargetProperty="Opacity"
+                                                                         To="1" Duration="0:0:0.14" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                        <DoubleAnimation Storyboard.TargetName="VerChecked" Storyboard.TargetProperty="Opacity"
+                                                                         To="0" Duration="0:0:0.14" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                        <DoubleAnimation Storyboard.TargetName="VerNormal" Storyboard.TargetProperty="Opacity"
+                                                                         To="1" Duration="0:0:0.14" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </Trigger.ExitActions>
                                         </Trigger>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="#15FFFFFF"/>
+                                            <Trigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                                         To="1" Duration="0:0:0.14" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </Trigger.EnterActions>
+                                            <Trigger.ExitActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="HoverBd" Storyboard.TargetProperty="Opacity"
+                                                                         To="0" Duration="0:0:0.12" EasingFunction="{x:Static motion:AxolotlMotion.EaseOut}"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </Trigger.ExitActions>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -119,21 +175,66 @@
                 <!-- Forge -->
                 <Border CornerRadius="16" Background="{DynamicResource Surface3Brush}" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"
                         Margin="0,0,0,10">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
-                                </Trigger>
-                                <DataTrigger Binding="{Binding ForgeExpanded}" Value="True">
-                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
-                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentGlassMediumBrush}"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <StackPanel>
+                    <Grid>
+                            <!-- 悬停 / 展开高亮：动画 Opacity，不做颜色硬切 -->
+                            <Border CornerRadius="16" Background="{DynamicResource Surface4Brush}" Opacity="0"
+                                    IsHitTestVisible="False">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Trigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1"
+                                                                             Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.EnterActions>
+                                                <Trigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0"
+                                                                             Duration="0:0:0.14" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.ExitActions>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <Border CornerRadius="16" Background="{DynamicResource Surface4Brush}"
+                                    BorderBrush="{DynamicResource AccentGlassMediumBrush}" BorderThickness="1"
+                                    Opacity="0" IsHitTestVisible="False">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ForgeExpanded}" Value="True">
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1"
+                                                                             Duration="0:0:0.2" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0"
+                                                                             Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.ExitActions>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <StackPanel>
                         <Button Command="{Binding ToggleForgeCommand}" HorizontalAlignment="Stretch"
                                 Style="{x:Null}" Background="Transparent" BorderThickness="0" Cursor="Hand"
                                 Padding="0" Margin="0">
@@ -187,7 +288,9 @@
                             </Grid>
                         </Button>
 
-                        <Grid x:Name="ForgeExpandPanel" Visibility="{Binding ForgeExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        <!-- ⚠ 展开/收起不能用 Visibility 绑定（硬切）。改成 ClipToBounds + MaxHeight，
+                 由 code-behind 按**实测高度**做动画（见 AnimateExpandPanel）。 -->
+                        <Grid x:Name="ForgeExpandPanel" ClipToBounds="True" MaxHeight="0"
                               RenderTransformOrigin="0.5,0">
                             <Grid.RenderTransform>
                                 <TransformGroup>
@@ -202,26 +305,72 @@
                             </Border>
                         </Grid>
                     </StackPanel>
+                        </Grid>
                 </Border>
 
                 <!-- Fabric -->
                 <Border CornerRadius="16" Background="{DynamicResource Surface3Brush}" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"
                         Margin="0,0,0,10">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
-                                </Trigger>
-                                <DataTrigger Binding="{Binding FabricExpanded}" Value="True">
-                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
-                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentGlassMediumBrush}"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <StackPanel>
+                    <Grid>
+                            <!-- 悬停 / 展开高亮：动画 Opacity，不做颜色硬切 -->
+                            <Border CornerRadius="16" Background="{DynamicResource Surface4Brush}" Opacity="0"
+                                    IsHitTestVisible="False">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Trigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1"
+                                                                             Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.EnterActions>
+                                                <Trigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0"
+                                                                             Duration="0:0:0.14" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.ExitActions>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <Border CornerRadius="16" Background="{DynamicResource Surface4Brush}"
+                                    BorderBrush="{DynamicResource AccentGlassMediumBrush}" BorderThickness="1"
+                                    Opacity="0" IsHitTestVisible="False">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding FabricExpanded}" Value="True">
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1"
+                                                                             Duration="0:0:0.2" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0"
+                                                                             Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.ExitActions>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <StackPanel>
                         <Button Command="{Binding ToggleFabricCommand}" HorizontalAlignment="Stretch"
                                 Style="{x:Null}" Background="Transparent" BorderThickness="0" Cursor="Hand"
                                 Padding="0" Margin="0">
@@ -275,7 +424,9 @@
                             </Grid>
                         </Button>
 
-                        <Grid x:Name="FabricExpandPanel" Visibility="{Binding FabricExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        <!-- ⚠ 展开/收起不能用 Visibility 绑定（硬切）。改成 ClipToBounds + MaxHeight，
+                 由 code-behind 按**实测高度**做动画（见 AnimateExpandPanel）。 -->
+                        <Grid x:Name="FabricExpandPanel" ClipToBounds="True" MaxHeight="0"
                               RenderTransformOrigin="0.5,0">
                             <Grid.RenderTransform>
                                 <TransformGroup>
@@ -290,26 +441,72 @@
                             </Border>
                         </Grid>
                     </StackPanel>
+                        </Grid>
                 </Border>
 
                 <!-- OptiFine -->
                 <Border CornerRadius="16" Background="{DynamicResource Surface3Brush}" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"
                         Margin="0,0,0,10">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Background" Value="{DynamicResource Surface3Brush}"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
-                                </Trigger>
-                                <DataTrigger Binding="{Binding OptifineExpanded}" Value="True">
-                                    <Setter Property="Background" Value="{DynamicResource Surface4Brush}"/>
-                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentGlassMediumBrush}"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <StackPanel>
+                    <Grid>
+                            <!-- 悬停 / 展开高亮：动画 Opacity，不做颜色硬切 -->
+                            <Border CornerRadius="16" Background="{DynamicResource Surface4Brush}" Opacity="0"
+                                    IsHitTestVisible="False">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Trigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1"
+                                                                             Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.EnterActions>
+                                                <Trigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0"
+                                                                             Duration="0:0:0.14" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </Trigger.ExitActions>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <Border CornerRadius="16" Background="{DynamicResource Surface4Brush}"
+                                    BorderBrush="{DynamicResource AccentGlassMediumBrush}" BorderThickness="1"
+                                    Opacity="0" IsHitTestVisible="False">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding OptifineExpanded}" Value="True">
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1"
+                                                                             Duration="0:0:0.2" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0"
+                                                                             Duration="0:0:0.16" EasingFunction="{StaticResource EaseOutCubic}"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.ExitActions>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <StackPanel>
                         <Button Command="{Binding ToggleOptifineCommand}" HorizontalAlignment="Stretch"
                                 Style="{x:Null}" Background="Transparent" BorderThickness="0" Cursor="Hand"
                                 Padding="0" Margin="0">
@@ -363,7 +560,9 @@
                             </Grid>
                         </Button>
 
-                        <Grid x:Name="OptifineExpandPanel" Visibility="{Binding OptifineExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        <!-- ⚠ 展开/收起不能用 Visibility 绑定（硬切）。改成 ClipToBounds + MaxHeight，
+                 由 code-behind 按**实测高度**做动画（见 AnimateExpandPanel）。 -->
+                        <Grid x:Name="OptifineExpandPanel" ClipToBounds="True" MaxHeight="0"
                               RenderTransformOrigin="0.5,0">
                             <Grid.RenderTransform>
                                 <TransformGroup>
@@ -378,6 +577,7 @@
                             </Border>
                         </Grid>
                     </StackPanel>
+                        </Grid>
                 </Border>
 
             </StackPanel>
